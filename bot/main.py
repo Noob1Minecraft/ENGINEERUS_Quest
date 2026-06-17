@@ -6,7 +6,7 @@ from aiogram.fsm.state import StatesGroup, State
 from dotenv import load_dotenv
 
 # Импортируем роутер ежедневных квестов
-from bot.daily_quest import router as daily_quest_router
+from daily_quest import router as daily_quest_router
 
 load_dotenv()
 bot = Bot(token=os.getenv("BOT_TOKEN"))
