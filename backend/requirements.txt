@@ -3,3 +3,4 @@ uvicorn
 aiosqlite
 httpx
 aiogram
+python-dotenv
