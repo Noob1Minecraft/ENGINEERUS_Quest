@@ -1199,51 +1199,57 @@
             }
         }
 
-        async function sendQuery() {
-            if (!currentUser) return alert(translations[currentLang].error_login);
-            
-            const module = document.getElementById('module').value;
-            const question = document.getElementById('question').value.trim();
-            if (!question) return alert(translations[currentLang].error_question);
-            
-            const responseDiv = document.getElementById('ai-response');
-            responseDiv.style.display = 'block';
-            responseDiv.innerHTML = `<p class="animate-pulse">${translations[currentLang].ai_loading}</p>`;
-            
-            try {
-                const endpoint = module === 'tutor' ? `${API}/ai` : `${API}/module`;
-                const payload = module === 'tutor' 
-                    ? {telegram_id: currentUser.tg_id, username: currentUser.username, text: question, lang: currentLang}
-                    : {telegram_id: currentUser.tg_id, username: currentUser.username, module: module, text: question, lang: currentLang};
-                
-                const res = await fetch(endpoint, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(payload)
+      async function sendQuery() {
+    if (!currentUser) return alert(translations[currentLang].error_login);
+    
+    const module = document.getElementById('module').value;
+    const question = document.getElementById('question').value.trim();
+    if (!question) return alert(translations[currentLang].error_question);
+    
+    const responseDiv = document.getElementById('ai-response');
+    responseDiv.style.display = 'block';
+    responseDiv.innerHTML = `<p class="animate-pulse">${translations[currentLang].ai_loading}</p>`;
+    
+    try {
+        const endpoint = module === 'tutor' ? `${API}/ai` : `${API}/module`;
+        const payload = module === 'tutor' 
+            ? {telegram_id: currentUser.tg_id, username: currentUser.username, text: question, lang: currentLang}
+            : {telegram_id: currentUser.tg_id, username: currentUser.username, module: module, text: question, lang: currentLang};
+        
+        const res = await fetch(endpoint, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        
+        if (data.status === 'limit') {
+            responseDiv.innerHTML = `<p style="color: var(--error);">${data.message}</p>`;
+        } else {
+            let html = `<div style="white-space: pre-wrap; margin-bottom: 1rem;">${data.response}</div>`;
+            html += `<p style="color: var(--success); font-weight: 600;">${translations[currentLang].ai_success} ${data.level}</p>`;
+            if (data.new_achievements && data.new_achievements.length > 0) {
+                html += '<div style="margin-top: 1rem; padding: 1rem; background: var(--bg-light); border-radius: 8px;">';
+                html += `<p style="font-weight: 700; margin-bottom: 0.5rem;">${translations[currentLang].ai_new_achievements}</p>`;
+                data.new_achievements.forEach(ach => {
+                    html += `<p>• ${ach.name} (+${ach.xp} XP)</p>`;
                 });
-                const data = await res.json();
-                
-                if (data.status === 'limit') {
-                    responseDiv.innerHTML = `<p style="color: var(--error);">${data.message}</p>`;
-                } else {
-                    let html = `<div style="white-space: pre-wrap; margin-bottom: 1rem;">${data.response}</div>`;
-                    html += `<p style="color: var(--success); font-weight: 600;">${translations[currentLang].ai_success} ${data.level}</p>`;
-                    if (data.new_achievements && data.new_achievements.length > 0) {
-                        html += '<div style="margin-top: 1rem; padding: 1rem; background: var(--bg-light); border-radius: 8px;">';
-                        html += `<p style="font-weight: 700; margin-bottom: 0.5rem;">${translations[currentLang].ai_new_achievements}</p>`;
-                        data.new_achievements.forEach(ach => {
-                            html += `<p>• ${ach.name} (+${ach.xp} XP)</p>`;
-                        });
-                        html += '</div>';
-                    }
-                    responseDiv.innerHTML = html;
-                    updateProfile();
-                    loadAchievements();
-                }
-            } catch (e) {
-                responseDiv.innerHTML = `<p style="color: var(--error);">Ошибка: ${e.message}</p>`;
+                html += '</div>';
+            }
+            responseDiv.innerHTML = html;
+            
+            // Обновляем профиль и ачивки
+            if (typeof updateProfile === 'function') {
+                await updateProfile();
+            }
+            if (typeof loadAchievements === 'function') {
+                await loadAchievements();
             }
         }
+    } catch (e) {
+        responseDiv.innerHTML = `<p style="color: var(--error);">Ошибка: ${e.message}</p>`;
+    }
+}
 
         function switchTab(tabName, btn) {
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
