@@ -8,6 +8,7 @@ import os, httpx, json, logging
 from pathlib import Path
 from dotenv import load_dotenv
 from datetime import date, timedelta
+import random
 
 import database
 from prompts import AI_PROMPTS, MODULE_PROMPTS  
@@ -77,12 +78,12 @@ ACHIEVEMENTS = {
 
 # Декларативные правила ачивок
 ACHIEVEMENT_RULES = {
-    "first_step": lambda u: u.get("requests_count", 0) >= 1,
-    "material_master": lambda u: u.get("material_count", 0) >= 5,
-    "patent_crafter": lambda u: u.get("patent_count", 0) >= 1,
-    "streak_3": lambda u: u.get("streak", 0) >= 3,
-    "streak_7": lambda u: u.get("streak", 0) >= 7,
-    "xp_100": lambda u: u.get("xp", 0) >= 100,
+    "first_step": lambda u: int(u.get("requests_count", 0) or 0) >= 1,
+    "material_master": lambda u: int(u.get("material_count", 0) or 0) >= 5,
+    "patent_crafter": lambda u: int(u.get("patent_count", 0) or 0) >= 1,
+    "streak_3": lambda u: int(u.get("streak", 0) or 0) >= 3,
+    "streak_7": lambda u: int(u.get("streak", 0) or 0) >= 7,
+    "xp_100": lambda u: int(u.get("xp", 0) or 0) >= 100,
     "all_modules": lambda u: len(u.get("modules_used_list", [])) >= 4,
 }
 
@@ -131,6 +132,16 @@ Requirements:
 6. Minimum 300-500 words for complex topics
 7. Use bullet points and headers for structure"""
 }
+
+# === ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ БЕЗОПАСНОГО INT ===
+def safe_int(value, default=0):
+    """Безопасная конвертация в int"""
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return default
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -181,6 +192,23 @@ class SetLangRequest(BaseModel):
     telegram_id: int
     lang: str
 
+class WebRegisterRequest(BaseModel):
+    email: str
+    password: str
+    username: str = ""
+
+class WebLoginRequest(BaseModel):
+    email: str
+    password: str
+
+class BindRequest(BaseModel):
+    telegram_id: int
+    email: str
+    password: str
+
+class UnbindRequest(BaseModel):
+    telegram_id: int
+
 # === ИИ ФУНКЦИЯ (МУЛЬТИЯЗЫЧНАЯ) ===
 async def call_ai(prompt: str, lang: str = "ru") -> str:
     """Отвечает на выбранном языке ПОДРОБНО"""
@@ -224,7 +252,8 @@ async def check_and_award_achievements(user_data: dict) -> list:
     new_achievements = []
     
     try:
-        modules_used = user_data.get("modules_used", [])
+        # Парсим modules_used
+        modules_used = user_data.get("modules_used", "[]")
         if isinstance(modules_used, str):
             try:
                 modules_used = json.loads(modules_used)
@@ -234,6 +263,14 @@ async def check_and_award_achievements(user_data: dict) -> list:
             modules_used = []
         user_data["modules_used_list"] = modules_used
         
+        # Гарантируем что все числовые поля - это int
+        user_data["xp"] = safe_int(user_data.get("xp"))
+        user_data["requests_count"] = safe_int(user_data.get("requests_count"))
+        user_data["material_count"] = safe_int(user_data.get("material_count"))
+        user_data["patent_count"] = safe_int(user_data.get("patent_count"))
+        user_data["streak"] = safe_int(user_data.get("streak"))
+        
+        # Получаем существующие ачивки
         try:
             existing = await database.get_achievements(user_data["telegram_id"])
             existing_codes = {ex[0] for ex in existing} if existing else set()
@@ -263,7 +300,7 @@ async def check_and_award_achievements(user_data: dict) -> list:
         
         if total_xp_gained > 0:
             await database.add_xp(user_data["telegram_id"], total_xp_gained)
-            user_data["xp"] += total_xp_gained
+            user_data["xp"] = user_data["xp"] + total_xp_gained
         
     except Exception as e:
         logger.error(f"Критическая ошибка в check_and_award_achievements: {e}", exc_info=True)
@@ -278,7 +315,7 @@ async def handle_ai(req: AIRequest):
     if not allowed:
         return {"status": "limit", "message": " Лимит 10 запросов/день."}
     
-    #  Берём язык из запроса или из БД
+    # Берём язык из запроса или из БД
     lang = req.lang if req.lang else await database.get_preferred_lang(req.telegram_id)
     
     prompt = f"{AI_PROMPTS['tutor']}\n\nВопрос: {req.text}"
@@ -292,16 +329,21 @@ async def handle_ai(req: AIRequest):
     
     updated_user = await database.get_user(req.telegram_id)
     user_data = {
-        "telegram_id": req.telegram_id, "xp": updated_user["xp"], "level": updated_user["level"],
-        "streak": updated_user["streak"], "requests_count": updated_user["requests_count"] + 1,
-        "material_count": updated_user["material_count"], "patent_count": updated_user["patent_count"],
-        "modules_used": updated_user["modules_used"]
+        "telegram_id": req.telegram_id,
+        "xp": safe_int(updated_user.get("xp")),
+        "level": safe_int(updated_user.get("level"), 1),
+        "streak": safe_int(updated_user.get("streak")),
+        "requests_count": safe_int(updated_user.get("requests_count")),
+        "material_count": safe_int(updated_user.get("material_count")),
+        "patent_count": safe_int(updated_user.get("patent_count")),
+        "modules_used": updated_user.get("modules_used", "[]")
     }
     new_achievements = await check_and_award_achievements(user_data)
     
     return {
-        "status": "ok", "response": ai_response, "xp": user_data["xp"], 
-        "level": user_data["level"], "streak": user_data["streak"], 
+        "status": "ok", "response": ai_response,
+        "xp": user_data["xp"], "level": user_data["level"],
+        "streak": user_data["streak"],
         "new_achievements": new_achievements, "lang": lang
     }
 
@@ -313,7 +355,7 @@ async def handle_module(req: ModuleRequest):
     
     user = await database.get_or_create_user(req.telegram_id, req.username)
     
-    #  Берём язык из запроса или из БД
+    # Берём язык из запроса или из БД
     lang = req.lang if req.lang else await database.get_preferred_lang(req.telegram_id)
     
     modules_used_raw = user.get("modules_used", "[]")
@@ -338,30 +380,87 @@ async def handle_module(req: ModuleRequest):
     await database.update_streak(req.telegram_id)
     await database.save_request(req.telegram_id, req.module, req.text, ai_response)
     
-    new_mat = user["material_count"] + (1 if req.module == "material" else 0)
-    new_pat = user["patent_count"] + (1 if req.module == "patent" else 0)
+    # Безопасная работа с числовыми полями
+    new_mat = safe_int(user.get("material_count")) + (1 if req.module == "material" else 0)
+    new_pat = safe_int(user.get("patent_count")) + (1 if req.module == "patent" else 0)
     await database.update_module_counts(req.telegram_id, new_mat, new_pat, json.dumps(modules_used))
     
     updated_user = await database.get_user(req.telegram_id)
     user_data = {
-        "telegram_id": req.telegram_id, "xp": updated_user["xp"], "level": updated_user["level"],
-        "streak": updated_user["streak"], "requests_count": updated_user["requests_count"],
-        "material_count": new_mat, "patent_count": new_pat, "modules_used": modules_used
+        "telegram_id": req.telegram_id,
+        "xp": safe_int(updated_user.get("xp")),
+        "level": safe_int(updated_user.get("level"), 1),
+        "streak": safe_int(updated_user.get("streak")),
+        "requests_count": safe_int(updated_user.get("requests_count")),
+        "material_count": new_mat,
+        "patent_count": new_pat,
+        "modules_used": modules_used
     }
     new_achievements = await check_and_award_achievements(user_data)
     
     return {
-        "status": "ok", "response": ai_response, "xp": user_data["xp"], 
-        "level": user_data["level"], "new_achievements": new_achievements, "lang": lang
+        "status": "ok", "response": ai_response,
+        "xp": user_data["xp"], "level": user_data["level"],
+        "new_achievements": new_achievements, "lang": lang
     }
 
-# === API: РЕГИСТРАЦИЯ ===
+# === API: РЕГИСТРАЦИЯ (Telegram) ===
 @app.post("/api/auth/register")
 async def register(req: RegisterRequest):
     user = await database.get_or_create_user(req.telegram_id, req.username)
     if req.full_name:
         await database.update_username(req.telegram_id, req.full_name)
     return {"status": "ok", "user": user}
+
+# === API: ВЕБ-АВТОРИЗАЦИЯ (Email + Password) ===
+@app.post("/api/auth/web/register")
+async def web_register(req: WebRegisterRequest):
+    """Регистрация через сайт (email + пароль)"""
+    if not req.email or len(req.password) < 4:
+        raise HTTPException(status_code=400, detail="Некорректные данные (пароль минимум 4 символа)")
+    
+    user = await database.register_user(req.email, req.password, req.username)
+    if not user:
+        raise HTTPException(status_code=400, detail="Такой email уже зарегистрирован")
+    
+    return {"status": "ok", "user": user}
+
+@app.post("/api/auth/web/login")
+async def web_login(req: WebLoginRequest):
+    """Вход через сайт (email + пароль)"""
+    user = await database.authenticate_user(req.email, req.password)
+    if not user:
+        raise HTTPException(status_code=401, detail="Неверный email или пароль")
+    
+    return {"status": "ok", "user": user}
+
+@app.post("/api/auth/bind")
+async def bind_account(req: BindRequest):
+    """Привязать Telegram к веб-аккаунту"""
+    user = await database.authenticate_user(req.email, req.password)
+    if not user:
+        raise HTTPException(401, "Неверный email или пароль")
+    
+    async with database.get_db() as db:
+        await db.execute(
+            "UPDATE users SET telegram_id = ? WHERE email = ?",
+            (req.telegram_id, req.email)
+        )
+        await db.commit()
+    
+    return {"status": "ok", "message": " Аккаунт привязан"}
+
+@app.post("/api/auth/unbind")
+async def unbind_account(req: UnbindRequest):
+    """Отвязать Telegram от веб-аккаунта"""
+    async with database.get_db() as db:
+        await db.execute(
+            "UPDATE users SET telegram_id = NULL WHERE telegram_id = ?",
+            (req.telegram_id,)
+        )
+        await db.commit()
+    
+    return {"status": "ok", "message": " Привязка удалена"}
 
 # === API: ЛИДЕРБОРД ===
 @app.get("/api/leaderboard")
@@ -381,6 +480,12 @@ async def complete_quest(req: QuestCompleteRequest):
     
     quest = QUESTS[req.quest_id]
     user = await database.get_or_create_user(req.telegram_id, "")
+    
+    # Гарантируем что все числовые поля - это int
+    user["xp"] = safe_int(user.get("xp"))
+    user["requests_count"] = safe_int(user.get("requests_count"))
+    user["material_count"] = safe_int(user.get("material_count"))
+    user["streak"] = safe_int(user.get("streak"))
     
     completed = await database.get_completed_quests(req.telegram_id)
     if req.quest_id in [c[0] for c in completed]:
@@ -420,8 +525,8 @@ async def complete_quest(req: QuestCompleteRequest):
         "status": "ok", 
         "message": f" Квест выполнен! +{quest['xp']} XP",
         "quest": quest,
-        "new_xp": updated_user["xp"],
-        "new_level": updated_user["level"],
+        "new_xp": safe_int(updated_user.get("xp")),
+        "new_level": safe_int(updated_user.get("level"), 1),
         "new_achievements": new_achievements
     }
 
@@ -435,8 +540,28 @@ async def get_completed_quests(tg_id: int):
 async def get_user_profile(tg_id: int):
     user = await database.get_user(tg_id)
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    return user
+        # Создаём пользователя если нет
+        user = await database.get_or_create_user(tg_id, "")
+    
+    # Возвращаем безопасные значения
+    return {
+        "id": user.get("id"),
+        "telegram_id": user.get("telegram_id"),
+        "username": user.get("username") or "Инженер",
+        "email": user.get("email"),
+        "xp": safe_int(user.get("xp")),
+        "level": safe_int(user.get("level"), 1),
+        "streak": safe_int(user.get("streak")),
+        "is_premium": bool(user.get("is_premium")),
+        "daily_requests": safe_int(user.get("daily_requests")),
+        "last_request_date": user.get("last_request_date"),
+        "requests_count": safe_int(user.get("requests_count")),
+        "material_count": safe_int(user.get("material_count")),
+        "patent_count": safe_int(user.get("patent_count")),
+        "modules_used": user.get("modules_used", "[]"),
+        "preferred_lang": user.get("preferred_lang", "ru"),
+        "created_at": user.get("created_at")
+    }
 
 @app.get("/api/achievements/{tg_id}")
 async def get_user_achievements(tg_id: int):
@@ -463,8 +588,6 @@ async def get_user_language(tg_id: int):
     return {"lang": lang}
 
 # === API: ЕЖЕДНЕВНЫЕ КВЕСТЫ ===
-import random
-
 DAILY_QUESTS = [
     {"type": "sopromat", "text": " Реши 3 задачи по сопромату", "xp": 50},
     {"type": "termeh", "text": " Разберись с термехом (2 задачи)", "xp": 50},
@@ -489,7 +612,7 @@ async def get_daily_quest(req: DailyQuestRequest):
     if last_quest == today:
         return {
             "status": "already",
-            "message": " Ты уже взял квест сегодня! Заходи завтра 🔥"
+            "message": " Ты уже взял квест сегодня! Заходи завтра "
         }
     
     quest = random.choice(DAILY_QUESTS)
@@ -498,7 +621,7 @@ async def get_daily_quest(req: DailyQuestRequest):
     return {
         "status": "ok",
         "quest": quest,
-        "streak": user.get("streak", 0)
+        "streak": safe_int(user.get("streak"))
     }
 
 @app.post("/api/daily/check")
@@ -534,7 +657,7 @@ async def check_daily_quest(req: DailyQuestRequest):
     await database.clear_daily_quest(req.telegram_id)
     
     updated_user = await database.get_user(req.telegram_id)
-    new_streak = updated_user.get("streak", 1)
+    new_streak = safe_int(updated_user.get("streak"), 1)
     
     bonus = 0
     if new_streak == 7:
@@ -547,8 +670,8 @@ async def check_daily_quest(req: DailyQuestRequest):
         "xp_reward": xp_reward,
         "bonus": bonus,
         "streak": new_streak,
-        "total_xp": updated_user.get("xp", 0),
-        "level": updated_user.get("level", 1)
+        "total_xp": safe_int(updated_user.get("xp")),
+        "level": safe_int(updated_user.get("level"), 1)
     }
 
 @app.get("/api/daily/status/{tg_id}")
@@ -559,9 +682,9 @@ async def get_daily_status(tg_id: int):
         return {"status": "error", "message": "Пользователь не найден"}
     
     return {
-        "streak": user.get("streak", 0),
-        "xp": user.get("xp", 0),
-        "level": user.get("level", 1),
+        "streak": safe_int(user.get("streak")),
+        "xp": safe_int(user.get("xp")),
+        "level": safe_int(user.get("level"), 1),
         "has_active_quest": user.get("active_quest_type") is not None
     }
 

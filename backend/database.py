@@ -13,58 +13,85 @@ async def get_db():
         await db.execute("PRAGMA journal_mode=WAL;")
         await db.execute("PRAGMA busy_timeout=5000;")
         yield db
-
 async def init_db():
     async with get_db() as db:
+        # 1. Таблица пользователей
         await db.execute("""CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, telegram_id INTEGER UNIQUE NOT NULL,
-            username TEXT, xp INTEGER DEFAULT 0, level INTEGER DEFAULT 1,
-            streak INTEGER DEFAULT 0, last_active DATE, is_premium BOOLEAN DEFAULT 0,
-            daily_requests INTEGER DEFAULT 0, last_request_date DATE,
-            requests_count INTEGER DEFAULT 0, material_count INTEGER DEFAULT 0,
-            patent_count INTEGER DEFAULT 0, modules_used TEXT DEFAULT '[]',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            telegram_id INTEGER UNIQUE,
+            username TEXT,
+            email TEXT UNIQUE,
+            password_hash TEXT,
+            xp INTEGER DEFAULT 0,
+            level INTEGER DEFAULT 1,
+            streak INTEGER DEFAULT 0,
+            last_active DATE,
+            is_premium BOOLEAN DEFAULT 0,
+            daily_requests INTEGER DEFAULT 0,
+            last_request_date DATE,
+            requests_count INTEGER DEFAULT 0,
+            material_count INTEGER DEFAULT 0,
+            patent_count INTEGER DEFAULT 0,
+            modules_used TEXT DEFAULT '[]',
+            active_quest_type TEXT,
+            last_daily_quest TEXT,
+            preferred_lang TEXT DEFAULT 'ru',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""")
         
+        # 2. Таблица запросов к ИИ
         await db.execute("""CREATE TABLE IF NOT EXISTS requests (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, telegram_id INTEGER NOT NULL,
-            module TEXT NOT NULL, input_text TEXT, ai_response TEXT,
-            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            telegram_id INTEGER NOT NULL,
+            module TEXT NOT NULL,
+            input_text TEXT,
+            ai_response TEXT,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""")
         
+        # 3. Таблица ачивок
         await db.execute("""CREATE TABLE IF NOT EXISTS user_achievements (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, telegram_id INTEGER NOT NULL,
-            achievement_code TEXT NOT NULL, earned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(telegram_id, achievement_code))""")
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            telegram_id INTEGER NOT NULL,
+            achievement_code TEXT NOT NULL,
+            earned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(telegram_id, achievement_code)
+        )""")
         
+        # 4. Таблица научных ссылок
         await db.execute("""CREATE TABLE IF NOT EXISTS research_refs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL,
-            authors TEXT, year INTEGER, url TEXT, pdf_path TEXT,
-            category TEXT, added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            authors TEXT,
+            year INTEGER,
+            url TEXT,
+            pdf_path TEXT,
+            category TEXT,
+            added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""")
         
+        # 5. Таблица выполненных квестов
         await db.execute("""CREATE TABLE IF NOT EXISTS completed_quests (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, telegram_id INTEGER NOT NULL,
-            quest_id TEXT NOT NULL, completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(telegram_id, quest_id))""")
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            telegram_id INTEGER NOT NULL,
+            quest_id TEXT NOT NULL,
+            completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(telegram_id, quest_id)
+        )""")
         
-        # === АВТОМАТИЧЕСКИЕ АЛЬТЕРЫ (НАКАТЫВАЕМ НОВЫЕ КОЛОНКИ) ===
-        try:
-            await db.execute("ALTER TABLE users ADD COLUMN active_quest_type TEXT")
-        except:
-            pass
-        try:
-            await db.execute("ALTER TABLE users ADD COLUMN last_daily_quest TEXT")
-        except:
-            pass
-        try:
-            await db.execute("ALTER TABLE users ADD COLUMN preferred_lang TEXT DEFAULT 'ru'")
-        except:
-            pass
-        
-        #  НАКАТЫВАЕМ КОЛОНКУ ДЛЯ ХЭША ПАРОЛЯ
-        try:
-            await db.execute("ALTER TABLE users ADD COLUMN password_hash TEXT")
-            print(" Колонка password_hash успешно добавлена в таблицу users")
-        except:
-            pass
+        # === Миграции для старых баз ===
+        migrations = [
+            "ALTER TABLE users ADD COLUMN active_quest_type TEXT",
+            "ALTER TABLE users ADD COLUMN last_daily_quest TEXT",
+            "ALTER TABLE users ADD COLUMN preferred_lang TEXT DEFAULT 'ru'",
+            "ALTER TABLE users ADD COLUMN email TEXT",
+            "ALTER TABLE users ADD COLUMN password_hash TEXT",
+        ]
+        for sql in migrations:
+            try:
+                await db.execute(sql)
+            except Exception:
+                pass
         
         await db.commit()
     print(" База данных инициализирована:", DB_PATH)
@@ -87,27 +114,40 @@ async def get_user(tg_id: int):
         return _row_to_dict(row) if row else None
 
 def _row_to_dict(row):
-    """ ОБНОВЛЕНО: Полная проверка длины кортежа во избежание IndexErrors """
+    """Преобразует строку БД в словарь с безопасной проверкой и конвертацией типов"""
+    if not row:
+        return None
+    
+    # Безопасная конвертация в int (если None или строка → 0)
+    def safe_int(value, default=0):
+        if value is None:
+            return default
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            return default
+    
     return {
-        "id": row[0], 
-        "telegram_id": row[1],  
-        "username": row[2], 
-        "xp": row[3],
-        "level": row[4], 
-        "streak": row[5], 
-        "last_active": row[6],
-        "is_premium": bool(row[7]), 
-        "daily_requests": row[8],
-        "last_request_date": row[9], 
-        "requests_count": row[10],
-        "material_count": row[11], 
-        "patent_count": row[12],
-        "modules_used": row[13], 
-        "created_at": row[14],
-        "active_quest_type": row[15] if len(row) > 15 else None,
-        "last_daily_quest": row[16] if len(row) > 16 else None,
-        "preferred_lang": row[17] if len(row) > 17 else "ru",
-        "password_hash": row[18] if len(row) > 18 else None  #  ДОБАВЛЕНО
+        "id": safe_int(row[0]),
+        "telegram_id": row[1],  # Может быть None для веб-пользователей
+        "username": row[2] or "",
+        "email": row[3] if len(row) > 3 else None,
+        "password_hash": row[4] if len(row) > 4 else None,
+        "xp": safe_int(row[5] if len(row) > 5 else 0),
+        "level": safe_int(row[6] if len(row) > 6 else 1),
+        "streak": safe_int(row[7] if len(row) > 7 else 0),
+        "last_active": row[8] if len(row) > 8 else None,
+        "is_premium": bool(row[9]) if len(row) > 9 else False,
+        "daily_requests": safe_int(row[10] if len(row) > 10 else 0),
+        "last_request_date": row[11] if len(row) > 11 else None,
+        "requests_count": safe_int(row[12] if len(row) > 12 else 0),
+        "material_count": safe_int(row[13] if len(row) > 13 else 0),
+        "patent_count": safe_int(row[14] if len(row) > 14 else 0),
+        "modules_used": row[15] if len(row) > 15 else "[]",
+        "active_quest_type": row[16] if len(row) > 16 else None,
+        "last_daily_quest": row[17] if len(row) > 17 else None,
+        "preferred_lang": row[18] if len(row) > 18 else "ru",
+        "created_at": row[19] if len(row) > 19 else None
     }
 
 #  НОВЫЕ ФУНКЦИИ ДЛЯ ПОДДЕРЖКИ ВЕБ-АУТЕНТИФИКАЦИИ

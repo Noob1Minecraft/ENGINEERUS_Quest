@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Engineerus Quest — Вход</title>
+    <style>
+        :root {
+            --bg: #0F172A; --surface: #1E293B; --primary: #2563EB;
+            --text: #F8FAFC; --text-muted: #94A3B8; --error: #EF4444;
+        }
+        body { font-family: sans-serif; background: var(--bg); color: var(--text); display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        .auth-container { background: var(--surface); padding: 2rem; border-radius: 16px; width: 100%; max-width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+        h2 { text-align: center; margin-bottom: 1.5rem; }
+        input { width: 100%; padding: 12px; margin-bottom: 1rem; background: #334155; border: 1px solid #475569; color: white; border-radius: 8px; box-sizing: border-box; }
+        input:focus { outline: none; border-color: var(--primary); }
+        button { width: 100%; padding: 12px; background: var(--primary); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 1rem; }
+        button:hover { opacity: 0.9; }
+        .toggle-text { text-align: center; margin-top: 1rem; font-size: 0.9rem; color: var(--text-muted); }
+        .toggle-text a { color: var(--primary); cursor: pointer; text-decoration: underline; }
+        .error { color: var(--error); text-align: center; margin-bottom: 1rem; font-size: 0.9rem; display: none; }
+    </style>
+</head>
+<body>
+
+<div class="auth-container">
+    <div id="error-msg" class="error"></div>
+
+    <!-- Форма ВХОДА -->
+    <div id="login-form">
+        <h2> Вход</h2>
+        <input type="email" id="login-email" placeholder="Email" required>
+        <input type="password" id="login-password" placeholder="Пароль" required>
+        <button onclick="login()">Войти</button>
+        <p class="toggle-text">Нет аккаунта? <a onclick="toggle()">Зарегистрироваться</a></p>
+    </div>
+
+    <!-- Форма РЕГИСТРАЦИИ -->
+    <div id="register-form" style="display: none;">
+        <h2> Регистрация</h2>
+        <input type="text" id="reg-name" placeholder="Имя" required>
+        <input type="email" id="reg-email" placeholder="Email" required>
+        <input type="password" id="reg-password" placeholder="Пароль (мин. 4 символа)" required>
+        <button onclick="register()">Создать аккаунт</button>
+        <p class="toggle-text">Уже есть аккаунт? <a onclick="toggle()">Войти</a></p>
+    </div>
+</div>
+
+<script>
+    const API_URL = 'https://engineerus-quest-api.onrender.com/api'; // ТВОЙ URL RENDER
+
+    function toggle() {
+        const loginForm = document.getElementById('login-form');
+        const regForm = document.getElementById('register-form');
+        const isLoginVisible = loginForm.style.display !== 'none';
+        
+        loginForm.style.display = isLoginVisible ? 'none' : 'block';
+        regForm.style.display = isLoginVisible ? 'block' : 'none';
+        document.getElementById('error-msg').style.display = 'none';
+    }
+
+    async function register() {
+        const email = document.getElementById('reg-email').value;
+        const password = document.getElementById('reg-password').value;
+        const username = document.getElementById('reg-name').value;
+
+        try {
+            const res = await fetch(`${API_URL}/auth/register`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ email, password, username })
+            });
+            const data = await res.json();
+            
+            if (data.status === 'ok') {
+                localStorage.setItem('user', JSON.stringify(data.user));
+                window.location.href = 'app.html'; // Переход в приложение
+            } else {
+                showError(data.detail);
+            }
+        } catch (e) {
+            showError('Ошибка сети. Попробуй позже.');
+        }
+    }
+
+    async function login() {
+        const email = document.getElementById('login-email').value;
+        const password = document.getElementById('login-password').value;
+
+        try {
+            const res = await fetch(`${API_URL}/auth/login`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ email, password })
+            });
+            const data = await res.json();
+            
+            if (data.status === 'ok') {
+                localStorage.setItem('user', JSON.stringify(data.user));
+                window.location.href = 'app.html';
+            } else {
+                showError(data.detail);
+            }
+        } catch (e) {
+            showError('Ошибка сети. Попробуй позже.');
+        }
+    }
+
+    function showError(msg) {
+        const errDiv = document.getElementById('error-msg');
+        errDiv.textContent = msg;
+        errDiv.style.display = 'block';
+    }
+</script>
+
+</body>
+</html>

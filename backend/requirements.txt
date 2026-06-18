@@ -4,3 +4,4 @@ aiosqlite
 httpx
 aiogram
 python-dotenv
+passlib[bcrypt]

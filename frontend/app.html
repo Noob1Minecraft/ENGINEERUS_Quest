@@ -33,6 +33,8 @@
         @keyframes slideIn { from { transform: translateX(400px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
         @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
         @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+        @keyframes modalSlideIn { from { opacity: 0; transform: translateY(50px) scale(0.9); } to { opacity: 1; transform: translateY(0) scale(1); } }
+        @keyframes slideInRight { from { opacity: 0; transform: translateX(30px); } to { opacity: 1; transform: translateX(0); } }
         
         .animate-fade-in { animation: fadeIn 0.6s ease-out; }
         .animate-slide-in { animation: slideIn 0.3s ease-out; }
@@ -79,6 +81,138 @@
         }
         .lang-selector:hover {
             border-color: var(--warning);
+            transform: translateY(-2px);
+        }
+        
+        /* === КНОПКА ВЫХОДА В НАВИГАЦИИ === */
+        .logout-btn-nav {
+            background: var(--error);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 1rem;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .logout-btn-nav:hover {
+            background: #DC2626;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+        }
+        
+        /* === КНОПКА ВЫХОДА В ПРОФИЛЕ === */
+        .logout-btn-profile {
+            background: var(--error);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 1rem;
+            transition: all 0.3s;
+            margin-top: 1rem;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+        
+        .logout-btn-profile:hover {
+            background: #DC2626;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+        }
+        
+        /* === МОДАЛЬНОЕ ОКНО ПОДТВЕРЖДЕНИЯ ВЫХОДА === */
+        .logout-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(5px);
+            z-index: 10001;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.3s ease-out;
+        }
+        
+        .logout-modal {
+            background: var(--bg-light);
+            border-radius: 20px;
+            padding: 2.5rem;
+            max-width: 400px;
+            width: 90%;
+            border: 2px solid var(--error);
+            box-shadow: 0 20px 60px rgba(239, 68, 68, 0.3);
+            text-align: center;
+            animation: modalSlideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        
+        .logout-modal-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+        }
+        
+        .logout-modal-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            color: var(--text);
+        }
+        
+        .logout-modal-text {
+            color: var(--text-muted);
+            margin-bottom: 1.5rem;
+            line-height: 1.6;
+        }
+        
+        .logout-modal-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+        }
+        
+        .logout-modal-btn {
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            font-family: inherit;
+            font-size: 1rem;
+            transition: all 0.2s;
+            flex: 1;
+        }
+        
+        .logout-modal-btn-cancel {
+            background: var(--surface);
+            color: var(--text);
+        }
+        
+        .logout-modal-btn-cancel:hover {
+            background: #475569;
+        }
+        
+        .logout-modal-btn-confirm {
+            background: var(--error);
+            color: white;
+        }
+        
+        .logout-modal-btn-confirm:hover {
+            background: #DC2626;
             transform: translateY(-2px);
         }
         
@@ -326,11 +460,6 @@
             overflow: hidden;
         }
 
-        @keyframes modalSlideIn {
-            from { opacity: 0; transform: translateY(50px) scale(0.9); }
-            to { opacity: 1; transform: translateY(0) scale(1); }
-        }
-
         .onboarding-robot {
             width: 120px;
             height: 120px;
@@ -453,11 +582,6 @@
             animation: slideInRight 0.4s cubic-bezier(0.16, 1, 0.3, 1);
         }
 
-        @keyframes slideInRight {
-            from { opacity: 0; transform: translateX(30px); }
-            to { opacity: 1; transform: translateX(0); }
-        }
-
         @media (max-width: 768px) {
             .hero h1 { font-size: 2rem; }
             .stats-grid { grid-template-columns: 1fr; }
@@ -466,6 +590,9 @@
             }
             .onboarding-title {
                 font-size: 1.5rem;
+            }
+            .logout-modal-buttons {
+                flex-direction: column;
             }
         }
     </style>
@@ -511,6 +638,25 @@
         </div>
     </div>
 
+    <!-- МОДАЛЬНОЕ ОКНО ПОДТВЕРЖДЕНИЯ ВЫХОДА -->
+    <div class="logout-modal-overlay" id="logoutModal">
+        <div class="logout-modal">
+            <div class="logout-modal-icon"></div>
+            <h3 class="logout-modal-title" data-i18n="logout_title">Выйти из аккаунта?</h3>
+            <p class="logout-modal-text" data-i18n="logout_text">
+                Ты уверен, что хочешь выйти? Тебе нужно будет снова войти, чтобы продолжить.
+            </p>
+            <div class="logout-modal-buttons">
+                <button class="logout-modal-btn logout-modal-btn-cancel" onclick="closeLogoutModal()" data-i18n="logout_cancel">
+                    Отмена
+                </button>
+                <button class="logout-modal-btn logout-modal-btn-confirm" onclick="confirmLogout()" data-i18n="logout_confirm">
+                    Выйти
+                </button>
+            </div>
+        </div>
+    </div>
+
     <nav>
         <ul>
             <li><a href="#home" data-i18n="nav_home">Главная</a></li>
@@ -526,7 +672,11 @@
                     <option value="en">🇬🇧 EN</option>
                 </select>
             </li>
-            <li><a href="index.html" style="background: var(--error); padding: 0.5rem 1rem; border-radius: 8px;" data-i18n="logout">Выйти</a></li>
+            <li>
+                <button onclick="logout()" class="logout-btn-nav" data-i18n="logout">
+                     Выйти
+                </button>
+            </li>
         </ul>
     </nav>
 
@@ -567,7 +717,9 @@
                     <p style="text-align: center; margin-top: 1rem; color: var(--text-muted);">
                         <span data-i18n="xp_to_next">До следующего уровня:</span> <span id="xp-to-next">100</span> XP
                     </p>
-                    <button onclick="logout()" style="margin-top: 1rem; background: var(--error);" data-i18n="logout">Выйти</button>
+                    <button onclick="logout()" class="logout-btn-profile" data-i18n="logout">
+                         Выйти из аккаунта
+                    </button>
                 </div>
             </div>
         </section>
@@ -621,7 +773,12 @@
             ru: {
                 nav_home: "Главная", nav_profile: "Профиль", nav_quests: "Квесты",
                 nav_leaderboard: "Лидеры", nav_achievements: "Ачивки", nav_ai: "ИИ-помощник",
-                logout: "Выйти",
+                logout: " Выйти",
+                logout_title: "Выйти из аккаунта?",
+                logout_text: "Ты уверен, что хочешь выйти? Тебе нужно будет снова войти, чтобы продолжить.",
+                logout_cancel: "Отмена",
+                logout_confirm: "Выйти",
+                logout_goodbye: " До встречи! Возвращайся скорее!",
                 hero_subtitle: "Геймифицированная платформа для студентов-инженеров",
                 hero_tagline: "Выполняй квесты • Получай XP • Поднимайся в рейтинге",
                 profile_title: "Твой профиль", stat_level: "Уровень", stat_streak: "Стрик", stat_quests: "Квестов",
@@ -633,13 +790,18 @@
                 quest_completed: " Выполнено", quest_check: "Проверить выполнение", quest_reward: "Награда:",
                 leaderboard_empty: "Пока нет участников", leaderboard_level: "Уровень", leaderboard_days: "дн.",
                 achievement_earned: "Получено", achievement_locked: "Заблокировано",
-                ai_loading: "Загрузка...", ai_success: " +XP | Уровень:", ai_new_achievements: "🎉 Новые ачивки:",
+                ai_loading: " Загрузка...", ai_success: " +XP | Уровень:", ai_new_achievements: " Новые ачивки:",
                 error_login: "Сначала войди в систему", error_question: "Введи вопрос"
             },
             kk: {
                 nav_home: "Басты бет", nav_profile: "Профиль", nav_quests: "Квесттер",
                 nav_leaderboard: "Көшбасшылар", nav_achievements: "Жетістіктер", nav_ai: "ЖИ көмекші",
-                logout: "Шығу",
+                logout: " Шығу",
+                logout_title: "Аккаунттан шығу керек пе?",
+                logout_text: "Шығуды қалайтынына сенімдісіз бе? Жалғастыру үшін қайта кіру керек болады.",
+                logout_cancel: "Болдырмау",
+                logout_confirm: "Шығу",
+                logout_goodbye: " Кездескенше! Жақында қайтып орал!",
                 hero_subtitle: "Инженер студенттерге арналған геймификацияланған платформа",
                 hero_tagline: "Квесттерді орында • XP ал • Рейтингте көтеріл",
                 profile_title: "Сенің профилің", stat_level: "Деңгей", stat_streak: "Стрик", stat_quests: "Квесттер",
@@ -651,13 +813,18 @@
                 quest_completed: " Орындалды", quest_check: "Орындалуын тексеру", quest_reward: "Сыйлық:",
                 leaderboard_empty: "Әзірге қатысушылар жоқ", leaderboard_level: "Деңгей", leaderboard_days: "күн",
                 achievement_earned: "Алынды", achievement_locked: "Бұғатталған",
-                ai_loading: "Жүктелуде...", ai_success: " +XP | Деңгей:", ai_new_achievements: "🎉 Жаңа жетістіктер:",
+                ai_loading: " Жүктелуде...", ai_success: " +XP | Деңгей:", ai_new_achievements: " Жаңа жетістіктер:",
                 error_login: "Алдымен жүйеге кір", error_question: "Сұрақ енгіз"
             },
             en: {
                 nav_home: "Home", nav_profile: "Profile", nav_quests: "Quests",
                 nav_leaderboard: "Leaders", nav_achievements: "Achievements", nav_ai: "AI Assistant",
-                logout: "Logout",
+                logout: " Logout",
+                logout_title: "Logout from account?",
+                logout_text: "Are you sure you want to logout? You'll need to login again to continue.",
+                logout_cancel: "Cancel",
+                logout_confirm: "Logout",
+                logout_goodbye: " See you soon! Come back!",
                 hero_subtitle: "Gamified platform for engineering students",
                 hero_tagline: "Complete quests • Earn XP • Climb the leaderboard",
                 profile_title: "Your profile", stat_level: "Level", stat_streak: "Streak", stat_quests: "Quests",
@@ -669,7 +836,7 @@
                 quest_completed: " Completed", quest_check: "Check completion", quest_reward: "Reward:",
                 leaderboard_empty: "No participants yet", leaderboard_level: "Level", leaderboard_days: "days",
                 achievement_earned: "Earned", achievement_locked: "Locked",
-                ai_loading: "Loading...", ai_success: " +XP | Level:", ai_new_achievements: "🎉 New achievements:",
+                ai_loading: " Loading...", ai_success: " +XP | Level:", ai_new_achievements: " New achievements:",
                 error_login: "Please login first", error_question: "Enter question"
             }
         };
@@ -763,7 +930,6 @@
         function initOnboarding() {
             console.log(' Запускаю onboarding автоматически...');
             
-            // ВСЕГДА показываем onboarding при загрузке
             setTimeout(() => {
                 const overlay = document.getElementById('onboardingOverlay');
                 if (overlay) {
@@ -827,9 +993,33 @@
             }, 400);
         }
 
+        // === ФУНКЦИИ ВЫХОДА ===
         function logout() {
+            // Показываем модальное окно подтверждения
+            document.getElementById('logoutModal').style.display = 'flex';
+        }
+
+        function closeLogoutModal() {
+            const modal = document.getElementById('logoutModal');
+            modal.style.opacity = '0';
+            modal.style.transition = 'opacity 0.3s';
+            setTimeout(() => {
+                modal.style.display = 'none';
+                modal.style.opacity = '1';
+            }, 300);
+        }
+
+        function confirmLogout() {
+            // Очищаем все данные пользователя
             localStorage.clear();
-            window.location.href = 'index.html';
+            
+            // Показываем уведомление
+            showNotification(translations[currentLang].logout_goodbye);
+            
+            // Через 1 секунду перенаправляем на главную
+            setTimeout(() => {
+                window.location.href = 'index.html';
+            }, 1000);
         }
 
         async function updateProfile() {

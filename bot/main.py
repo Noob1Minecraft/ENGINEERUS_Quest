@@ -39,8 +39,18 @@ TEXTS = {
             "/daily — ежедневный квест\n"
             "/check_daily — проверить квест\n"
             "/streak — твоя серия\n"
+            "/bind — привязать веб-аккаунт\n"
+            "/whoami — статус привязки\n"
             "/help — помощь"
-        )
+        ),
+        "bind_usage": " **Привязка веб-аккаунта**\n\nИспользуй:\n`/bind email пароль`\n\nПример:\n`/bind user@example.com mypassword123`",
+        "bind_success": " Аккаунт привязан! Теперь твой прогресс синхронизируется с сайтом.",
+        "bind_error": " Ошибка привязки. Проверь email и пароль.",
+        "bind_already": " Ты уже привязан к аккаунту: {email}",
+        "whoami_bound": " Ты привязан к аккаунту: **{email}**\n\nПрогресс синхронизирован с сайтом.",
+        "whoami_not_bound": " Ты не привязан к веб-аккаунту.\n\nИспользуй /bind для привязки.",
+        "unbind_success": " Привязка удалена.",
+        "unbind_not_bound": " Ты не привязан к аккаунту."
     },
     "kk": {
         "choose_lang": " Сәлем! Тілді таңда:",
@@ -51,11 +61,11 @@ TEXTS = {
         "error": " Қате. Бір минуттан кейін қайтала.",
         "current_lang": " Ағымдағы тіл: Қазақша\n\nЖаңа тілді таңда:",
         "lang_changed": " Тіл қазақшаға өзгертілді!",
-        "no_achievements": " Жетістіктер жоқ. Модульдерді қолдана баста!",
+        "no_achievements": "🔒 Жетістіктер жоқ. Модульдерді қолдана баста!",
         "achievements_header": " Сенің жетістіктерің:\n\n",
         "thinking": " Ойлануда...",
         "help": (
-            " **Бот пәрмендері:**\n\n"
+            "📖 **Бот пәрмендері:**\n\n"
             "/start — қайта бастау\n"
             "/lang — тілді өзгерту\n"
             "/profile — профилің\n"
@@ -63,8 +73,18 @@ TEXTS = {
             "/daily — күнделікті квест\n"
             "/check_daily — квестті тексеру\n"
             "/streak — серияң\n"
+            "/bind — веб-аккаунтты байланыстыру\n"
+            "/whoami — байланыс күйі\n"
             "/help — көмек"
-        )
+        ),
+        "bind_usage": " **Веб-аккаунтты байланыстыру**\n\nПайдалан:\n`/bind email пароль`\n\nМысал:\n`/bind user@example.com mypassword123`",
+        "bind_success": " Аккаунт байланыстырылды! Енді прогрессің сайтпен синхрондалады.",
+        "bind_error": " Байланыстыру қатесі. Email мен парольді тексер.",
+        "bind_already": " Сен аккаунтқа байланыстырылған: {email}",
+        "whoami_bound": " Сен аккаунтқа байланыстырылған: **{email}**\n\nПрогресс сайтпен синхрондалған.",
+        "whoami_not_bound": " Сен веб-аккаунтқа байланыстырылмаған.\n\nБайланыстыру үшін /bind пайдалан.",
+        "unbind_success": " Байланыс жойылды.",
+        "unbind_not_bound": " Сен аккаунтқа байланыстырылмаған."
     },
     "en": {
         "choose_lang": " Hello! Select language:",
@@ -87,16 +107,26 @@ TEXTS = {
             "/daily — daily quest\n"
             "/check_daily — check quest\n"
             "/streak — your streak\n"
+            "/bind — link web account\n"
+            "/whoami — link status\n"
             "/help — help"
-        )
+        ),
+        "bind_usage": " **Link web account**\n\nUse:\n`/bind email password`\n\nExample:\n`/bind user@example.com mypassword123`",
+        "bind_success": " Account linked! Your progress now syncs with the website.",
+        "bind_error": " Link error. Check email and password.",
+        "bind_already": " You're already linked to: {email}",
+        "whoami_bound": " You're linked to: **{email}**\n\nProgress synced with website.",
+        "whoami_not_bound": " You're not linked to a web account.\n\nUse /bind to link.",
+        "unbind_success": " Link removed.",
+        "unbind_not_bound": " You're not linked to an account."
     }
 }
 
-# Кэш языков (чтобы не дёргать API каждый раз)
+# Кэш языков
 user_langs_cache = {}
 
 async def get_user_lang(tg_id: int) -> str:
-    """Получить язык пользователя (из кэша или API)"""
+    """Получить язык пользователя"""
     if tg_id in user_langs_cache:
         return user_langs_cache[tg_id]
     try:
@@ -111,7 +141,7 @@ async def get_user_lang(tg_id: int) -> str:
     return "ru"
 
 async def set_user_lang(tg_id: int, lang: str):
-    """Установить язык пользователя через API"""
+    """Установить язык пользователя"""
     user_langs_cache[tg_id] = lang
     try:
         async with httpx.AsyncClient() as client:
@@ -126,7 +156,7 @@ async def set_user_lang(tg_id: int, lang: str):
 class ModuleState(StatesGroup):
     waiting_input = State()
 
-# === /start — СРАЗУ ВЫБОР ЯЗЫКА ===
+# === /start — ВЫБОР ЯЗЫКА ===
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message, state: FSMContext):
     await state.clear()
@@ -137,18 +167,12 @@ async def cmd_start(message: types.Message, state: FSMContext):
     ])
     await message.answer(TEXTS["ru"]["choose_lang"], reply_markup=kb)
 
-# === ВЫБОР ЯЗЫКА ПРИ СТАРТЕ ===
+# === ВЫБОР ЯЗЫКА ===
 @dp.callback_query(lambda c: c.data.startswith("start_lang:"))
 async def start_lang_callback(callback: types.CallbackQuery):
     lang = callback.data.split(":")[1]
-    
-    # Сохраняем язык
     await set_user_lang(callback.from_user.id, lang)
-    
-    # Подтверждение на выбранном языке
     await callback.message.edit_text(TEXTS[lang]["lang_set"])
-    
-    # Через 1.5 секунды показываем модули
     await asyncio.sleep(1.5)
     
     kb = types.InlineKeyboardMarkup(inline_keyboard=[
@@ -206,7 +230,7 @@ async def process_query(message: types.Message, state: FSMContext):
                     "telegram_id": message.from_user.id,
                     "username": message.from_user.username or "",
                     "text": message.text,
-                    "lang": lang  #  Передаём язык
+                    "lang": lang
                 }
             else:
                 endpoint = f"{API_URL}/api/module"
@@ -215,7 +239,7 @@ async def process_query(message: types.Message, state: FSMContext):
                     "username": message.from_user.username or "",
                     "module": module,
                     "text": message.text,
-                    "lang": lang  #  Передаём язык
+                    "lang": lang
                 }
             
             resp = await client.post(endpoint, json=payload, timeout=180.0)
@@ -224,8 +248,7 @@ async def process_query(message: types.Message, state: FSMContext):
         if res.get("status") == "limit":
             await message.answer(TEXTS[lang]["limit_msg"])
         else:
-            # Ответ ИИ на выбранном языке
-            text = f" {res['response']}\n\n💎 +XP | 📊 {res['xp']} | 🎯 Lvl {res['level']}"
+            text = f" {res['response']}\n\n +XP |  {res['xp']} |  Lvl {res['level']}"
             
             if res.get("streak"):
                 streak_word = {"ru": "дн.", "kk": "күн", "en": "days"}[lang]
@@ -260,11 +283,11 @@ async def cmd_profile(message: types.Message):
         
         labels = {
             "ru": {"level": "Уровень", "streak": "Стрик", "days": "дн.", 
-                   "requests": "Запросов сегодня", "ach": "Ачивок", "premium": "Да/Нет"},
+                   "requests": "Запросов сегодня", "ach": "Ачивок"},
             "kk": {"level": "Деңгей", "streak": "Стрик", "days": "күн",
-                   "requests": "Бүгінгі сұраулар", "ach": "Жетістіктер", "premium": "Иә/Жоқ"},
+                   "requests": "Бүгінгі сұраулар", "ach": "Жетістіктер"},
             "en": {"level": "Level", "streak": "Streak", "days": "days",
-                   "requests": "Requests today", "ach": "Achievements", "premium": "Yes/No"}
+                   "requests": "Requests today", "ach": "Achievements"}
         }
         L = labels[lang]
         prem = {"ru": "Да" if user['is_premium'] else "Нет",
@@ -279,6 +302,11 @@ async def cmd_profile(message: types.Message):
             f" {L['requests']}: {user['daily_requests']}/10\n"
             f" {L['ach']}: {ach['total']}"
         )
+        
+        # Показываем email, если привязан
+        if user.get("email"):
+            text += f"\n Email: {user['email']}"
+        
         await message.answer(text)
     except Exception as e:
         await message.answer(f" {str(e)}")
@@ -308,6 +336,93 @@ async def cmd_achievements(message: types.Message):
 async def cmd_help(message: types.Message):
     lang = await get_user_lang(message.from_user.id)
     await message.answer(TEXTS[lang]["help"], parse_mode="Markdown")
+
+# === /bind — ПРИВЯЗКА ВЕБ-АККАУНТА ===
+@dp.message(Command("bind"))
+async def cmd_bind(message: types.Message):
+    """Привязать Telegram к веб-аккаунту"""
+    lang = await get_user_lang(message.from_user.id)
+    
+    # Парсим аргументы
+    args = message.text.split(maxsplit=2)
+    if len(args) < 3:
+        await message.answer(TEXTS[lang]["bind_usage"], parse_mode="Markdown")
+        return
+    
+    email = args[1]
+    password = args[2]
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            # Проверяем, не привязан ли уже
+            user_resp = await client.get(f"{API_URL}/api/user/{message.from_user.id}")
+            if user_resp.status_code == 200:
+                user = user_resp.json()
+                if user.get("email"):
+                    await message.answer(TEXTS[lang]["bind_already"].format(email=user["email"]))
+                    return
+            
+            # Привязываем аккаунт
+            resp = await client.post(
+                f"{API_URL}/api/auth/bind",
+                json={
+                    "telegram_id": message.from_user.id,
+                    "email": email,
+                    "password": password
+                },
+                timeout=10.0
+            )
+            
+            if resp.status_code == 200:
+                await message.answer(TEXTS[lang]["bind_success"])
+            else:
+                await message.answer(TEXTS[lang]["bind_error"])
+    except Exception as e:
+        await message.answer(f" {str(e)}")
+
+# === /whoami — СТАТУС ПРИВЯЗКИ ===
+@dp.message(Command("whoami"))
+async def cmd_whoami(message: types.Message):
+    """Показать статус привязки"""
+    lang = await get_user_lang(message.from_user.id)
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(f"{API_URL}/api/user/{message.from_user.id}")
+            if resp.status_code == 200:
+                user = resp.json()
+                if user.get("email"):
+                    await message.answer(
+                        TEXTS[lang]["whoami_bound"].format(email=user["email"]),
+                        parse_mode="Markdown"
+                    )
+                else:
+                    await message.answer(TEXTS[lang]["whoami_not_bound"])
+            else:
+                await message.answer(TEXTS[lang]["whoami_not_bound"])
+    except Exception as e:
+        await message.answer(f" {str(e)}")
+
+# === /unbind — ОТВЯЗКА ===
+@dp.message(Command("unbind"))
+async def cmd_unbind(message: types.Message):
+    """Отвязать веб-аккаунт"""
+    lang = await get_user_lang(message.from_user.id)
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                f"{API_URL}/api/auth/unbind",
+                json={"telegram_id": message.from_user.id},
+                timeout=10.0
+            )
+            
+            if resp.status_code == 200:
+                await message.answer(TEXTS[lang]["unbind_success"])
+            else:
+                await message.answer(TEXTS[lang]["unbind_not_bound"])
+    except Exception as e:
+        await message.answer(f" {str(e)}")
 
 # === ЗАПУСК ===
 async def main():
