@@ -1022,29 +1022,49 @@
             }, 1000);
         }
 
-        async function updateProfile() {
-            if (!currentUser) return;
-            try {
-                const res = await fetch(`${API}/user/${currentUser.tg_id}`);
-                const user = await res.json();
-                
-                document.getElementById('xp-val').textContent = user.xp;
-                document.getElementById('level-val').textContent = user.level;
-                document.getElementById('streak-val').textContent = user.streak;
-                
-                const xpInLevel = user.xp % 100;
-                const progress = (xpInLevel / 100) * 100;
-                document.getElementById('xp-bar').style.width = progress + '%';
-                document.getElementById('xp-bar').textContent = `${xpInLevel} / 100 XP`;
-                document.getElementById('xp-to-next').textContent = 100 - xpInLevel;
-                
-                const questsRes = await fetch(`${API}/quests/completed/${currentUser.tg_id}`);
-                const questsData = await questsRes.json();
-                document.getElementById('quests-val').textContent = questsData.completed.length;
-            } catch (e) {
-                console.error('Ошибка профиля:', e);
-            }
+       async function loadAchievements() {
+    if (!currentUser) return;
+    
+    // Используем telegram_id, если есть, иначе email
+    const userId = currentUser.tg_id || currentUser.email;
+    if (!userId) return;
+    
+    try {
+        const res = await fetch(`${API}/achievements/${userId}`);
+        const data = await res.json();
+        const list = document.getElementById('achievements-list');
+        list.innerHTML = '';
+        
+        const allAchievements = {
+            "first_step": {"name": "Первый шаг", "desc": "Первый запрос к ИИ"},
+            "material_master": {"name": "Материаловед", "desc": "5 подборов в MaterialSwap"},
+            "patent_crafter": {"name": "Патентный чертёжник", "desc": "1 заявка в PatentCraft"},
+            "streak_3": {"name": "3 дня в строю", "desc": "Активность 3 дня подряд"},
+            "streak_7": {"name": "Неделя в строю", "desc": "Активность 7 дней подряд"},
+            "xp_100": {"name": "Сотня", "desc": "Достиг 100 XP"},
+            "all_modules": {"name": "Инженер-универсал", "desc": "Использовал все модули"}
+        };
+        
+        const earnedCodes = data.achievements ? data.achievements.map(a => a.code) : [];
+        
+        for (const [code, ach] of Object.entries(allAchievements)) {
+            const earned = earnedCodes.includes(code);
+            const div = document.createElement('div');
+            div.className = 'achievement' + (earned ? ' earned' : ' locked');
+            div.innerHTML = `
+                <div style="font-size: 2rem; margin-bottom: 0.5rem;">${ach.name.charAt(0)}</div>
+                <div style="font-weight: 700; margin-bottom: 0.25rem;">${ach.name}</div>
+                <div style="color: var(--text-muted); font-size: 0.875rem;">${ach.desc}</div>
+                ${earned 
+                    ? `<p style="color: var(--success); margin-top: 0.5rem; font-weight: 600;">✅ Получено</p>` 
+                    : `<p style="color: var(--text-muted); margin-top: 0.5rem;">🔒 Заблокировано</p>`}
+            `;
+            list.appendChild(div);
         }
+    } catch (e) {
+        console.error('Ошибка ачивок:', e);
+    }
+}
 
         async function loadQuests() {
             if (!currentUser) return;
