@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Engineerus Quest — Приложение</title>
+    <title>Engineerus Quest</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -84,7 +84,6 @@
             transform: translateY(-2px);
         }
         
-        /* === КНОПКА ВЫХОДА В НАВИГАЦИИ === */
         .logout-btn-nav {
             background: var(--error);
             color: white;
@@ -96,18 +95,13 @@
             font-family: inherit;
             font-size: 1rem;
             transition: all 0.3s;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
         }
-        
         .logout-btn-nav:hover {
             background: #DC2626;
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
         }
         
-        /* === КНОПКА ВЫХОДА В ПРОФИЛЕ === */
         .logout-btn-profile {
             background: var(--error);
             color: white;
@@ -121,25 +115,16 @@
             transition: all 0.3s;
             margin-top: 1rem;
             width: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 0.5rem;
         }
-        
         .logout-btn-profile:hover {
             background: #DC2626;
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
         }
         
-        /* === МОДАЛЬНОЕ ОКНО ПОДТВЕРЖДЕНИЯ ВЫХОДА === */
         .logout-modal-overlay {
             position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
+            top: 0; left: 0; right: 0; bottom: 0;
             background: rgba(0, 0, 0, 0.8);
             backdrop-filter: blur(5px);
             z-index: 10001;
@@ -148,7 +133,6 @@
             justify-content: center;
             animation: fadeIn 0.3s ease-out;
         }
-        
         .logout-modal {
             background: var(--bg-light);
             border-radius: 20px;
@@ -160,31 +144,10 @@
             text-align: center;
             animation: modalSlideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
         }
-        
-        .logout-modal-icon {
-            font-size: 4rem;
-            margin-bottom: 1rem;
-        }
-        
-        .logout-modal-title {
-            font-size: 1.5rem;
-            font-weight: 700;
-            margin-bottom: 0.5rem;
-            color: var(--text);
-        }
-        
-        .logout-modal-text {
-            color: var(--text-muted);
-            margin-bottom: 1.5rem;
-            line-height: 1.6;
-        }
-        
-        .logout-modal-buttons {
-            display: flex;
-            gap: 1rem;
-            justify-content: center;
-        }
-        
+        .logout-modal-icon { font-size: 4rem; margin-bottom: 1rem; }
+        .logout-modal-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.5rem; color: var(--text); }
+        .logout-modal-text { color: var(--text-muted); margin-bottom: 1.5rem; line-height: 1.6; }
+        .logout-modal-buttons { display: flex; gap: 1rem; justify-content: center; }
         .logout-modal-btn {
             padding: 0.75rem 1.5rem;
             border-radius: 8px;
@@ -196,25 +159,10 @@
             transition: all 0.2s;
             flex: 1;
         }
-        
-        .logout-modal-btn-cancel {
-            background: var(--surface);
-            color: var(--text);
-        }
-        
-        .logout-modal-btn-cancel:hover {
-            background: #475569;
-        }
-        
-        .logout-modal-btn-confirm {
-            background: var(--error);
-            color: white;
-        }
-        
-        .logout-modal-btn-confirm:hover {
-            background: #DC2626;
-            transform: translateY(-2px);
-        }
+        .logout-modal-btn-cancel { background: var(--surface); color: var(--text); }
+        .logout-modal-btn-cancel:hover { background: #475569; }
+        .logout-modal-btn-confirm { background: var(--error); color: white; }
+        .logout-modal-btn-confirm:hover { background: #DC2626; transform: translateY(-2px); }
         
         .container { max-width: 1200px; margin: 0 auto; padding: 2rem 1rem; }
         
@@ -446,7 +394,6 @@
             animation: fadeIn 0.5s ease-out;
             backdrop-filter: blur(10px);
         }
-
         .onboarding-modal {
             background: var(--bg-light);
             border-radius: 20px;
@@ -459,14 +406,12 @@
             position: relative;
             overflow: hidden;
         }
-
         .onboarding-robot {
             width: 120px;
             height: 120px;
             margin: 0 auto 1.5rem;
             animation: float 3s ease-in-out infinite;
         }
-
         .onboarding-step-counter {
             text-align: center;
             color: var(--text-muted);
@@ -474,7 +419,6 @@
             margin-bottom: 0.5rem;
             font-weight: 600;
         }
-
         .onboarding-title {
             font-size: 2rem;
             font-weight: 800;
@@ -485,7 +429,6 @@
             -webkit-text-fill-color: transparent;
             background-clip: text;
         }
-
         .onboarding-text {
             color: var(--text-muted);
             text-align: center;
@@ -493,14 +436,12 @@
             line-height: 1.6;
             margin-bottom: 2rem;
         }
-
         .onboarding-progress {
             display: flex;
             gap: 0.5rem;
             justify-content: center;
             margin-bottom: 2rem;
         }
-
         .onboarding-dot {
             width: 40px;
             height: 6px;
@@ -508,18 +449,15 @@
             border-radius: 10px;
             transition: all 0.3s;
         }
-
         .onboarding-dot.active {
             background: linear-gradient(90deg, var(--primary), var(--warning));
             width: 60px;
         }
-
         .onboarding-buttons {
             display: flex;
             gap: 1rem;
             justify-content: center;
         }
-
         .onboarding-btn {
             padding: 0.875rem 2rem;
             border-radius: 12px;
@@ -529,29 +467,21 @@
             transition: all 0.3s;
             border: none;
         }
-
-        .onboarding-btn-primary {
-            background: var(--primary);
-            color: white;
-        }
-
+        .onboarding-btn-primary { background: var(--primary); color: white; }
         .onboarding-btn-primary:hover {
             background: var(--primary-hover);
             transform: translateY(-2px);
             box-shadow: 0 8px 20px rgba(37, 99, 235, 0.4);
         }
-
         .onboarding-btn-secondary {
             background: transparent;
             color: var(--text-muted);
             border: 2px solid var(--surface);
         }
-
         .onboarding-btn-secondary:hover {
             border-color: var(--primary);
             color: var(--text);
         }
-
         .onboarding-skip {
             position: absolute;
             top: 1.5rem;
@@ -565,43 +495,33 @@
             line-height: 1;
             transition: all 0.2s;
         }
-
         .onboarding-skip:hover {
             color: var(--error);
             transform: scale(1.2);
         }
-
         .onboarding-feature-icon {
             font-size: 3rem;
             text-align: center;
             margin-bottom: 1rem;
             animation: pulse 2s infinite;
         }
-
         .slide-enter {
             animation: slideInRight 0.4s cubic-bezier(0.16, 1, 0.3, 1);
         }
-
+        
         @media (max-width: 768px) {
             .hero h1 { font-size: 2rem; }
             .stats-grid { grid-template-columns: 1fr; }
-            .onboarding-modal {
-                padding: 2rem 1.5rem;
-            }
-            .onboarding-title {
-                font-size: 1.5rem;
-            }
-            .logout-modal-buttons {
-                flex-direction: column;
-            }
+            .onboarding-modal { padding: 2rem 1.5rem; }
+            .onboarding-title { font-size: 1.5rem; }
+            .logout-modal-buttons { flex-direction: column; }
         }
     </style>
 </head>
 <body>
-    <!-- ONBOARDING TOUR -->
     <div class="onboarding-overlay" id="onboardingOverlay" style="display: none;">
         <div class="onboarding-modal">
-            <button class="onboarding-skip" onclick="closeOnboarding()" title="Пропустить">×</button>
+            <button class="onboarding-skip" onclick="closeOnboarding()" title="Skip">×</button>
             
             <svg class="onboarding-robot" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
                 <rect x="30" y="20" width="60" height="50" rx="10" fill="#2563EB"/>
@@ -619,39 +539,32 @@
                 <circle cx="70" cy="85" r="3" fill="#10B981"/>
             </svg>
 
-            <div class="onboarding-step-counter" id="onboardingStepCounter">Шаг 1 из 5</div>
-            
-            <h2 class="onboarding-title" id="onboardingTitle">Добро пожаловать!</h2>
-            
+            <div class="onboarding-step-counter" id="onboardingStepCounter">Step 1 of 5</div>
+            <h2 class="onboarding-title" id="onboardingTitle">Welcome!</h2>
             <div class="onboarding-feature-icon" id="onboardingFeatureIcon"></div>
-            
             <p class="onboarding-text" id="onboardingText">
-                Engineerus Quest — твой персональный ИИ-помощник для изучения инженерии!
+                Engineerus Quest - your personal AI assistant for engineering studies!
             </p>
-            
             <div class="onboarding-progress" id="onboardingProgress"></div>
-            
             <div class="onboarding-buttons">
-                <button class="onboarding-btn onboarding-btn-secondary" onclick="prevStep()" id="prevBtn" style="display: none;">← Назад</button>
-                <button class="onboarding-btn onboarding-btn-primary" onclick="nextStep()" id="nextBtn">Далее →</button>
+                <button class="onboarding-btn onboarding-btn-secondary" onclick="prevStep()" id="prevBtn" style="display: none;">← Back</button>
+                <button class="onboarding-btn onboarding-btn-primary" onclick="nextStep()" id="nextBtn">Next →</button>
             </div>
         </div>
     </div>
 
-    <!-- МОДАЛЬНОЕ ОКНО ПОДТВЕРЖДЕНИЯ ВЫХОДА -->
     <div class="logout-modal-overlay" id="logoutModal">
         <div class="logout-modal">
-            <div class="logout-modal-icon"></div>
-            <h3 class="logout-modal-title" data-i18n="logout_title">Выйти из аккаунта?</h3>
+            <h3 class="logout-modal-title" data-i18n="logout_title">Logout from account?</h3>
             <p class="logout-modal-text" data-i18n="logout_text">
-                Ты уверен, что хочешь выйти? Тебе нужно будет снова войти, чтобы продолжить.
+                Are you sure you want to logout? You will need to login again to continue.
             </p>
             <div class="logout-modal-buttons">
                 <button class="logout-modal-btn logout-modal-btn-cancel" onclick="closeLogoutModal()" data-i18n="logout_cancel">
-                    Отмена
+                    Cancel
                 </button>
                 <button class="logout-modal-btn logout-modal-btn-confirm" onclick="confirmLogout()" data-i18n="logout_confirm">
-                    Выйти
+                    Logout
                 </button>
             </div>
         </div>
@@ -659,23 +572,21 @@
 
     <nav>
         <ul>
-            <li><a href="#home" data-i18n="nav_home">Главная</a></li>
-            <li><a href="#profile" data-i18n="nav_profile">Профиль</a></li>
-            <li><a href="#quests" data-i18n="nav_quests">Квесты</a></li>
-            <li><a href="#leaderboard" data-i18n="nav_leaderboard">Лидеры</a></li>
-            <li><a href="#achievements" data-i18n="nav_achievements">Ачивки</a></li>
-            <li><a href="#ai" data-i18n="nav_ai">ИИ-помощник</a></li>
+            <li><a href="#home" data-i18n="nav_home">Home</a></li>
+            <li><a href="#profile" data-i18n="nav_profile">Profile</a></li>
+            <li><a href="#quests" data-i18n="nav_quests">Quests</a></li>
+            <li><a href="#leaderboard" data-i18n="nav_leaderboard">Leaders</a></li>
+            <li><a href="#achievements" data-i18n="nav_achievements">Achievements</a></li>
+            <li><a href="#ai" data-i18n="nav_ai">AI Assistant</a></li>
             <li>
                 <select id="langSelector" class="lang-selector" onchange="setLanguage(this.value)">
-                    <option value="ru">🇷🇺 RU</option>
-                    <option value="kk">🇰🇿 KZ</option>
-                    <option value="en">🇬🇧 EN</option>
+                    <option value="ru">RU</option>
+                    <option value="kk">KZ</option>
+                    <option value="en">EN</option>
                 </select>
             </li>
             <li>
-                <button onclick="logout()" class="logout-btn-nav" data-i18n="logout">
-                     Выйти
-                </button>
+                <button onclick="logout()" class="logout-btn-nav" data-i18n="logout">Logout</button>
             </li>
         </ul>
     </nav>
@@ -684,13 +595,13 @@
         <section id="home">
             <div class="hero">
                 <h1>Engineerus Quest</h1>
-                <p data-i18n="hero_subtitle">Геймифицированная платформа для студентов-инженеров</p>
-                <p class="tagline" data-i18n="hero_tagline">Выполняй квесты • Получай XP • Поднимайся в рейтинге</p>
+                <p data-i18n="hero_subtitle">Gamified platform for engineering students</p>
+                <p class="tagline" data-i18n="hero_tagline">Complete quests • Earn XP • Climb the leaderboard</p>
             </div>
         </section>
 
         <section id="profile">
-            <h2 style="margin-bottom: 1.5rem;" data-i18n="profile_title">Твой профиль</h2>
+            <h2 style="margin-bottom: 1.5rem;" data-i18n="profile_title">Your profile</h2>
             <div class="card">
                 <div id="profile-section">
                     <div class="stats-grid">
@@ -700,66 +611,64 @@
                         </div>
                         <div class="stat-box animate-fade-in" style="animation-delay: 0.1s;">
                             <span class="stat-value" id="level-val">1</span>
-                            <span class="stat-label" data-i18n="stat_level">Уровень</span>
+                            <span class="stat-label" data-i18n="stat_level">Level</span>
                         </div>
                         <div class="stat-box animate-fade-in" style="animation-delay: 0.2s;">
                             <span class="stat-value" id="streak-val">0</span>
-                            <span class="stat-label" data-i18n="stat_streak">Стрик</span>
+                            <span class="stat-label" data-i18n="stat_streak">Streak</span>
                         </div>
                         <div class="stat-box animate-fade-in" style="animation-delay: 0.3s;">
                             <span class="stat-value" id="quests-val">0</span>
-                            <span class="stat-label" data-i18n="stat_quests">Квестов</span>
+                            <span class="stat-label" data-i18n="stat_quests">Quests</span>
                         </div>
                     </div>
                     <div class="xp-bar-container">
                         <div class="xp-bar" id="xp-bar" style="width: 0%;">0 / 100 XP</div>
                     </div>
                     <p style="text-align: center; margin-top: 1rem; color: var(--text-muted);">
-                        <span data-i18n="xp_to_next">До следующего уровня:</span> <span id="xp-to-next">100</span> XP
+                        <span data-i18n="xp_to_next">To next level:</span> <span id="xp-to-next">100</span> XP
                     </p>
-                    <button onclick="logout()" class="logout-btn-profile" data-i18n="logout">
-                         Выйти из аккаунта
-                    </button>
+                    <button onclick="logout()" class="logout-btn-profile" data-i18n="logout">Logout</button>
                 </div>
             </div>
         </section>
 
         <div class="tabs">
-            <button class="tab active" onclick="switchTab('quests', this)" data-i18n="tab_quests">Квесты</button>
-            <button class="tab" onclick="switchTab('leaderboard', this)" data-i18n="tab_leaderboard">Лидеры</button>
-            <button class="tab" onclick="switchTab('achievements', this)" data-i18n="tab_achievements">Ачивки</button>
-            <button class="tab" onclick="switchTab('ai', this)" data-i18n="tab_ai">ИИ-помощник</button>
+            <button class="tab active" onclick="switchTab('quests', this)" data-i18n="tab_quests">Quests</button>
+            <button class="tab" onclick="switchTab('leaderboard', this)" data-i18n="tab_leaderboard">Leaders</button>
+            <button class="tab" onclick="switchTab('achievements', this)" data-i18n="tab_achievements">Achievements</button>
+            <button class="tab" onclick="switchTab('ai', this)" data-i18n="tab_ai">AI Assistant</button>
         </div>
 
         <div id="quests-tab" class="tab-content active">
-            <h2 style="margin-bottom: 1.5rem;" data-i18n="quests_title">Активные квесты</h2>
+            <h2 style="margin-bottom: 1.5rem;" data-i18n="quests_title">Active quests</h2>
             <div id="quests-list"></div>
         </div>
 
         <div id="leaderboard-tab" class="tab-content">
-            <h2 style="margin-bottom: 1.5rem;" data-i18n="leaderboard_title">Таблица лидеров</h2>
+            <h2 style="margin-bottom: 1.5rem;" data-i18n="leaderboard_title">Leaderboard</h2>
             <div id="leaderboard-list"></div>
         </div>
 
         <div id="achievements-tab" class="tab-content">
-            <h2 style="margin-bottom: 1.5rem;" data-i18n="achievements_title">Твои достижения</h2>
+            <h2 style="margin-bottom: 1.5rem;" data-i18n="achievements_title">Your achievements</h2>
             <div class="achievements-grid" id="achievements-list"></div>
         </div>
 
         <div id="ai-tab" class="tab-content">
-            <h2 style="margin-bottom: 1.5rem;" data-i18n="ai_title">ИИ-помощник</h2>
+            <h2 style="margin-bottom: 1.5rem;" data-i18n="ai_title">AI Assistant</h2>
             <div class="card">
-                <label data-i18n="ai_module">Модуль:</label>
+                <label data-i18n="ai_module">Module:</label>
                 <select id="module">
-                    <option value="tutor"> TUTOR AI (Репетитор)</option>
-                    <option value="material"> MaterialSwap (Материалы)</option>
-                    <option value="patent"> PatentCraft (Патенты)</option>
-                    <option value="legal"> EngiLegal (Документы)</option>
-                    <option value="match"> EngiMatch (Команда)</option>
+                    <option value="tutor">TUTOR AI (Tutor)</option>
+                    <option value="material">MaterialSwap (Materials)</option>
+                    <option value="patent">PatentCraft (Patents)</option>
+                    <option value="legal">EngiLegal (Documents)</option>
+                    <option value="match">EngiMatch (Team)</option>
                 </select>
-                <label data-i18n="ai_question">Вопрос / Задача:</label>
-                <textarea id="question" rows="4" data-i18n-placeholder="ai_placeholder" placeholder="Например: объясни закон Ома простыми словами..."></textarea>
-                <button onclick="sendQuery()" style="margin-top: 1rem; width: 100%;" data-i18n="ai_send">Отправить запрос</button>
+                <label data-i18n="ai_question">Question / Task:</label>
+                <textarea id="question" rows="4" data-i18n-placeholder="ai_placeholder" placeholder="For example: explain Ohm's law in simple words..."></textarea>
+                <button onclick="sendQuery()" style="margin-top: 1rem; width: 100%;" data-i18n="ai_send">Send request</button>
                 <div id="ai-response" style="display: none; margin-top: 1.5rem; padding: 1.5rem; background: var(--surface); border-radius: var(--radius);"></div>
             </div>
         </div>
@@ -773,12 +682,12 @@
             ru: {
                 nav_home: "Главная", nav_profile: "Профиль", nav_quests: "Квесты",
                 nav_leaderboard: "Лидеры", nav_achievements: "Ачивки", nav_ai: "ИИ-помощник",
-                logout: " Выйти",
+                logout: "Выйти",
                 logout_title: "Выйти из аккаунта?",
                 logout_text: "Ты уверен, что хочешь выйти? Тебе нужно будет снова войти, чтобы продолжить.",
                 logout_cancel: "Отмена",
                 logout_confirm: "Выйти",
-                logout_goodbye: " До встречи! Возвращайся скорее!",
+                logout_goodbye: "До встречи! Возвращайся скорее!",
                 hero_subtitle: "Геймифицированная платформа для студентов-инженеров",
                 hero_tagline: "Выполняй квесты • Получай XP • Поднимайся в рейтинге",
                 profile_title: "Твой профиль", stat_level: "Уровень", stat_streak: "Стрик", stat_quests: "Квестов",
@@ -787,21 +696,21 @@
                 quests_title: "Активные квесты", leaderboard_title: "Таблица лидеров", achievements_title: "Твои достижения",
                 ai_title: "ИИ-помощник", ai_module: "Модуль:", ai_question: "Вопрос / Задача:",
                 ai_placeholder: "Например: объясни закон Ома простыми словами...", ai_send: "Отправить запрос",
-                quest_completed: " Выполнено", quest_check: "Проверить выполнение", quest_reward: "Награда:",
+                quest_completed: "Выполнено", quest_check: "Проверить выполнение", quest_reward: "Награда:",
                 leaderboard_empty: "Пока нет участников", leaderboard_level: "Уровень", leaderboard_days: "дн.",
                 achievement_earned: "Получено", achievement_locked: "Заблокировано",
-                ai_loading: " Загрузка...", ai_success: " +XP | Уровень:", ai_new_achievements: " Новые ачивки:",
+                ai_loading: "Загрузка...", ai_success: "+XP | Уровень:", ai_new_achievements: "Новые ачивки:",
                 error_login: "Сначала войди в систему", error_question: "Введи вопрос"
             },
             kk: {
                 nav_home: "Басты бет", nav_profile: "Профиль", nav_quests: "Квесттер",
                 nav_leaderboard: "Көшбасшылар", nav_achievements: "Жетістіктер", nav_ai: "ЖИ көмекші",
-                logout: " Шығу",
+                logout: "Шығу",
                 logout_title: "Аккаунттан шығу керек пе?",
                 logout_text: "Шығуды қалайтынына сенімдісіз бе? Жалғастыру үшін қайта кіру керек болады.",
                 logout_cancel: "Болдырмау",
                 logout_confirm: "Шығу",
-                logout_goodbye: " Кездескенше! Жақында қайтып орал!",
+                logout_goodbye: "Кездескенше! Жақында қайтып орал!",
                 hero_subtitle: "Инженер студенттерге арналған геймификацияланған платформа",
                 hero_tagline: "Квесттерді орында • XP ал • Рейтингте көтеріл",
                 profile_title: "Сенің профилің", stat_level: "Деңгей", stat_streak: "Стрик", stat_quests: "Квесттер",
@@ -810,21 +719,21 @@
                 quests_title: "Белсенді квесттер", leaderboard_title: "Көшбасшылар кестесі", achievements_title: "Сенің жетістіктерің",
                 ai_title: "ЖИ көмекші", ai_module: "Модуль:", ai_question: "Сұрақ / Тапсырма:",
                 ai_placeholder: "Мысалы: Ом заңын қарапайым тілмен түсіндір...", ai_send: "Сұрау жіберу",
-                quest_completed: " Орындалды", quest_check: "Орындалуын тексеру", quest_reward: "Сыйлық:",
+                quest_completed: "Орындалды", quest_check: "Орындалуын тексеру", quest_reward: "Сыйлық:",
                 leaderboard_empty: "Әзірге қатысушылар жоқ", leaderboard_level: "Деңгей", leaderboard_days: "күн",
                 achievement_earned: "Алынды", achievement_locked: "Бұғатталған",
-                ai_loading: " Жүктелуде...", ai_success: " +XP | Деңгей:", ai_new_achievements: " Жаңа жетістіктер:",
+                ai_loading: "Жүктелуде...", ai_success: "+XP | Деңгей:", ai_new_achievements: "Жаңа жетістіктер:",
                 error_login: "Алдымен жүйеге кір", error_question: "Сұрақ енгіз"
             },
             en: {
                 nav_home: "Home", nav_profile: "Profile", nav_quests: "Quests",
                 nav_leaderboard: "Leaders", nav_achievements: "Achievements", nav_ai: "AI Assistant",
-                logout: " Logout",
+                logout: "Logout",
                 logout_title: "Logout from account?",
                 logout_text: "Are you sure you want to logout? You'll need to login again to continue.",
                 logout_cancel: "Cancel",
                 logout_confirm: "Logout",
-                logout_goodbye: " See you soon! Come back!",
+                logout_goodbye: "See you soon! Come back!",
                 hero_subtitle: "Gamified platform for engineering students",
                 hero_tagline: "Complete quests • Earn XP • Climb the leaderboard",
                 profile_title: "Your profile", stat_level: "Level", stat_streak: "Streak", stat_quests: "Quests",
@@ -833,10 +742,10 @@
                 quests_title: "Active quests", leaderboard_title: "Leaderboard", achievements_title: "Your achievements",
                 ai_title: "AI Assistant", ai_module: "Module:", ai_question: "Question / Task:",
                 ai_placeholder: "For example: explain Ohm's law in simple words...", ai_send: "Send request",
-                quest_completed: " Completed", quest_check: "Check completion", quest_reward: "Reward:",
+                quest_completed: "Completed", quest_check: "Check completion", quest_reward: "Reward:",
                 leaderboard_empty: "No participants yet", leaderboard_level: "Level", leaderboard_days: "days",
                 achievement_earned: "Earned", achievement_locked: "Locked",
-                ai_loading: " Loading...", ai_success: " +XP | Level:", ai_new_achievements: " New achievements:",
+                ai_loading: "Loading...", ai_success: "+XP | Level:", ai_new_achievements: "New achievements:",
                 error_login: "Please login first", error_question: "Enter question"
             }
         };
@@ -874,52 +783,78 @@
             const savedTgId = localStorage.getItem('user_tg_id');
             const savedUsername = localStorage.getItem('username');
             
-            if (!savedEmail || !savedTgId) {
+            if (!savedEmail && !savedTgId) {
                 window.location.href = 'index.html';
                 return;
             }
             
             currentUser = {
-                tg_id: parseInt(savedTgId),
-                username: savedUsername,
+                tg_id: savedTgId ? parseInt(savedTgId) : null,
+                username: savedUsername || 'Engineer',
                 email: savedEmail
             };
             
             setLanguage(currentLang);
-            
             updateProfile();
             loadQuests();
             loadLeaderboard();
             loadAchievements();
-            
-            // Запускаем onboarding автоматически
             initOnboarding();
         });
 
-        // === ONBOARDING TOUR ===
+        async function updateProfile() {
+            if (!currentUser) return;
+            const userId = currentUser.tg_id || currentUser.email;
+            if (!userId) return;
+            
+            try {
+                const res = await fetch(`${API}/user/${userId}`);
+                if (!res.ok) return;
+                const user = await res.json();
+                
+                document.getElementById('xp-val').textContent = user.xp || 0;
+                document.getElementById('level-val').textContent = user.level || 1;
+                document.getElementById('streak-val').textContent = user.streak || 0;
+                
+                const xpInLevel = (user.xp || 0) % 100;
+                const progress = (xpInLevel / 100) * 100;
+                document.getElementById('xp-bar').style.width = progress + '%';
+                document.getElementById('xp-bar').textContent = `${xpInLevel} / 100 XP`;
+                document.getElementById('xp-to-next').textContent = 100 - xpInLevel;
+                
+                if (currentUser.tg_id) {
+                    const questsRes = await fetch(`${API}/quests/completed/${currentUser.tg_id}`);
+                    const questsData = await questsRes.json();
+                    document.getElementById('quests-val').textContent = questsData.completed ? questsData.completed.length : 0;
+                }
+            } catch (e) {
+                console.error('Profile error:', e);
+            }
+        }
+
         const onboardingSteps = [
             {
-                icon: "",
+                icon: "1",
                 title: "Привет, инженер!",
                 text: "Я твой ИИ-помощник. Сейчас покажу, как устроена платформа и как ты можешь прокачать свои навыки!"
             },
             {
-                icon: "",
+                icon: "2",
                 title: "ИИ-помощник 24/7",
                 text: "Задавай любые вопросы по инженерии — от термодинамики до патентов. ИИ работает локально, бесплатно и быстро!"
             },
             {
-                icon: "",
+                icon: "3",
                 title: "Учись играя",
                 text: "За каждый вопрос и квест ты получаешь XP и уровни. Собирай ачивки и соревнуйся с друзьями в таблице лидеров!"
             },
             {
-                icon: "",
+                icon: "4",
                 title: "Не теряй стрик",
                 text: "Заходи каждый день, чтобы поддерживать серию активности. Стрик мотивирует учиться регулярно!"
             },
             {
-                icon: "",
+                icon: "5",
                 title: "Поехали!",
                 text: "Готов прокачать свои инженерные навыки? Начни с первого квеста или задай вопрос ИИ прямо сейчас!"
             }
@@ -928,14 +863,11 @@
         let currentOnboardingStep = 0;
 
         function initOnboarding() {
-            console.log(' Запускаю onboarding автоматически...');
-            
             setTimeout(() => {
                 const overlay = document.getElementById('onboardingOverlay');
                 if (overlay) {
                     overlay.style.display = 'flex';
                     renderOnboardingStep();
-                    console.log(' Onboarding показан!');
                 }
             }, 1000);
         }
@@ -956,13 +888,11 @@
             
             document.getElementById('prevBtn').style.display = currentOnboardingStep === 0 ? 'none' : 'inline-block';
             document.getElementById('nextBtn').textContent = 
-                currentOnboardingStep === onboardingSteps.length - 1 ? 'Начать! 🎉' : 'Далее →';
+                currentOnboardingStep === onboardingSteps.length - 1 ? 'Начать!' : 'Далее →';
             
             const modal = document.querySelector('.onboarding-modal');
             modal.classList.add('slide-enter');
-            setTimeout(() => {
-                modal.classList.remove('slide-enter');
-            }, 400);
+            setTimeout(() => modal.classList.remove('slide-enter'), 400);
         }
 
         function nextStep() {
@@ -985,17 +915,13 @@
             const overlay = document.getElementById('onboardingOverlay');
             overlay.style.opacity = '0';
             overlay.style.transition = 'opacity 0.4s';
-            
             setTimeout(() => {
                 overlay.style.display = 'none';
                 overlay.style.opacity = '1';
-                console.log(' Onboarding закрыт');
             }, 400);
         }
 
-        // === ФУНКЦИИ ВЫХОДА ===
         function logout() {
-            // Показываем модальное окно подтверждения
             document.getElementById('logoutModal').style.display = 'flex';
         }
 
@@ -1010,131 +936,104 @@
         }
 
         function confirmLogout() {
-            // Очищаем все данные пользователя
             localStorage.clear();
-            
-            // Показываем уведомление
             showNotification(translations[currentLang].logout_goodbye);
+            setTimeout(() => window.location.href = 'index.html', 1000);
+        }
+
+        async function loadAchievements() {
+            if (!currentUser) return;
+            const userId = currentUser.tg_id || currentUser.email;
+            if (!userId) return;
             
-            // Через 1 секунду перенаправляем на главную
-            setTimeout(() => {
-                window.location.href = 'index.html';
-            }, 1000);
+            try {
+                const res = await fetch(`${API}/achievements/${userId}`);
+                const data = await res.json();
+                const list = document.getElementById('achievements-list');
+                list.innerHTML = '';
+                
+                const allAchievements = {
+                    "first_step": {"name": "Первый шаг", "desc": "Первый запрос к ИИ"},
+                    "material_master": {"name": "Материаловед", "desc": "5 подборов в MaterialSwap"},
+                    "patent_crafter": {"name": "Патентный чертёжник", "desc": "1 заявка в PatentCraft"},
+                    "streak_3": {"name": "3 дня в строю", "desc": "Активность 3 дня подряд"},
+                    "streak_7": {"name": "Неделя в строю", "desc": "Активность 7 дней подряд"},
+                    "xp_100": {"name": "Сотня", "desc": "Достиг 100 XP"},
+                    "all_modules": {"name": "Инженер-универсал", "desc": "Использовал все модули"}
+                };
+                
+                const earnedCodes = data.achievements ? data.achievements.map(a => a.code) : [];
+                
+                for (const [code, ach] of Object.entries(allAchievements)) {
+                    const earned = earnedCodes.includes(code);
+                    const div = document.createElement('div');
+                    div.className = 'achievement' + (earned ? ' earned' : ' locked');
+                    div.innerHTML = `
+                        <div style="font-size: 2rem; margin-bottom: 0.5rem;">${ach.name.charAt(0)}</div>
+                        <div style="font-weight: 700; margin-bottom: 0.25rem;">${ach.name}</div>
+                        <div style="color: var(--text-muted); font-size: 0.875rem;">${ach.desc}</div>
+                        ${earned 
+                            ? `<p style="color: var(--success); margin-top: 0.5rem; font-weight: 600;">${translations[currentLang].achievement_earned}</p>` 
+                            : `<p style="color: var(--text-muted); margin-top: 0.5rem;">${translations[currentLang].achievement_locked}</p>`}
+                    `;
+                    list.appendChild(div);
+                }
+            } catch (e) {
+                console.error('Achievements error:', e);
+            }
         }
 
-       async function loadAchievements() {
-    if (!currentUser) return;
-    
-    // Используем telegram_id, если есть, иначе email
-    const userId = currentUser.tg_id || currentUser.email;
-    if (!userId) return;
-    
-    try {
-        const res = await fetch(`${API}/achievements/${userId}`);
-        const data = await res.json();
-        const list = document.getElementById('achievements-list');
-        list.innerHTML = '';
-        
-        const allAchievements = {
-            "first_step": {"name": "Первый шаг", "desc": "Первый запрос к ИИ"},
-            "material_master": {"name": "Материаловед", "desc": "5 подборов в MaterialSwap"},
-            "patent_crafter": {"name": "Патентный чертёжник", "desc": "1 заявка в PatentCraft"},
-            "streak_3": {"name": "3 дня в строю", "desc": "Активность 3 дня подряд"},
-            "streak_7": {"name": "Неделя в строю", "desc": "Активность 7 дней подряд"},
-            "xp_100": {"name": "Сотня", "desc": "Достиг 100 XP"},
-            "all_modules": {"name": "Инженер-универсал", "desc": "Использовал все модули"}
-        };
-        
-        const earnedCodes = data.achievements ? data.achievements.map(a => a.code) : [];
-        
-        for (const [code, ach] of Object.entries(allAchievements)) {
-            const earned = earnedCodes.includes(code);
-            const div = document.createElement('div');
-            div.className = 'achievement' + (earned ? ' earned' : ' locked');
-            div.innerHTML = `
-                <div style="font-size: 2rem; margin-bottom: 0.5rem;">${ach.name.charAt(0)}</div>
-                <div style="font-weight: 700; margin-bottom: 0.25rem;">${ach.name}</div>
-                <div style="color: var(--text-muted); font-size: 0.875rem;">${ach.desc}</div>
-                ${earned 
-                    ? `<p style="color: var(--success); margin-top: 0.5rem; font-weight: 600;">✅ Получено</p>` 
-                    : `<p style="color: var(--text-muted); margin-top: 0.5rem;">🔒 Заблокировано</p>`}
-            `;
-            list.appendChild(div);
+        async function loadQuests() {
+            if (!currentUser) return;
+            
+            try {
+                const tgId = currentUser.tg_id;
+                const questsRes = await fetch(`${API}/quests`);
+                const quests = await questsRes.json();
+                
+                const list = document.getElementById('quests-list');
+                list.innerHTML = '';
+                
+                if (!quests.quests || Object.keys(quests.quests).length === 0) {
+                    list.innerHTML = '<p style="padding: 2rem; text-align: center; color: var(--text-muted);">No quests found</p>';
+                    return;
+                }
+                
+                let completedIds = [];
+                if (tgId) {
+                    const completedRes = await fetch(`${API}/quests/completed/${tgId}`);
+                    const completed = await completedRes.json();
+                    completedIds = completed.completed || [];
+                }
+                
+                for (const quest of Object.values(quests.quests)) {
+                    const isCompleted = completedIds.includes(quest.id);
+                    const card = document.createElement('div');
+                    card.className = 'quest-card' + (isCompleted ? ' completed' : '');
+                    card.innerHTML = `
+                        <div class="quest-header">
+                            <span class="quest-name">${quest.name}</span>
+                            <span class="quest-xp">+${quest.xp} XP</span>
+                        </div>
+                        <div style="color: var(--text-muted); margin-bottom: 0.5rem;">${quest.desc}</div>
+                        <div style="background: var(--bg-light); padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.875rem; display: inline-block;">
+                            ${translations[currentLang].quest_reward} ${quest.reward}
+                        </div>
+                        ${!isCompleted && tgId
+                            ? `<button onclick="completeQuest('${quest.id}')" style="margin-top: 1rem; width: 100%;">${translations[currentLang].quest_check}</button>` 
+                            : `<p style="margin-top: 1rem; color: ${isCompleted ? 'var(--success)' : 'var(--text-muted)'}; font-weight: 600;">${isCompleted ? translations[currentLang].quest_completed : 'Link Telegram to complete'}</p>`}
+                    `;
+                    list.appendChild(card);
+                }
+            } catch (e) {
+                console.error('Quests error:', e);
+                document.getElementById('quests-list').innerHTML = 
+                    `<p style="padding: 2rem; text-align: center; color: var(--error);">Quests load error: ${e.message}</p>`;
+            }
         }
-    } catch (e) {
-        console.error('Ошибка ачивок:', e);
-    }
-}
-
-       async function loadQuests() {
-    if (!currentUser) {
-        console.log(' loadQuests: currentUser не определён');
-        return;
-    }
-    
-    console.log(' loadQuests: currentUser =', currentUser);
-    
-    try {
-        const tgId = currentUser.tg_id;
-        if (!tgId) {
-            console.log('️ loadQuests: telegram_id отсутствует, используем fallback');
-            document.getElementById('quests-list').innerHTML = 
-                '<p style="padding: 2rem; text-align: center; color: var(--text-muted);">⚠️ Привяжи Telegram аккаунт через бота командой /bind</p>';
-            return;
-        }
-        
-        console.log('📡 Запрос квестов для tg_id:', tgId);
-        
-        const [questsRes, completedRes] = await Promise.all([
-            fetch(`${API}/quests`),
-            fetch(`${API}/quests/completed/${tgId}`)
-        ]);
-        
-        console.log(' Ответ quests:', questsRes.status);
-        console.log(' Ответ completed:', completedRes.status);
-        
-        const quests = await questsRes.json();
-        const completed = await completedRes.json();
-        
-        console.log(' Квесты получены:', quests);
-        console.log(' Выполненные:', completed);
-        
-        const list = document.getElementById('quests-list');
-        list.innerHTML = '';
-        
-        if (!quests.quests || Object.keys(quests.quests).length === 0) {
-            list.innerHTML = '<p style="padding: 2rem; text-align: center; color: var(--text-muted);">Квесты не найдены</p>';
-            return;
-        }
-        
-        for (const quest of Object.values(quests.quests)) {
-            const isCompleted = completed.completed && completed.completed.includes(quest.id);
-            const card = document.createElement('div');
-            card.className = 'quest-card' + (isCompleted ? ' completed' : '');
-            card.innerHTML = `
-                <div class="quest-header">
-                    <span class="quest-name">${quest.name}</span>
-                    <span class="quest-xp">+${quest.xp} XP</span>
-                </div>
-                <div style="color: var(--text-muted); margin-bottom: 0.5rem;">${quest.desc}</div>
-                <div style="background: var(--bg-light); padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.875rem; display: inline-block;">
-                    ${translations[currentLang].quest_reward} ${quest.reward}
-                </div>
-                ${!isCompleted 
-                    ? `<button onclick="completeQuest('${quest.id}')" style="margin-top: 1rem; width: 100%;">${translations[currentLang].quest_check}</button>` 
-                    : `<p style="margin-top: 1rem; color: var(--success); font-weight: 600;">${translations[currentLang].quest_completed}</p>`}
-            `;
-            list.appendChild(card);
-        }
-    } catch (e) {
-        console.error(' Ошибка квестов:', e);
-        document.getElementById('quests-list').innerHTML = 
-            `<p style="padding: 2rem; text-align: center; color: var(--error);">Ошибка загрузки квестов: ${e.message}</p>`;
-    }
-}
 
         async function completeQuest(questId) {
-            if (!currentUser) return;
+            if (!currentUser || !currentUser.tg_id) return;
             try {
                 const res = await fetch(`${API}/quests/complete`, {
                     method: 'POST',
@@ -1152,143 +1051,91 @@
                     alert(data.message);
                 }
             } catch (e) {
-                alert('Ошибка: ' + e.message);
+                alert('Error: ' + e.message);
             }
         }
 
         async function loadLeaderboard() {
-    console.log(' loadLeaderboard: API =', API);
-    
-    try {
-        const res = await fetch(`${API}/leaderboard`);
-        console.log(' Leaderboard status:', res.status);
-        
-        const data = await res.json();
-        console.log(' Leaderboard data:', data);
-        
-        const list = document.getElementById('leaderboard-list');
-        list.innerHTML = '';
-        
-        if (!data.leaderboard || data.leaderboard.length === 0) {
-            list.innerHTML = `<p style="padding: 2rem; text-align: center; color: var(--text-muted);">${translations[currentLang].leaderboard_empty}</p>`;
-            return;
-        }
-        
-        data.leaderboard.forEach((user, idx) => {
-            const rank = idx + 1;
-            const medal = rank === 1 ? '' : rank === 2 ? '' : rank === 3 ? '' : `#${rank}`;
-            const rankClass = rank <= 3 ? `rank-${rank}` : '';
-            const item = document.createElement('div');
-            item.className = 'leaderboard-item animate-fade-in';
-            item.style.animationDelay = `${idx * 0.1}s`;
-            item.innerHTML = `
-                <div class="rank ${rankClass}">${medal}</div>
-                <div class="user-info">
-                    <div class="user-name">${user.username || 'Аноним'}</div>
-                    <div class="user-level">${translations[currentLang].leaderboard_level} ${user.level} | 🔥 ${user.streak} ${translations[currentLang].leaderboard_days}</div>
-                </div>
-                <div class="user-xp">${user.xp} XP</div>
-            `;
-            list.appendChild(item);
-        });
-    } catch (e) {
-        console.error(' Ошибка лидерборда:', e);
-        document.getElementById('leaderboard-list').innerHTML = 
-            `<p style="padding: 2rem; text-align: center; color: var(--error);">Ошибка: ${e.message}</p>`;
-    }
-}
-        
-
-        async function loadAchievements() {
-            if (!currentUser) return;
             try {
-                const res = await fetch(`${API}/achievements/${currentUser.tg_id}`);
+                const res = await fetch(`${API}/leaderboard`);
                 const data = await res.json();
-                const list = document.getElementById('achievements-list');
+                const list = document.getElementById('leaderboard-list');
                 list.innerHTML = '';
                 
-                const allAchievements = {
-                    "first_step": {"name": "Первый шаг", "desc": "Первый запрос к ИИ"},
-                    "material_master": {"name": "Материаловед", "desc": "5 подборов в MaterialSwap"},
-                    "patent_crafter": {"name": "Патентный чертёжник", "desc": "1 заявка в PatentCraft"},
-                    "streak_3": {"name": "3 дня в строю", "desc": "Активность 3 дня подряд"},
-                    "streak_7": {"name": "Неделя в строю", "desc": "Активность 7 дней подряд"},
-                    "xp_100": {"name": "Сотня", "desc": "Достиг 100 XP"},
-                    "all_modules": {"name": "Инженер-универсал", "desc": "Использовал все модули"}
-                };
-                
-                const earnedCodes = data.achievements.map(a => a.code);
-                
-                for (const [code, ach] of Object.entries(allAchievements)) {
-                    const earned = earnedCodes.includes(code);
-                    const div = document.createElement('div');
-                    div.className = 'achievement' + (earned ? ' earned' : ' locked');
-                    div.innerHTML = `
-                        <div style="font-size: 2rem; margin-bottom: 0.5rem;">${ach.name.charAt(0)}</div>
-                        <div style="font-weight: 700; margin-bottom: 0.25rem;">${ach.name}</div>
-                        <div style="color: var(--text-muted); font-size: 0.875rem;">${ach.desc}</div>
-                        ${earned 
-                            ? `<p style="color: var(--success); margin-top: 0.5rem; font-weight: 600;">${translations[currentLang].achievement_earned}</p>` 
-                            : `<p style="color: var(--text-muted); margin-top: 0.5rem;">${translations[currentLang].achievement_locked}</p>`}
-                    `;
-                    list.appendChild(div);
+                if (!data.leaderboard || data.leaderboard.length === 0) {
+                    list.innerHTML = `<p style="padding: 2rem; text-align: center; color: var(--text-muted);">${translations[currentLang].leaderboard_empty}</p>`;
+                    return;
                 }
+                
+                data.leaderboard.forEach((user, idx) => {
+                    const rank = idx + 1;
+                    const rankClass = rank <= 3 ? `rank-${rank}` : '';
+                    const item = document.createElement('div');
+                    item.className = 'leaderboard-item animate-fade-in';
+                    item.style.animationDelay = `${idx * 0.1}s`;
+                    item.innerHTML = `
+                        <div class="rank ${rankClass}">#${rank}</div>
+                        <div class="user-info">
+                            <div class="user-name">${user.username || 'Anonymous'}</div>
+                            <div class="user-level">${translations[currentLang].leaderboard_level} ${user.level} | ${user.streak} ${translations[currentLang].leaderboard_days}</div>
+                        </div>
+                        <div class="user-xp">${user.xp} XP</div>
+                    `;
+                    list.appendChild(item);
+                });
             } catch (e) {
-                console.error('Ошибка ачивок:', e);
+                console.error('Leaderboard error:', e);
+                document.getElementById('leaderboard-list').innerHTML = 
+                    `<p style="padding: 2rem; text-align: center; color: var(--error);">Error: ${e.message}</p>`;
             }
         }
 
-      async function sendQuery() {
-    if (!currentUser) return alert(translations[currentLang].error_login);
-    
-    const module = document.getElementById('module').value;
-    const question = document.getElementById('question').value.trim();
-    if (!question) return alert(translations[currentLang].error_question);
-    
-    const responseDiv = document.getElementById('ai-response');
-    responseDiv.style.display = 'block';
-    responseDiv.innerHTML = `<p class="animate-pulse">${translations[currentLang].ai_loading}</p>`;
-    
-    try {
-        const endpoint = module === 'tutor' ? `${API}/ai` : `${API}/module`;
-        const payload = module === 'tutor' 
-            ? {telegram_id: currentUser.tg_id, username: currentUser.username, text: question, lang: currentLang}
-            : {telegram_id: currentUser.tg_id, username: currentUser.username, module: module, text: question, lang: currentLang};
-        
-        const res = await fetch(endpoint, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(payload)
-        });
-        const data = await res.json();
-        
-        if (data.status === 'limit') {
-            responseDiv.innerHTML = `<p style="color: var(--error);">${data.message}</p>`;
-        } else {
-            let html = `<div style="white-space: pre-wrap; margin-bottom: 1rem;">${data.response}</div>`;
-            html += `<p style="color: var(--success); font-weight: 600;">${translations[currentLang].ai_success} ${data.level}</p>`;
-            if (data.new_achievements && data.new_achievements.length > 0) {
-                html += '<div style="margin-top: 1rem; padding: 1rem; background: var(--bg-light); border-radius: 8px;">';
-                html += `<p style="font-weight: 700; margin-bottom: 0.5rem;">${translations[currentLang].ai_new_achievements}</p>`;
-                data.new_achievements.forEach(ach => {
-                    html += `<p>• ${ach.name} (+${ach.xp} XP)</p>`;
-                });
-                html += '</div>';
-            }
-            responseDiv.innerHTML = html;
+        async function sendQuery() {
+            if (!currentUser) return alert(translations[currentLang].error_login);
             
-            // Обновляем профиль и ачивки
-            if (typeof updateProfile === 'function') {
-                await updateProfile();
-            }
-            if (typeof loadAchievements === 'function') {
-                await loadAchievements();
+            const module = document.getElementById('module').value;
+            const question = document.getElementById('question').value.trim();
+            if (!question) return alert(translations[currentLang].error_question);
+            
+            const responseDiv = document.getElementById('ai-response');
+            responseDiv.style.display = 'block';
+            responseDiv.innerHTML = `<p class="animate-pulse">${translations[currentLang].ai_loading}</p>`;
+            
+            try {
+                const userId = currentUser.tg_id || 0;
+                const endpoint = module === 'tutor' ? `${API}/ai` : `${API}/module`;
+                const payload = module === 'tutor' 
+                    ? {telegram_id: userId, username: currentUser.username, text: question, lang: currentLang}
+                    : {telegram_id: userId, username: currentUser.username, module: module, text: question, lang: currentLang};
+                
+                const res = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                
+                if (data.status === 'limit') {
+                    responseDiv.innerHTML = `<p style="color: var(--error);">${data.message}</p>`;
+                } else {
+                    let html = `<div style="white-space: pre-wrap; margin-bottom: 1rem;">${data.response}</div>`;
+                    html += `<p style="color: var(--success); font-weight: 600;">${translations[currentLang].ai_success} ${data.level}</p>`;
+                    if (data.new_achievements && data.new_achievements.length > 0) {
+                        html += '<div style="margin-top: 1rem; padding: 1rem; background: var(--bg-light); border-radius: 8px;">';
+                        html += `<p style="font-weight: 700; margin-bottom: 0.5rem;">${translations[currentLang].ai_new_achievements}</p>`;
+                        data.new_achievements.forEach(ach => {
+                            html += `<p>• ${ach.name} (+${ach.xp} XP)</p>`;
+                        });
+                        html += '</div>';
+                    }
+                    responseDiv.innerHTML = html;
+                    updateProfile();
+                    loadAchievements();
+                }
+            } catch (e) {
+                responseDiv.innerHTML = `<p style="color: var(--error);">Error: ${e.message}</p>`;
             }
         }
-    } catch (e) {
-        responseDiv.innerHTML = `<p style="color: var(--error);">Ошибка: ${e.message}</p>`;
-    }
-}
 
         function switchTab(tabName, btn) {
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
