@@ -193,17 +193,38 @@ async def add_xp(tg_id: int, amount: int):
         await db.commit()
 
 async def update_streak(tg_id: int):
+    """Обновляет стрик пользователя"""
     async with get_db() as db:
-        cur = await db.execute("SELECT streak, last_active FROM users WHERE telegram_id = ?", (tg_id,))
+        cur = await db.execute(
+            "SELECT streak, last_active FROM users WHERE telegram_id = ?", 
+            (tg_id,)
+        )
         row = await cur.fetchone()
-        if not row: 
+        if not row:
             return
-        streak, last = row
+        
+        streak, last_active = row
         today = date.today()
-        if last == str(today): 
-            return
-        new_streak = streak + 1 if last == str(today - timedelta(days=1)) else 1
-        await db.execute("UPDATE users SET streak = ?, last_active = ? WHERE telegram_id = ?", (new_streak, str(today), tg_id))
+        
+        if last_active:
+            last_date = date.fromisoformat(str(last_active))
+            if last_date == today:
+                # Уже обновляли сегодня - не увеличиваем
+                return
+            elif last_date == today - timedelta(days=1):
+                # Вчера был активен - увеличиваем стрик
+                streak = (streak or 0) + 1
+            else:
+                # Пропустил день - сбрасываем стрик на 1
+                streak = 1
+        else:
+            # Первый раз - устанавливаем стрик 1
+            streak = 1
+        
+        await db.execute(
+            "UPDATE users SET streak = ?, last_active = ? WHERE telegram_id = ?",
+            (streak, today, tg_id)
+        )
         await db.commit()
 
 async def check_daily_limit(tg_id: int, is_premium: bool):

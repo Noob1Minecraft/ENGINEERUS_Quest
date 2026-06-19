@@ -481,7 +481,6 @@ async def complete_quest(req: QuestCompleteRequest):
     quest = QUESTS[req.quest_id]
     user = await database.get_or_create_user(req.telegram_id, "")
     
-    # Гарантируем что все числовые поля - это int
     user["xp"] = safe_int(user.get("xp"))
     user["requests_count"] = safe_int(user.get("requests_count"))
     user["material_count"] = safe_int(user.get("material_count"))
@@ -518,6 +517,9 @@ async def complete_quest(req: QuestCompleteRequest):
     await database.complete_quest(req.telegram_id, req.quest_id)
     await database.add_xp(req.telegram_id, quest["xp"])
     
+    #  ЭТА СТРОКА ДОЛЖНА БЫТЬ!
+    await database.update_streak(req.telegram_id)
+    
     updated_user = await database.get_user(req.telegram_id)
     new_achievements = await check_and_award_achievements(updated_user)
     
@@ -527,6 +529,7 @@ async def complete_quest(req: QuestCompleteRequest):
         "quest": quest,
         "new_xp": safe_int(updated_user.get("xp")),
         "new_level": safe_int(updated_user.get("level"), 1),
+        "new_streak": safe_int(updated_user.get("streak")),
         "new_achievements": new_achievements
     }
 

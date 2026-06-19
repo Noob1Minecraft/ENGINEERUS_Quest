@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Engineerus Quest</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'></text></svg>">
     <style>
         :root {
             --primary: #2563EB;
@@ -22,507 +23,166 @@
             --shadow: 0 8px 24px rgba(0,0,0,0.3);
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
-            font-family: 'Inter', sans-serif; 
-            background: var(--bg); 
-            color: var(--text); 
-            line-height: 1.6;
-        }
+        body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
         
         @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes slideIn { from { transform: translateX(400px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
         @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
         @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
         @keyframes modalSlideIn { from { opacity: 0; transform: translateY(50px) scale(0.9); } to { opacity: 1; transform: translateY(0) scale(1); } }
-        @keyframes slideInRight { from { opacity: 0; transform: translateX(30px); } to { opacity: 1; transform: translateX(0); } }
         
         .animate-fade-in { animation: fadeIn 0.6s ease-out; }
         .animate-slide-in { animation: slideIn 0.3s ease-out; }
-        .animate-pulse { animation: pulse 2s infinite; }
         
-        nav {
-            background: var(--bg-light);
-            padding: 1rem 2rem;
-            position: sticky;
-            top: 0;
-            z-index: 100;
-            box-shadow: var(--shadow);
-            border-bottom: 2px solid var(--primary);
-        }
-        nav ul {
-            list-style: none;
-            display: flex;
-            gap: 2rem;
-            justify-content: center;
-            flex-wrap: wrap;
-            align-items: center;
-        }
-        nav a {
-            color: var(--text);
-            text-decoration: none;
-            font-weight: 600;
-            transition: all 0.2s;
-            padding: 0.5rem 1rem;
-            border-radius: 8px;
-        }
+        nav { background: var(--bg-light); padding: 1rem 2rem; position: sticky; top: 0; z-index: 100; box-shadow: var(--shadow); border-bottom: 2px solid var(--primary); }
+        nav ul { list-style: none; display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; align-items: center; }
+        nav a { color: var(--text); text-decoration: none; font-weight: 600; transition: all 0.2s; padding: 0.5rem 1rem; border-radius: 8px; }
         nav a:hover { color: var(--warning); background: rgba(245, 158, 11, 0.1); }
         
-        .lang-selector {
-            background: var(--surface);
-            color: var(--text);
-            border: 2px solid var(--primary);
-            padding: 0.5rem 1rem;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            font-family: inherit;
-            font-size: 1rem;
-            transition: all 0.2s;
-        }
-        .lang-selector:hover {
-            border-color: var(--warning);
-            transform: translateY(-2px);
-        }
+        .lang-selector { background: var(--surface); color: var(--text); border: 2px solid var(--primary); padding: 0.5rem 1rem; border-radius: 8px; font-weight: 600; cursor: pointer; font-family: inherit; }
         
-        .logout-btn-nav {
-            background: var(--error);
-            color: white;
-            border: none;
-            padding: 0.5rem 1rem;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            font-family: inherit;
-            font-size: 1rem;
-            transition: all 0.3s;
-        }
-        .logout-btn-nav:hover {
-            background: #DC2626;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
-        }
+        .logout-btn-nav { background: var(--error); color: white; border: none; padding: 0.5rem 1rem; border-radius: 8px; font-weight: 600; cursor: pointer; }
+        .logout-btn-profile { background: var(--error); color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 8px; font-weight: 600; cursor: pointer; margin-top: 1rem; width: 100%; }
         
-        .logout-btn-profile {
-            background: var(--error);
-            color: white;
-            border: none;
-            padding: 0.75rem 1.5rem;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            font-family: inherit;
-            font-size: 1rem;
-            transition: all 0.3s;
-            margin-top: 1rem;
-            width: 100%;
-        }
-        .logout-btn-profile:hover {
-            background: #DC2626;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
-        }
-        
-        .logout-modal-overlay {
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0, 0, 0, 0.8);
-            backdrop-filter: blur(5px);
-            z-index: 10001;
-            display: none;
-            align-items: center;
-            justify-content: center;
-            animation: fadeIn 0.3s ease-out;
-        }
-        .logout-modal {
-            background: var(--bg-light);
-            border-radius: 20px;
-            padding: 2.5rem;
-            max-width: 400px;
-            width: 90%;
-            border: 2px solid var(--error);
-            box-shadow: 0 20px 60px rgba(239, 68, 68, 0.3);
-            text-align: center;
-            animation: modalSlideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-        .logout-modal-icon { font-size: 4rem; margin-bottom: 1rem; }
-        .logout-modal-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.5rem; color: var(--text); }
-        .logout-modal-text { color: var(--text-muted); margin-bottom: 1.5rem; line-height: 1.6; }
+        .logout-modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(5px); z-index: 10001; display: none; align-items: center; justify-content: center; }
+        .logout-modal { background: var(--bg-light); border-radius: 20px; padding: 2.5rem; max-width: 400px; width: 90%; border: 2px solid var(--error); text-align: center; animation: modalSlideIn 0.4s; }
+        .logout-modal-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.5rem; }
+        .logout-modal-text { color: var(--text-muted); margin-bottom: 1.5rem; }
         .logout-modal-buttons { display: flex; gap: 1rem; justify-content: center; }
-        .logout-modal-btn {
-            padding: 0.75rem 1.5rem;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            border: none;
-            font-family: inherit;
-            font-size: 1rem;
-            transition: all 0.2s;
-            flex: 1;
-        }
+        .logout-modal-btn { padding: 0.75rem 1.5rem; border-radius: 8px; font-weight: 600; cursor: pointer; border: none; flex: 1; }
         .logout-modal-btn-cancel { background: var(--surface); color: var(--text); }
-        .logout-modal-btn-cancel:hover { background: #475569; }
         .logout-modal-btn-confirm { background: var(--error); color: white; }
-        .logout-modal-btn-confirm:hover { background: #DC2626; transform: translateY(-2px); }
         
         .container { max-width: 1200px; margin: 0 auto; padding: 2rem 1rem; }
         
-        .hero {
-            text-align: center;
-            padding: 4rem 1rem;
-            background: linear-gradient(135deg, var(--bg-light) 0%, var(--surface) 100%);
-            border-radius: var(--radius);
-            margin-bottom: 2rem;
-            border: 2px solid var(--primary);
-        }
-        .hero h1 {
-            font-size: 3rem;
-            font-weight: 800;
-            background: linear-gradient(135deg, var(--primary), var(--warning));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            margin-bottom: 1rem;
-        }
+        .hero { text-align: center; padding: 4rem 1rem; background: linear-gradient(135deg, var(--bg-light) 0%, var(--surface) 100%); border-radius: var(--radius); margin-bottom: 2rem; border: 2px solid var(--primary); }
+        .hero h1 { font-size: 3rem; font-weight: 800; background: linear-gradient(135deg, var(--primary), var(--warning)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; margin-bottom: 1rem; }
         .hero p { font-size: 1.25rem; color: var(--text-muted); }
         .hero .tagline { margin-top: 1rem; color: var(--warning); font-weight: 600; }
         
-        .card {
-            background: var(--bg-light);
-            border-radius: var(--radius);
-            padding: 2rem;
-            box-shadow: var(--shadow);
-            margin-bottom: 2rem;
-            border: 1px solid var(--surface);
-        }
+        .card { background: var(--bg-light); border-radius: var(--radius); padding: 2rem; box-shadow: var(--shadow); margin-bottom: 2rem; border: 1px solid var(--surface); }
         
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
-            margin-bottom: 2rem;
-        }
-        .stat-box {
-            background: var(--surface);
-            padding: 1.5rem;
-            border-radius: var(--radius);
-            text-align: center;
-        }
-        .stat-value {
-            font-size: 2.5rem;
-            font-weight: 800;
-            color: var(--warning);
-            display: block;
-        }
-        .stat-label {
-            color: var(--text-muted);
-            font-size: 0.875rem;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+        .stat-box { background: var(--surface); padding: 1.5rem; border-radius: var(--radius); text-align: center; }
+        .stat-value { font-size: 2.5rem; font-weight: 800; color: var(--warning); display: block; }
+        .stat-label { color: var(--text-muted); font-size: 0.875rem; text-transform: uppercase; }
         
-        .xp-bar-container {
-            background: var(--surface);
-            border-radius: 20px;
-            padding: 4px;
-            margin: 1rem 0;
-            overflow: hidden;
-        }
-        .xp-bar {
-            height: 24px;
-            background: linear-gradient(90deg, var(--success), var(--primary));
-            border-radius: 16px;
-            transition: width 0.5s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: 600;
-            font-size: 0.875rem;
-        }
+        .xp-bar-container { background: var(--surface); border-radius: 20px; padding: 4px; margin: 1rem 0; overflow: hidden; }
+        .xp-bar { height: 24px; background: linear-gradient(90deg, var(--success), var(--primary)); border-radius: 16px; transition: width 0.5s ease; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; }
         
-        button {
-            background: var(--primary);
-            color: white;
-            padding: 0.75rem 1.5rem;
-            border: none;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-            font-size: 1rem;
-        }
-        button:hover {
-            background: var(--primary-hover);
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
-        }
+        button { background: var(--primary); color: white; padding: 0.75rem 1.5rem; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+        button:hover { background: var(--primary-hover); transform: translateY(-2px); }
         
-        input, select, textarea {
-            width: 100%;
-            padding: 0.75rem;
-            background: var(--surface);
-            border: 2px solid var(--surface);
-            border-radius: 8px;
-            color: var(--text);
-            font-family: inherit;
-            font-size: 1rem;
-        }
-        input:focus, select:focus, textarea:focus {
-            outline: none;
-            border-color: var(--primary);
-        }
-        label {
-            display: block;
-            font-weight: 600;
-            margin: 1rem 0 0.5rem;
-            color: var(--text-muted);
-        }
+        input, select, textarea { width: 100%; padding: 0.75rem; background: var(--surface); border: 2px solid var(--surface); border-radius: 8px; color: var(--text); font-family: inherit; }
+        input:focus, select:focus, textarea:focus { outline: none; border-color: var(--primary); }
+        label { display: block; font-weight: 600; margin: 1rem 0 0.5rem; color: var(--text-muted); }
         
-        .tabs {
-            display: flex;
-            gap: 0.5rem;
-            margin-bottom: 2rem;
-            border-bottom: 2px solid var(--surface);
-            flex-wrap: wrap;
-        }
-        .tab {
-            padding: 1rem 2rem;
-            background: none;
-            border: none;
-            color: var(--text-muted);
-            font-weight: 600;
-            cursor: pointer;
-            border-bottom: 3px solid transparent;
-            transition: all 0.2s;
-        }
-        .tab.active {
-            color: var(--primary);
-            border-bottom-color: var(--primary);
-        }
-        .tab-content { display: none; animation: fadeIn 0.4s ease-out; }
-        .tab-content.active { display: block; }
+        .tabs { display: flex; gap: 0.5rem; margin-bottom: 2rem; border-bottom: 2px solid var(--surface); flex-wrap: wrap; }
+        .tab { padding: 1rem 1.5rem; background: none; border: none; color: var(--text-muted); font-weight: 600; cursor: pointer; border-bottom: 3px solid transparent; }
+        .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; animation: fadeIn 0.4s ease-out; }
         
-        .quest-card {
-            background: var(--surface);
-            border-radius: var(--radius);
-            padding: 1.5rem;
-            margin-bottom: 1rem;
-            border-left: 4px solid var(--primary);
-        }
+        .quest-card { background: var(--surface); border-radius: var(--radius); padding: 1.5rem; margin-bottom: 1rem; border-left: 4px solid var(--primary); }
         .quest-card.completed { border-left-color: var(--success); opacity: 0.7; }
-        .quest-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 0.5rem;
-        }
+        .quest-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
         .quest-name { font-size: 1.25rem; font-weight: 700; }
-        .quest-xp {
-            background: var(--warning);
-            color: var(--bg);
-            padding: 0.25rem 0.75rem;
-            border-radius: 20px;
-            font-weight: 700;
-            font-size: 0.875rem;
-        }
+        .quest-xp { background: var(--warning); color: var(--bg); padding: 0.25rem 0.75rem; border-radius: 20px; font-weight: 700; font-size: 0.875rem; }
         
-        .leaderboard-item {
-            display: flex;
-            align-items: center;
-            padding: 1rem 1.5rem;
-            border-bottom: 1px solid var(--surface);
-            background: var(--bg-light);
-        }
-        .leaderboard-item:hover { background: var(--surface); }
-        .rank {
-            font-size: 1.5rem;
-            font-weight: 800;
-            width: 60px;
-            text-align: center;
-        }
+        .leaderboard-item { display: flex; align-items: center; padding: 1rem 1.5rem; border-bottom: 1px solid var(--surface); background: var(--bg-light); }
+        .rank { font-size: 1.5rem; font-weight: 800; width: 60px; text-align: center; }
         .rank-1 { color: var(--gold); }
         .rank-2 { color: #C0C0C0; }
         .rank-3 { color: #CD7F32; }
         .user-info { flex: 1; }
-        .user-name { font-weight: 600; font-size: 1.1rem; }
+        .user-name { font-weight: 600; }
         .user-level { color: var(--text-muted); font-size: 0.875rem; }
-        .user-xp {
-            font-size: 1.25rem;
-            font-weight: 700;
-            color: var(--warning);
-        }
+        .user-xp { font-size: 1.25rem; font-weight: 700; color: var(--warning); }
         
-        .achievements-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-            gap: 1rem;
-        }
-        .achievement {
-            background: var(--surface);
-            border-radius: var(--radius);
-            padding: 1.5rem;
-            text-align: center;
-            border: 2px solid transparent;
-        }
-        .achievement.earned {
-            border-color: var(--gold);
-            box-shadow: 0 0 20px rgba(255, 215, 0, 0.2);
-        }
+        .achievements-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; }
+        .achievement { background: var(--surface); border-radius: var(--radius); padding: 1.5rem; text-align: center; border: 2px solid transparent; }
+        .achievement.earned { border-color: var(--gold); box-shadow: 0 0 20px rgba(255, 215, 0, 0.2); }
         .achievement.locked { opacity: 0.4; }
         
-        .notification {
-            position: fixed;
-            top: 80px;
-            right: 20px;
-            background: var(--success);
-            color: white;
-            padding: 1rem 1.5rem;
-            border-radius: var(--radius);
-            box-shadow: var(--shadow);
-            z-index: 1001;
-            animation: slideIn 0.3s ease;
-        }
+        .notification { position: fixed; top: 80px; right: 20px; background: var(--success); color: white; padding: 1rem 1.5rem; border-radius: var(--radius); box-shadow: var(--shadow); z-index: 1001; animation: slideIn 0.3s ease; }
         
-        .onboarding-overlay {
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0, 0, 0, 0.85);
-            z-index: 10000;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            animation: fadeIn 0.5s ease-out;
-            backdrop-filter: blur(10px);
-        }
-        .onboarding-modal {
-            background: var(--bg-light);
-            border-radius: 20px;
-            padding: 3rem;
-            max-width: 600px;
-            width: 90%;
-            border: 2px solid var(--primary);
-            box-shadow: 0 20px 60px rgba(37, 99, 235, 0.3);
-            animation: modalSlideIn 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-            position: relative;
-            overflow: hidden;
-        }
-        .onboarding-robot {
-            width: 120px;
-            height: 120px;
-            margin: 0 auto 1.5rem;
-            animation: float 3s ease-in-out infinite;
-        }
-        .onboarding-step-counter {
-            text-align: center;
-            color: var(--text-muted);
-            font-size: 0.875rem;
-            margin-bottom: 0.5rem;
-            font-weight: 600;
-        }
-        .onboarding-title {
-            font-size: 2rem;
-            font-weight: 800;
-            text-align: center;
-            margin-bottom: 1rem;
-            background: linear-gradient(135deg, var(--primary), var(--warning));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-        .onboarding-text {
-            color: var(--text-muted);
-            text-align: center;
-            font-size: 1.1rem;
-            line-height: 1.6;
-            margin-bottom: 2rem;
-        }
-        .onboarding-progress {
-            display: flex;
-            gap: 0.5rem;
-            justify-content: center;
-            margin-bottom: 2rem;
-        }
-        .onboarding-dot {
-            width: 40px;
-            height: 6px;
-            background: var(--surface);
-            border-radius: 10px;
-            transition: all 0.3s;
-        }
-        .onboarding-dot.active {
-            background: linear-gradient(90deg, var(--primary), var(--warning));
-            width: 60px;
-        }
-        .onboarding-buttons {
-            display: flex;
-            gap: 1rem;
-            justify-content: center;
-        }
-        .onboarding-btn {
-            padding: 0.875rem 2rem;
-            border-radius: 12px;
-            font-weight: 600;
-            font-size: 1rem;
-            cursor: pointer;
-            transition: all 0.3s;
-            border: none;
-        }
+        /* Learning Path */
+        .learning-path { display: flex; flex-direction: column; gap: 1rem; }
+        .learning-stage { background: var(--surface); border-radius: var(--radius); padding: 1.5rem; border-left: 4px solid var(--primary); transition: all 0.3s; }
+        .learning-stage:hover { transform: translateX(5px); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+        .learning-stage.completed { border-left-color: var(--success); opacity: 0.8; }
+        .learning-stage.current { border-left-color: var(--warning); background: linear-gradient(135deg, var(--surface), #3d2817); }
+        .learning-stage.locked { opacity: 0.5; border-left-color: var(--text-muted); }
+        .stage-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem; }
+        .stage-title { font-size: 1.25rem; font-weight: 700; }
+        .stage-badge { padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; }
+        .badge-completed { background: var(--success); color: white; }
+        .badge-current { background: var(--warning); color: var(--bg); }
+        .badge-locked { background: var(--text-muted); color: var(--bg); }
+        .stage-topics { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
+        .topic-tag { background: var(--bg-light); padding: 0.25rem 0.75rem; border-radius: 12px; font-size: 0.8rem; color: var(--text-muted); }
+        .stage-progress { margin-top: 1rem; }
+        .progress-bar { background: var(--bg); border-radius: 10px; height: 8px; overflow: hidden; margin-top: 0.5rem; }
+        .progress-fill { height: 100%; background: linear-gradient(90deg, var(--primary), var(--warning)); transition: width 0.5s ease; }
+        .progress-text { font-size: 0.875rem; color: var(--text-muted); display: flex; justify-content: space-between; }
+        
+        /* Books */
+        .books-filters { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+        .filter-btn { background: var(--surface); color: var(--text-muted); padding: 0.5rem 1rem; border-radius: 20px; font-size: 0.875rem; font-weight: 600; border: 2px solid transparent; cursor: pointer; }
+        .filter-btn:hover { border-color: var(--primary); color: var(--text); }
+        .filter-btn.active { background: var(--primary); color: white; }
+        .books-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
+        .book-card { background: var(--surface); border-radius: var(--radius); padding: 1.5rem; transition: all 0.3s; border: 1px solid transparent; display: flex; flex-direction: column; }
+        .book-card:hover { transform: translateY(-5px); border-color: var(--primary); box-shadow: 0 8px 16px rgba(0,0,0,0.3); }
+        .book-card.read { border-color: var(--success); opacity: 0.85; }
+        .book-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem; gap: 0.5rem; }
+        .book-title { font-size: 1.1rem; font-weight: 700; flex: 1; }
+        .book-category { padding: 0.2rem 0.6rem; border-radius: 12px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; background: var(--primary); color: white; white-space: nowrap; }
+        .book-author { color: var(--text-muted); font-size: 0.875rem; margin-bottom: 0.5rem; }
+        .book-desc { color: var(--text-muted); font-size: 0.875rem; line-height: 1.5; margin-bottom: 1rem; flex: 1; }
+        .book-meta { display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.75rem; }
+        .book-difficulty { display: flex; gap: 0.25rem; }
+        .difficulty-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--bg); }
+        .difficulty-dot.active { background: var(--warning); }
+        .book-actions { display: flex; gap: 0.5rem; }
+        .book-btn { flex: 1; padding: 0.5rem; font-size: 0.875rem; border-radius: 6px; }
+        .book-btn-read { background: var(--success); }
+        .book-btn-read:hover { background: #059669; }
+        .book-btn-link { background: var(--surface); color: var(--text); }
+        .book-btn-link:hover { background: var(--primary); }
+        
+        /* Onboarding */
+        .onboarding-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.85); z-index: 10000; display: flex; align-items: center; justify-content: center; animation: fadeIn 0.5s ease-out; backdrop-filter: blur(10px); }
+        .onboarding-modal { background: var(--bg-light); border-radius: 20px; padding: 3rem; max-width: 600px; width: 90%; border: 2px solid var(--primary); box-shadow: 0 20px 60px rgba(37, 99, 235, 0.3); animation: modalSlideIn 0.6s cubic-bezier(0.16, 1, 0.3, 1); position: relative; overflow: hidden; }
+        .onboarding-robot { width: 120px; height: 120px; margin: 0 auto 1.5rem; animation: float 3s ease-in-out infinite; }
+        .onboarding-step-counter { text-align: center; color: var(--text-muted); font-size: 0.875rem; margin-bottom: 0.5rem; font-weight: 600; }
+        .onboarding-title { font-size: 2rem; font-weight: 800; text-align: center; margin-bottom: 1rem; background: linear-gradient(135deg, var(--primary), var(--warning)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+        .onboarding-text { color: var(--text-muted); text-align: center; font-size: 1.1rem; line-height: 1.6; margin-bottom: 2rem; }
+        .onboarding-progress { display: flex; gap: 0.5rem; justify-content: center; margin-bottom: 2rem; }
+        .onboarding-dot { width: 40px; height: 6px; background: var(--surface); border-radius: 10px; transition: all 0.3s; }
+        .onboarding-dot.active { background: linear-gradient(90deg, var(--primary), var(--warning)); width: 60px; }
+        .onboarding-buttons { display: flex; gap: 1rem; justify-content: center; }
+        .onboarding-btn { padding: 0.875rem 2rem; border-radius: 12px; font-weight: 600; font-size: 1rem; cursor: pointer; transition: all 0.3s; border: none; }
         .onboarding-btn-primary { background: var(--primary); color: white; }
-        .onboarding-btn-primary:hover {
-            background: var(--primary-hover);
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(37, 99, 235, 0.4);
-        }
-        .onboarding-btn-secondary {
-            background: transparent;
-            color: var(--text-muted);
-            border: 2px solid var(--surface);
-        }
-        .onboarding-btn-secondary:hover {
-            border-color: var(--primary);
-            color: var(--text);
-        }
-        .onboarding-skip {
-            position: absolute;
-            top: 1.5rem;
-            right: 1.5rem;
-            background: transparent;
-            color: var(--text-muted);
-            border: none;
-            font-size: 1.5rem;
-            cursor: pointer;
-            padding: 0.5rem;
-            line-height: 1;
-            transition: all 0.2s;
-        }
-        .onboarding-skip:hover {
-            color: var(--error);
-            transform: scale(1.2);
-        }
-        .onboarding-feature-icon {
-            font-size: 3rem;
-            text-align: center;
-            margin-bottom: 1rem;
-            animation: pulse 2s infinite;
-        }
-        .slide-enter {
-            animation: slideInRight 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-        }
+        .onboarding-btn-primary:hover { background: var(--primary-hover); transform: translateY(-2px); box-shadow: 0 8px 20px rgba(37, 99, 235, 0.4); }
+        .onboarding-btn-secondary { background: transparent; color: var(--text-muted); border: 2px solid var(--surface); }
+        .onboarding-btn-secondary:hover { border-color: var(--primary); color: var(--text); }
+        .onboarding-skip { position: absolute; top: 1.5rem; right: 1.5rem; background: transparent; color: var(--text-muted); border: none; font-size: 1.5rem; cursor: pointer; padding: 0.5rem; line-height: 1; transition: all 0.2s; }
+        .onboarding-skip:hover { color: var(--error); transform: scale(1.2); }
+        .onboarding-feature-icon { font-size: 3rem; text-align: center; margin-bottom: 1rem; animation: pulse 2s infinite; }
         
         @media (max-width: 768px) {
             .hero h1 { font-size: 2rem; }
             .stats-grid { grid-template-columns: 1fr; }
-            .onboarding-modal { padding: 2rem 1.5rem; }
-            .onboarding-title { font-size: 1.5rem; }
-            .logout-modal-buttons { flex-direction: column; }
+            .books-grid { grid-template-columns: 1fr; }
         }
     </style>
 </head>
 <body>
+    <!-- Onboarding -->
     <div class="onboarding-overlay" id="onboardingOverlay" style="display: none;">
         <div class="onboarding-modal">
-            <button class="onboarding-skip" onclick="closeOnboarding()" title="Skip">×</button>
-            
+            <button class="onboarding-skip" onclick="closeOnboarding()" title="Skip">x</button>
             <svg class="onboarding-robot" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
                 <rect x="30" y="20" width="60" height="50" rx="10" fill="#2563EB"/>
                 <line x1="60" y1="20" x2="60" y2="10" stroke="#F59E0B" stroke-width="3"/>
@@ -538,46 +198,39 @@
                 <circle cx="50" cy="85" r="3" fill="#F59E0B"/>
                 <circle cx="70" cy="85" r="3" fill="#10B981"/>
             </svg>
-
             <div class="onboarding-step-counter" id="onboardingStepCounter">Step 1 of 5</div>
             <h2 class="onboarding-title" id="onboardingTitle">Welcome!</h2>
             <div class="onboarding-feature-icon" id="onboardingFeatureIcon"></div>
-            <p class="onboarding-text" id="onboardingText">
-                Engineerus Quest - your personal AI assistant for engineering studies!
-            </p>
+            <p class="onboarding-text" id="onboardingText">Engineerus Quest - your personal AI assistant!</p>
             <div class="onboarding-progress" id="onboardingProgress"></div>
             <div class="onboarding-buttons">
-                <button class="onboarding-btn onboarding-btn-secondary" onclick="prevStep()" id="prevBtn" style="display: none;">← Back</button>
-                <button class="onboarding-btn onboarding-btn-primary" onclick="nextStep()" id="nextBtn">Next →</button>
+                <button class="onboarding-btn onboarding-btn-secondary" onclick="prevStep()" id="prevBtn" style="display: none;">Back</button>
+                <button class="onboarding-btn onboarding-btn-primary" onclick="nextStep()" id="nextBtn">Next</button>
             </div>
         </div>
     </div>
 
+    <!-- Logout Modal -->
     <div class="logout-modal-overlay" id="logoutModal">
         <div class="logout-modal">
-            <h3 class="logout-modal-title" data-i18n="logout_title">Logout from account?</h3>
-            <p class="logout-modal-text" data-i18n="logout_text">
-                Are you sure you want to logout? You will need to login again to continue.
-            </p>
+            <h3 class="logout-modal-title" data-i18n="logout_title">Logout?</h3>
+            <p class="logout-modal-text" data-i18n="logout_text">Are you sure?</p>
             <div class="logout-modal-buttons">
-                <button class="logout-modal-btn logout-modal-btn-cancel" onclick="closeLogoutModal()" data-i18n="logout_cancel">
-                    Cancel
-                </button>
-                <button class="logout-modal-btn logout-modal-btn-confirm" onclick="confirmLogout()" data-i18n="logout_confirm">
-                    Logout
-                </button>
+                <button class="logout-modal-btn logout-modal-btn-cancel" onclick="closeLogoutModal()" data-i18n="logout_cancel">Cancel</button>
+                <button class="logout-modal-btn logout-modal-btn-confirm" onclick="confirmLogout()" data-i18n="logout_confirm">Logout</button>
             </div>
         </div>
     </div>
 
+    <!-- Navigation -->
     <nav>
         <ul>
             <li><a href="#home" data-i18n="nav_home">Home</a></li>
             <li><a href="#profile" data-i18n="nav_profile">Profile</a></li>
             <li><a href="#quests" data-i18n="nav_quests">Quests</a></li>
-            <li><a href="#leaderboard" data-i18n="nav_leaderboard">Leaders</a></li>
             <li><a href="#achievements" data-i18n="nav_achievements">Achievements</a></li>
             <li><a href="#ai" data-i18n="nav_ai">AI Assistant</a></li>
+            <li><a href="#learning" data-i18n="nav_learning">Learning</a></li>
             <li>
                 <select id="langSelector" class="lang-selector" onchange="setLanguage(this.value)">
                     <option value="ru">RU</option>
@@ -585,9 +238,7 @@
                     <option value="en">EN</option>
                 </select>
             </li>
-            <li>
-                <button onclick="logout()" class="logout-btn-nav" data-i18n="logout">Logout</button>
-            </li>
+            <li><button onclick="logout()" class="logout-btn-nav" data-i18n="logout">Logout</button></li>
         </ul>
     </nav>
 
@@ -596,40 +247,22 @@
             <div class="hero">
                 <h1>Engineerus Quest</h1>
                 <p data-i18n="hero_subtitle">Gamified platform for engineering students</p>
-                <p class="tagline" data-i18n="hero_tagline">Complete quests • Earn XP • Climb the leaderboard</p>
+                <p class="tagline" data-i18n="hero_tagline">Complete quests - Earn XP - Climb the leaderboard</p>
             </div>
         </section>
 
         <section id="profile">
             <h2 style="margin-bottom: 1.5rem;" data-i18n="profile_title">Your profile</h2>
             <div class="card">
-                <div id="profile-section">
-                    <div class="stats-grid">
-                        <div class="stat-box animate-fade-in">
-                            <span class="stat-value" id="xp-val">0</span>
-                            <span class="stat-label">XP</span>
-                        </div>
-                        <div class="stat-box animate-fade-in" style="animation-delay: 0.1s;">
-                            <span class="stat-value" id="level-val">1</span>
-                            <span class="stat-label" data-i18n="stat_level">Level</span>
-                        </div>
-                        <div class="stat-box animate-fade-in" style="animation-delay: 0.2s;">
-                            <span class="stat-value" id="streak-val">0</span>
-                            <span class="stat-label" data-i18n="stat_streak">Streak</span>
-                        </div>
-                        <div class="stat-box animate-fade-in" style="animation-delay: 0.3s;">
-                            <span class="stat-value" id="quests-val">0</span>
-                            <span class="stat-label" data-i18n="stat_quests">Quests</span>
-                        </div>
-                    </div>
-                    <div class="xp-bar-container">
-                        <div class="xp-bar" id="xp-bar" style="width: 0%;">0 / 100 XP</div>
-                    </div>
-                    <p style="text-align: center; margin-top: 1rem; color: var(--text-muted);">
-                        <span data-i18n="xp_to_next">To next level:</span> <span id="xp-to-next">100</span> XP
-                    </p>
-                    <button onclick="logout()" class="logout-btn-profile" data-i18n="logout">Logout</button>
+                <div class="stats-grid">
+                    <div class="stat-box"><span class="stat-value" id="xp-val">0</span><span class="stat-label">XP</span></div>
+                    <div class="stat-box"><span class="stat-value" id="level-val">1</span><span class="stat-label" data-i18n="stat_level">Level</span></div>
+                    <div class="stat-box"><span class="stat-value" id="streak-val">0</span><span class="stat-label" data-i18n="stat_streak">Streak</span></div>
+                    <div class="stat-box"><span class="stat-value" id="quests-val">0</span><span class="stat-label" data-i18n="stat_quests">Quests</span></div>
                 </div>
+                <div class="xp-bar-container"><div class="xp-bar" id="xp-bar" style="width: 0%;">0 / 100 XP</div></div>
+                <p style="text-align: center; margin-top: 1rem; color: var(--text-muted);"><span data-i18n="xp_to_next">To next level:</span> <span id="xp-to-next">100</span> XP</p>
+                <button onclick="logout()" class="logout-btn-profile" data-i18n="logout">Logout</button>
             </div>
         </section>
 
@@ -638,6 +271,7 @@
             <button class="tab" onclick="switchTab('leaderboard', this)" data-i18n="tab_leaderboard">Leaders</button>
             <button class="tab" onclick="switchTab('achievements', this)" data-i18n="tab_achievements">Achievements</button>
             <button class="tab" onclick="switchTab('ai', this)" data-i18n="tab_ai">AI Assistant</button>
+            <button class="tab" onclick="switchTab('learning', this)" data-i18n="tab_learning">Learning</button>
         </div>
 
         <div id="quests-tab" class="tab-content active">
@@ -660,16 +294,29 @@
             <div class="card">
                 <label data-i18n="ai_module">Module:</label>
                 <select id="module">
-                    <option value="tutor">TUTOR AI (Tutor)</option>
-                    <option value="material">MaterialSwap (Materials)</option>
-                    <option value="patent">PatentCraft (Patents)</option>
-                    <option value="legal">EngiLegal (Documents)</option>
-                    <option value="match">EngiMatch (Team)</option>
+                    <option value="tutor">TUTOR AI</option>
+                    <option value="material">MaterialSwap</option>
+                    <option value="patent">PatentCraft</option>
+                    <option value="legal">EngiLegal</option>
+                    <option value="match">EngiMatch</option>
                 </select>
-                <label data-i18n="ai_question">Question / Task:</label>
-                <textarea id="question" rows="4" data-i18n-placeholder="ai_placeholder" placeholder="For example: explain Ohm's law in simple words..."></textarea>
+                <label data-i18n="ai_question">Question:</label>
+                <textarea id="question" rows="4" data-i18n-placeholder="ai_placeholder" placeholder="Explain Ohm's law..."></textarea>
                 <button onclick="sendQuery()" style="margin-top: 1rem; width: 100%;" data-i18n="ai_send">Send request</button>
                 <div id="ai-response" style="display: none; margin-top: 1.5rem; padding: 1.5rem; background: var(--surface); border-radius: var(--radius);"></div>
+            </div>
+        </div>
+
+        <div id="learning-tab" class="tab-content">
+            <h2 style="margin-bottom: 1.5rem; color: var(--warning);" data-i18n="learning_title">LEARNING PATH</h2>
+            <div class="card">
+                <h3 style="margin-bottom: 1rem; color: var(--warning);" data-i18n="roadmap_title">Engineering Roadmap</h3>
+                <div class="learning-path" id="learning-path"></div>
+            </div>
+            <div class="card">
+                <h3 style="margin-bottom: 1rem; color: var(--warning);" data-i18n="books_title">Books and Resources</h3>
+                <div class="books-filters" id="books-filters"></div>
+                <div class="books-grid" id="books-grid"></div>
             </div>
         </div>
     </div>
@@ -677,105 +324,150 @@
     <script>
         const API = '/api';
         let currentUser = null;
+        let currentBookFilter = 'all';
+        let currentLang = localStorage.getItem('lang') || 'ru';
         
         const translations = {
             ru: {
                 nav_home: "Главная", nav_profile: "Профиль", nav_quests: "Квесты",
                 nav_leaderboard: "Лидеры", nav_achievements: "Ачивки", nav_ai: "ИИ-помощник",
-                logout: "Выйти",
-                logout_title: "Выйти из аккаунта?",
-                logout_text: "Ты уверен, что хочешь выйти? Тебе нужно будет снова войти, чтобы продолжить.",
-                logout_cancel: "Отмена",
-                logout_confirm: "Выйти",
-                logout_goodbye: "До встречи! Возвращайся скорее!",
+                nav_learning: "Обучение",
+                logout: "Выйти", logout_title: "Выйти из аккаунта?", logout_text: "Ты уверен?",
+                logout_cancel: "Отмена", logout_confirm: "Выйти",
                 hero_subtitle: "Геймифицированная платформа для студентов-инженеров",
-                hero_tagline: "Выполняй квесты • Получай XP • Поднимайся в рейтинге",
+                hero_tagline: "Выполняй квесты - Получай XP - Поднимайся в рейтинге",
                 profile_title: "Твой профиль", stat_level: "Уровень", stat_streak: "Стрик", stat_quests: "Квестов",
                 xp_to_next: "До следующего уровня:",
-                tab_quests: "Квесты", tab_leaderboard: "Лидеры", tab_achievements: "Ачивки", tab_ai: "ИИ-помощник",
+                tab_quests: "Квесты", tab_leaderboard: "Лидеры", tab_achievements: "Ачивки",
+                tab_ai: "ИИ-помощник", tab_learning: "Обучение",
+                learning_title: "План обучения", roadmap_title: "Дорожная карта инженера",
+                books_title: "Книги и источники",
                 quests_title: "Активные квесты", leaderboard_title: "Таблица лидеров", achievements_title: "Твои достижения",
-                ai_title: "ИИ-помощник", ai_module: "Модуль:", ai_question: "Вопрос / Задача:",
-                ai_placeholder: "Например: объясни закон Ома простыми словами...", ai_send: "Отправить запрос",
+                ai_title: "ИИ-помощник", ai_module: "Модуль:", ai_question: "Вопрос:",
+                ai_placeholder: "Например: объясни закон Ома...", ai_send: "Отправить запрос",
                 quest_completed: "Выполнено", quest_check: "Проверить выполнение", quest_reward: "Награда:",
                 leaderboard_empty: "Пока нет участников", leaderboard_level: "Уровень", leaderboard_days: "дн.",
                 achievement_earned: "Получено", achievement_locked: "Заблокировано",
                 ai_loading: "Загрузка...", ai_success: "+XP | Уровень:", ai_new_achievements: "Новые ачивки:",
-                error_login: "Сначала войди в систему", error_question: "Введи вопрос"
+                stage_completed: "Пройдено", stage_current: "Текущий", stage_locked: "Заблокировано",
+                book_mark_read: "Прочитано", book_open: "Открыть",
+                book_difficulty: "Сложность:", book_pages: "стр.",
+                filter_all: "Все", filter_sopromat: "Сопромат", filter_termo: "Термех",
+                filter_materials: "Материалы", filter_patents: "Патенты", filter_math: "Математика"
             },
             kk: {
                 nav_home: "Басты бет", nav_profile: "Профиль", nav_quests: "Квесттер",
                 nav_leaderboard: "Көшбасшылар", nav_achievements: "Жетістіктер", nav_ai: "ЖИ көмекші",
-                logout: "Шығу",
-                logout_title: "Аккаунттан шығу керек пе?",
-                logout_text: "Шығуды қалайтынына сенімдісіз бе? Жалғастыру үшін қайта кіру керек болады.",
-                logout_cancel: "Болдырмау",
-                logout_confirm: "Шығу",
-                logout_goodbye: "Кездескенше! Жақында қайтып орал!",
-                hero_subtitle: "Инженер студенттерге арналған геймификацияланған платформа",
-                hero_tagline: "Квесттерді орында • XP ал • Рейтингте көтеріл",
+                nav_learning: "Оқу",
+                logout: "Шығу", logout_title: "Шығу?", logout_text: "Сенімдісіз бе?",
+                logout_cancel: "Болдырмау", logout_confirm: "Шығу",
+                hero_subtitle: "Инженер студенттерге арналған платформа",
+                hero_tagline: "Квесттерді орында - XP ал - Рейтингте көтеріл",
                 profile_title: "Сенің профилің", stat_level: "Деңгей", stat_streak: "Стрик", stat_quests: "Квесттер",
                 xp_to_next: "Келесі деңгейге дейін:",
-                tab_quests: "Квесттер", tab_leaderboard: "Көшбасшылар", tab_achievements: "Жетістіктер", tab_ai: "ЖИ көмекші",
+                tab_quests: "Квесттер", tab_leaderboard: "Көшбасшылар", tab_achievements: "Жетістіктер",
+                tab_ai: "ЖИ көмекші", tab_learning: "Оқу",
+                learning_title: "Оқу жоспары", roadmap_title: "Инженер жол картасы",
+                books_title: "Кітаптар мен ресурстар",
                 quests_title: "Белсенді квесттер", leaderboard_title: "Көшбасшылар кестесі", achievements_title: "Сенің жетістіктерің",
-                ai_title: "ЖИ көмекші", ai_module: "Модуль:", ai_question: "Сұрақ / Тапсырма:",
-                ai_placeholder: "Мысалы: Ом заңын қарапайым тілмен түсіндір...", ai_send: "Сұрау жіберу",
+                ai_title: "ЖИ көмекші", ai_module: "Модуль:", ai_question: "Сұрақ:",
+                ai_placeholder: "Мысалы: Ом заңын түсіндір...", ai_send: "Сұрау жіберу",
                 quest_completed: "Орындалды", quest_check: "Орындалуын тексеру", quest_reward: "Сыйлық:",
-                leaderboard_empty: "Әзірге қатысушылар жоқ", leaderboard_level: "Деңгей", leaderboard_days: "күн",
+                leaderboard_empty: "Қатысушылар жоқ", leaderboard_level: "Деңгей", leaderboard_days: "күн",
                 achievement_earned: "Алынды", achievement_locked: "Бұғатталған",
                 ai_loading: "Жүктелуде...", ai_success: "+XP | Деңгей:", ai_new_achievements: "Жаңа жетістіктер:",
-                error_login: "Алдымен жүйеге кір", error_question: "Сұрақ енгіз"
+                stage_completed: "Өтілді", stage_current: "Ағымдағы", stage_locked: "Бұғатталған",
+                book_mark_read: "Оқылды", book_open: "Ашу",
+                book_difficulty: "Қиындық:", book_pages: "б.",
+                filter_all: "Барлығы", filter_sopromat: "Сопромат", filter_termo: "Термомех",
+                filter_materials: "Материалдар", filter_patents: "Патенттер", filter_math: "Математика"
             },
             en: {
                 nav_home: "Home", nav_profile: "Profile", nav_quests: "Quests",
                 nav_leaderboard: "Leaders", nav_achievements: "Achievements", nav_ai: "AI Assistant",
-                logout: "Logout",
-                logout_title: "Logout from account?",
-                logout_text: "Are you sure you want to logout? You'll need to login again to continue.",
-                logout_cancel: "Cancel",
-                logout_confirm: "Logout",
-                logout_goodbye: "See you soon! Come back!",
+                nav_learning: "Learning",
+                logout: "Logout", logout_title: "Logout?", logout_text: "Are you sure?",
+                logout_cancel: "Cancel", logout_confirm: "Logout",
                 hero_subtitle: "Gamified platform for engineering students",
-                hero_tagline: "Complete quests • Earn XP • Climb the leaderboard",
+                hero_tagline: "Complete quests - Earn XP - Climb the leaderboard",
                 profile_title: "Your profile", stat_level: "Level", stat_streak: "Streak", stat_quests: "Quests",
                 xp_to_next: "To next level:",
-                tab_quests: "Quests", tab_leaderboard: "Leaders", tab_achievements: "Achievements", tab_ai: "AI Assistant",
+                tab_quests: "Quests", tab_leaderboard: "Leaders", tab_achievements: "Achievements",
+                tab_ai: "AI Assistant", tab_learning: "Learning",
+                learning_title: "Learning Path", roadmap_title: "Engineering Roadmap",
+                books_title: "Books and Resources",
                 quests_title: "Active quests", leaderboard_title: "Leaderboard", achievements_title: "Your achievements",
-                ai_title: "AI Assistant", ai_module: "Module:", ai_question: "Question / Task:",
-                ai_placeholder: "For example: explain Ohm's law in simple words...", ai_send: "Send request",
+                ai_title: "AI Assistant", ai_module: "Module:", ai_question: "Question:",
+                ai_placeholder: "For example: explain Ohm's law...", ai_send: "Send request",
                 quest_completed: "Completed", quest_check: "Check completion", quest_reward: "Reward:",
-                leaderboard_empty: "No participants yet", leaderboard_level: "Level", leaderboard_days: "days",
+                leaderboard_empty: "No participants", leaderboard_level: "Level", leaderboard_days: "days",
                 achievement_earned: "Earned", achievement_locked: "Locked",
                 ai_loading: "Loading...", ai_success: "+XP | Level:", ai_new_achievements: "New achievements:",
-                error_login: "Please login first", error_question: "Enter question"
+                stage_completed: "Completed", stage_current: "Current", stage_locked: "Locked",
+                book_mark_read: "Read", book_open: "Open",
+                book_difficulty: "Difficulty:", book_pages: "pages",
+                filter_all: "All", filter_sopromat: "Strength", filter_termo: "Thermo",
+                filter_materials: "Materials", filter_patents: "Patents", filter_math: "Math"
             }
         };
         
-        let currentLang = localStorage.getItem('lang') || 'ru';
+        const LEARNING_STAGES = [
+            { id: 'basics', title: { ru: 'Основы инженерии', kk: 'Инженерия негіздері', en: 'Engineering Basics' }, desc: { ru: 'Математика, физика, черчение', kk: 'Математика, физика', en: 'Math, Physics' }, topics: ['Math', 'Physics', 'CAD'], xp: 500, status: 'completed' },
+            { id: 'mechanics', title: { ru: 'Механика и сопромат', kk: 'Механика', en: 'Mechanics' }, desc: { ru: 'Сопротивление материалов', kk: 'Материалдар кедергісі', en: 'Strength of materials' }, topics: ['Sopromat', 'Teromeh'], xp: 800, status: 'current' },
+            { id: 'materials', title: { ru: 'Материаловедение', kk: 'Материалтану', en: 'Materials Science' }, desc: { ru: 'Металлы, полимеры', kk: 'Металлдар', en: 'Metals, Polymers' }, topics: ['Metals', 'Polymers'], xp: 600, status: 'locked' },
+            { id: 'design', title: { ru: 'Проектирование', kk: 'Жобалау', en: 'Design & CAD' }, desc: { ru: 'SolidWorks, AutoCAD', kk: '3D модельдеу', en: '3D Modeling' }, topics: ['SolidWorks', 'AutoCAD'], xp: 1000, status: 'locked' },
+            { id: 'patents', title: { ru: 'Патенты', kk: 'Патенттер', en: 'Patents' }, desc: { ru: 'Патентное право', kk: 'Патенттік құқық', en: 'Patent Law' }, topics: ['Patent Law', 'Innovation'], xp: 700, status: 'locked' }
+        ];
+        
+        const BOOKS_DATABASE = [
+            { id: 1, title: 'Сопромат для чайников', author: 'А. Александров', category: 'sopromat', difficulty: 2, pages: 320, desc: 'Простое введение в сопротивление материалов.', url: 'https://twirpx.com/file/2847563/', year: 2020 },
+            { id: 2, title: 'Термодинамика', author: 'Кириллин В.А.', category: 'termo', difficulty: 3, pages: 450, desc: 'Классический учебник по термодинамике.', url: 'https://studfile.net/preview/5430830/', year: 2018 },
+            { id: 3, title: 'Материаловедение', author: 'Бунин К.П.', category: 'materials', difficulty: 3, pages: 380, desc: 'Справочник по металлам и сплавам.', url: 'https://meganorm.ru', year: 2019 },
+            { id: 4, title: 'Патентование изобретений', author: 'Сергеев П.В.', category: 'patents', difficulty: 2, pages: 240, desc: 'Как защитить изобретение патентом.', url: 'https://gospatent.kz/ru/legislation', year: 2021 },
+            { id: 5, title: 'Высшая математика', author: 'Пискунов Н.С.', category: 'math', difficulty: 4, pages: 620, desc: 'Полный курс высшей математики.', url: 'https://twirpx.com', year: 2017 },
+            { id: 6, title: 'SolidWorks', author: 'Романцев И.И.', category: 'materials', difficulty: 2, pages: 410, desc: 'Руководство по 3D-моделированию.', url: 'https://help.solidworks.com', year: 2022 },
+            { id: 7, title: 'Теория механизмов', author: 'Артоболевский И.И.', category: 'sopromat', difficulty: 3, pages: 520, desc: 'Курс по механизмам и кинематике.', url: 'https://ru.scribd.com', year: 2015 },
+            { id: 8, title: 'Инженерная графика', author: 'Боголюбов С.К.', category: 'math', difficulty: 1, pages: 280, desc: 'Основы инженерного черчения.', url: 'https://studme.org', year: 2019 },
+            { id: 9, title: 'Методы конечных элементов', author: 'Зенкевич О.', category: 'materials', difficulty: 5, pages: 560, desc: 'Классика по FEM-анализу.', url: 'https://www.researchgate.net', year: 2016 },
+            { id: 10, title: 'Патентное право РК', author: 'Нурланов А.К.', category: 'patents', difficulty: 2, pages: 300, desc: 'Патентное законодательство Казахстана.', url: 'https://adilet.zan.kz', year: 2023 },
+            { id: 11, title: 'Python для инженеров', author: 'Лутц М.', category: 'math', difficulty: 2, pages: 580, desc: 'Python от основ до продвинутых тем.', url: 'https://docs.python.org/3/tutorial/', year: 2021 },
+            { id: 12, title: 'AutoCAD', author: 'Полещук Н.Н.', category: 'materials', difficulty: 1, pages: 350, desc: 'Руководство по AutoCAD.', url: 'https://www.autodesk.ru/education', year: 2020 },
+            { id: 13, title: 'Сопротивление материалов', author: 'Феодосьев В.И.', category: 'sopromat', difficulty: 4, pages: 592, desc: 'Классический учебник по сопромату.', url: 'https://twirpx.com', year: 2016 },
+            { id: 14, title: 'Техническая термодинамика', author: 'Нащокин В.В.', category: 'termo', difficulty: 3, pages: 496, desc: 'Основы термодинамики.', url: 'https://studfile.net', year: 2018 },
+            { id: 15, title: 'Расчёты в Excel', author: 'Гмурман В.Е.', category: 'math', difficulty: 2, pages: 320, desc: 'Excel для инженерных задач.', url: 'https://support.microsoft.com/ru-ru/excel', year: 2022 }
+        ];
+
+        // Onboarding data
+        const onboardingSteps = [
+            { icon: "1", title: "Привет, инженер!", text: "Я твой ИИ-помощник. Сейчас покажу, как устроена платформа!" },
+            { icon: "2", title: "ИИ-помощник 24/7", text: "Задавай любые вопросы по инженерии!" },
+            { icon: "3", title: "Учись играя", text: "За каждый вопрос и квест ты получаешь XP и уровни!" },
+            { icon: "4", title: "Не теряй стрик", text: "Заходи каждый день, чтобы поддерживать серию!" },
+            { icon: "5", title: "Поехали!", text: "Готов прокачать свои инженерные навыки?" }
+        ];
+        let currentOnboardingStep = 0;
         
         function setLanguage(lang) {
             currentLang = lang;
             localStorage.setItem('lang', lang);
             document.getElementById('langSelector').value = lang;
-            
             document.querySelectorAll('[data-i18n]').forEach(el => {
                 const key = el.getAttribute('data-i18n');
-                if (translations[lang][key]) {
+                if (translations[lang] && translations[lang][key]) {
                     el.textContent = translations[lang][key];
                 }
             });
-            
             document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
                 const key = el.getAttribute('data-i18n-placeholder');
-                if (translations[lang][key]) {
+                if (translations[lang] && translations[lang][key]) {
                     el.placeholder = translations[lang][key];
                 }
             });
-            
-            if (currentUser) {
-                loadQuests();
-                loadLeaderboard();
-                loadAchievements();
-            }
+            renderLearningPath();
+            renderBooks();
+            loadQuests();
+            loadLeaderboard();
+            loadAchievements();
         }
 
         window.addEventListener('DOMContentLoaded', () => {
@@ -796,345 +488,216 @@
             
             setLanguage(currentLang);
             updateProfile();
-            loadQuests();
-            loadLeaderboard();
-            loadAchievements();
             initOnboarding();
         });
 
-        async function updateProfile() {
-            if (!currentUser) return;
-            const userId = currentUser.tg_id || currentUser.email;
-            if (!userId) return;
-            
-            try {
-                const res = await fetch(`${API}/user/${userId}`);
-                if (!res.ok) return;
-                const user = await res.json();
-                
-                document.getElementById('xp-val').textContent = user.xp || 0;
-                document.getElementById('level-val').textContent = user.level || 1;
-                document.getElementById('streak-val').textContent = user.streak || 0;
-                
-                const xpInLevel = (user.xp || 0) % 100;
-                const progress = (xpInLevel / 100) * 100;
-                document.getElementById('xp-bar').style.width = progress + '%';
-                document.getElementById('xp-bar').textContent = `${xpInLevel} / 100 XP`;
-                document.getElementById('xp-to-next').textContent = 100 - xpInLevel;
-                
-                if (currentUser.tg_id) {
-                    const questsRes = await fetch(`${API}/quests/completed/${currentUser.tg_id}`);
-                    const questsData = await questsRes.json();
-                    document.getElementById('quests-val').textContent = questsData.completed ? questsData.completed.length : 0;
-                }
-            } catch (e) {
-                console.error('Profile error:', e);
+      async function updateProfile() {
+    if (!currentUser) return;
+    const userId = currentUser.tg_id || currentUser.email;
+    if (!userId) return;
+    
+    try {
+        const res = await fetch(API + '/user/' + userId);
+        if (!res.ok) return;
+        const user = await res.json();
+        
+        document.getElementById('xp-val').textContent = user.xp || 0;
+        document.getElementById('level-val').textContent = user.level || 1;
+        document.getElementById('streak-val').textContent = user.streak || 0;
+        
+        const xpInLevel = (user.xp || 0) % 100;
+        const progress = (xpInLevel / 100) * 100;
+        document.getElementById('xp-bar').style.width = progress + '%';
+        document.getElementById('xp-bar').textContent = xpInLevel + ' / 100 XP';
+        document.getElementById('xp-to-next').textContent = 100 - xpInLevel;
+        
+        //  ИСПРАВЛЕНИЕ: загружаем квесты для любого userId (tg_id или email)
+        try {
+            const questsRes = await fetch(API + '/quests/completed/' + userId);
+            if (questsRes.ok) {
+                const questsData = await questsRes.json();
+                const completedCount = questsData.completed ? questsData.completed.length : 0;
+                document.getElementById('quests-val').textContent = completedCount;
             }
+        } catch (e) {
+            console.error('Quests count error:', e);
+            document.getElementById('quests-val').textContent = '0';
         }
+    } catch (e) { console.error('Profile error:', e); }
+}
+        
 
-        const onboardingSteps = [
-            {
-                icon: "1",
-                title: "Привет, инженер!",
-                text: "Я твой ИИ-помощник. Сейчас покажу, как устроена платформа и как ты можешь прокачать свои навыки!"
-            },
-            {
-                icon: "2",
-                title: "ИИ-помощник 24/7",
-                text: "Задавай любые вопросы по инженерии — от термодинамики до патентов. ИИ работает локально, бесплатно и быстро!"
-            },
-            {
-                icon: "3",
-                title: "Учись играя",
-                text: "За каждый вопрос и квест ты получаешь XP и уровни. Собирай ачивки и соревнуйся с друзьями в таблице лидеров!"
-            },
-            {
-                icon: "4",
-                title: "Не теряй стрик",
-                text: "Заходи каждый день, чтобы поддерживать серию активности. Стрик мотивирует учиться регулярно!"
-            },
-            {
-                icon: "5",
-                title: "Поехали!",
-                text: "Готов прокачать свои инженерные навыки? Начни с первого квеста или задай вопрос ИИ прямо сейчас!"
-            }
-        ];
-
-        let currentOnboardingStep = 0;
-
+        // Onboarding functions
         function initOnboarding() {
             setTimeout(() => {
                 const overlay = document.getElementById('onboardingOverlay');
-                if (overlay) {
-                    overlay.style.display = 'flex';
-                    renderOnboardingStep();
-                }
+                if (overlay) { overlay.style.display = 'flex'; renderOnboardingStep(); }
             }, 1000);
         }
-
         function renderOnboardingStep() {
             const step = onboardingSteps[currentOnboardingStep];
-            
-            document.getElementById('onboardingStepCounter').textContent = 
-                `Шаг ${currentOnboardingStep + 1} из ${onboardingSteps.length}`;
+            document.getElementById('onboardingStepCounter').textContent = 'Step ' + (currentOnboardingStep + 1) + ' of ' + onboardingSteps.length;
             document.getElementById('onboardingTitle').textContent = step.title;
             document.getElementById('onboardingFeatureIcon').textContent = step.icon;
             document.getElementById('onboardingText').textContent = step.text;
-            
             const progressContainer = document.getElementById('onboardingProgress');
-            progressContainer.innerHTML = onboardingSteps.map((_, i) => 
-                `<div class="onboarding-dot ${i === currentOnboardingStep ? 'active' : ''}"></div>`
-            ).join('');
-            
+            progressContainer.innerHTML = onboardingSteps.map((_, i) => '<div class="onboarding-dot ' + (i === currentOnboardingStep ? 'active' : '') + '"></div>').join('');
             document.getElementById('prevBtn').style.display = currentOnboardingStep === 0 ? 'none' : 'inline-block';
-            document.getElementById('nextBtn').textContent = 
-                currentOnboardingStep === onboardingSteps.length - 1 ? 'Начать!' : 'Далее →';
-            
-            const modal = document.querySelector('.onboarding-modal');
-            modal.classList.add('slide-enter');
-            setTimeout(() => modal.classList.remove('slide-enter'), 400);
+            document.getElementById('nextBtn').textContent = currentOnboardingStep === onboardingSteps.length - 1 ? 'Start!' : 'Next';
         }
-
-        function nextStep() {
-            if (currentOnboardingStep < onboardingSteps.length - 1) {
-                currentOnboardingStep++;
-                renderOnboardingStep();
-            } else {
-                closeOnboarding();
-            }
-        }
-
-        function prevStep() {
-            if (currentOnboardingStep > 0) {
-                currentOnboardingStep--;
-                renderOnboardingStep();
-            }
-        }
-
+        function nextStep() { if (currentOnboardingStep < onboardingSteps.length - 1) { currentOnboardingStep++; renderOnboardingStep(); } else closeOnboarding(); }
+        function prevStep() { if (currentOnboardingStep > 0) { currentOnboardingStep--; renderOnboardingStep(); } }
         function closeOnboarding() {
             const overlay = document.getElementById('onboardingOverlay');
-            overlay.style.opacity = '0';
-            overlay.style.transition = 'opacity 0.4s';
-            setTimeout(() => {
-                overlay.style.display = 'none';
-                overlay.style.opacity = '1';
-            }, 400);
+            overlay.style.opacity = '0'; overlay.style.transition = 'opacity 0.4s';
+            setTimeout(() => { overlay.style.display = 'none'; overlay.style.opacity = '1'; }, 400);
         }
 
-        function logout() {
-            document.getElementById('logoutModal').style.display = 'flex';
-        }
-
-        function closeLogoutModal() {
-            const modal = document.getElementById('logoutModal');
-            modal.style.opacity = '0';
-            modal.style.transition = 'opacity 0.3s';
-            setTimeout(() => {
-                modal.style.display = 'none';
-                modal.style.opacity = '1';
-            }, 300);
-        }
-
+        function logout() { document.getElementById('logoutModal').style.display = 'flex'; }
+        function closeLogoutModal() { document.getElementById('logoutModal').style.display = 'none'; }
         function confirmLogout() {
             localStorage.clear();
-            showNotification(translations[currentLang].logout_goodbye);
-            setTimeout(() => window.location.href = 'index.html', 1000);
+            setTimeout(() => window.location.href = 'index.html', 500);
         }
 
         async function loadAchievements() {
             if (!currentUser) return;
             const userId = currentUser.tg_id || currentUser.email;
-            if (!userId) return;
-            
             try {
-                const res = await fetch(`${API}/achievements/${userId}`);
+                const res = await fetch(API + '/achievements/' + userId);
                 const data = await res.json();
                 const list = document.getElementById('achievements-list');
                 list.innerHTML = '';
-                
-                const allAchievements = {
+                const allAch = {
                     "first_step": {"name": "Первый шаг", "desc": "Первый запрос к ИИ"},
                     "material_master": {"name": "Материаловед", "desc": "5 подборов в MaterialSwap"},
                     "patent_crafter": {"name": "Патентный чертёжник", "desc": "1 заявка в PatentCraft"},
-                    "streak_3": {"name": "3 дня в строю", "desc": "Активность 3 дня подряд"},
-                    "streak_7": {"name": "Неделя в строю", "desc": "Активность 7 дней подряд"},
+                    "streak_3": {"name": "3 дня в строю", "desc": "Активность 3 дня"},
+                    "streak_7": {"name": "Неделя в строю", "desc": "Активность 7 дней"},
                     "xp_100": {"name": "Сотня", "desc": "Достиг 100 XP"},
-                    "all_modules": {"name": "Инженер-универсал", "desc": "Использовал все модули"}
+                    "all_modules": {"name": "Универсал", "desc": "Все модули"}
                 };
-                
                 const earnedCodes = data.achievements ? data.achievements.map(a => a.code) : [];
-                
-                for (const [code, ach] of Object.entries(allAchievements)) {
+                for (const [code, ach] of Object.entries(allAch)) {
                     const earned = earnedCodes.includes(code);
                     const div = document.createElement('div');
                     div.className = 'achievement' + (earned ? ' earned' : ' locked');
-                    div.innerHTML = `
-                        <div style="font-size: 2rem; margin-bottom: 0.5rem;">${ach.name.charAt(0)}</div>
-                        <div style="font-weight: 700; margin-bottom: 0.25rem;">${ach.name}</div>
-                        <div style="color: var(--text-muted); font-size: 0.875rem;">${ach.desc}</div>
-                        ${earned 
-                            ? `<p style="color: var(--success); margin-top: 0.5rem; font-weight: 600;">${translations[currentLang].achievement_earned}</p>` 
-                            : `<p style="color: var(--text-muted); margin-top: 0.5rem;">${translations[currentLang].achievement_locked}</p>`}
-                    `;
+                    div.innerHTML = '<div style="font-size: 2rem; margin-bottom: 0.5rem;">' + ach.name.charAt(0) + '</div>' +
+                        '<div style="font-weight: 700; margin-bottom: 0.25rem;">' + ach.name + '</div>' +
+                        '<div style="color: var(--text-muted); font-size: 0.875rem;">' + ach.desc + '</div>' +
+                        '<p style="color: ' + (earned ? 'var(--success)' : 'var(--text-muted)') + '; margin-top: 0.5rem; font-weight: 600;">' +
+                        (earned ? translations[currentLang].achievement_earned : translations[currentLang].achievement_locked) + '</p>';
                     list.appendChild(div);
                 }
-            } catch (e) {
-                console.error('Achievements error:', e);
-            }
+            } catch (e) { console.error('Achievements error:', e); }
         }
 
         async function loadQuests() {
             if (!currentUser) return;
-            
             try {
-                const tgId = currentUser.tg_id;
-                const questsRes = await fetch(`${API}/quests`);
+                const questsRes = await fetch(API + '/quests');
                 const quests = await questsRes.json();
-                
                 const list = document.getElementById('quests-list');
                 list.innerHTML = '';
-                
-                if (!quests.quests || Object.keys(quests.quests).length === 0) {
-                    list.innerHTML = '<p style="padding: 2rem; text-align: center; color: var(--text-muted);">No quests found</p>';
-                    return;
-                }
-                
                 let completedIds = [];
-                if (tgId) {
-                    const completedRes = await fetch(`${API}/quests/completed/${tgId}`);
-                    const completed = await completedRes.json();
-                    completedIds = completed.completed || [];
+                if (currentUser.tg_id) {
+                    try {
+                        const completedRes = await fetch(API + '/quests/completed/' + currentUser.tg_id);
+                        const completed = await completedRes.json();
+                        completedIds = completed.completed || [];
+                    } catch (e) { console.error('Completed quests error:', e); }
                 }
-                
                 for (const quest of Object.values(quests.quests)) {
                     const isCompleted = completedIds.includes(quest.id);
                     const card = document.createElement('div');
                     card.className = 'quest-card' + (isCompleted ? ' completed' : '');
-                    card.innerHTML = `
-                        <div class="quest-header">
-                            <span class="quest-name">${quest.name}</span>
-                            <span class="quest-xp">+${quest.xp} XP</span>
-                        </div>
-                        <div style="color: var(--text-muted); margin-bottom: 0.5rem;">${quest.desc}</div>
-                        <div style="background: var(--bg-light); padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.875rem; display: inline-block;">
-                            ${translations[currentLang].quest_reward} ${quest.reward}
-                        </div>
-                        ${!isCompleted && tgId
-                            ? `<button onclick="completeQuest('${quest.id}')" style="margin-top: 1rem; width: 100%;">${translations[currentLang].quest_check}</button>` 
-                            : `<p style="margin-top: 1rem; color: ${isCompleted ? 'var(--success)' : 'var(--text-muted)'}; font-weight: 600;">${isCompleted ? translations[currentLang].quest_completed : 'Link Telegram to complete'}</p>`}
-                    `;
+                    const actionButton = !isCompleted
+                        ? '<button onclick="completeQuest(\'' + quest.id + '\')" style="margin-top: 1rem; width: 100%;">' + translations[currentLang].quest_check + '</button>'
+                        : '<p style="margin-top: 1rem; color: var(--success); font-weight: 600;">' + translations[currentLang].quest_completed + '</p>';
+                    card.innerHTML = '<div class="quest-header"><span class="quest-name">' + quest.name + '</span><span class="quest-xp">+' + quest.xp + ' XP</span></div>' +
+                        '<div style="color: var(--text-muted); margin-bottom: 0.5rem;">' + quest.desc + '</div>' +
+                        '<div style="background: var(--bg-light); padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.875rem; display: inline-block;">' +
+                        translations[currentLang].quest_reward + ' ' + quest.reward + '</div>' + actionButton;
                     list.appendChild(card);
                 }
-            } catch (e) {
-                console.error('Quests error:', e);
-                document.getElementById('quests-list').innerHTML = 
-                    `<p style="padding: 2rem; text-align: center; color: var(--error);">Quests load error: ${e.message}</p>`;
-            }
+            } catch (e) { console.error('Quests error:', e); }
         }
 
         async function completeQuest(questId) {
-            if (!currentUser || !currentUser.tg_id) return;
+            if (!currentUser || !currentUser.tg_id) {
+                alert('Please link your Telegram account first');
+                return;
+            }
             try {
-                const res = await fetch(`${API}/quests/complete`, {
+                const res = await fetch(API + '/quests/complete', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({telegram_id: currentUser.tg_id, quest_id: questId})
                 });
                 const data = await res.json();
-                
                 if (data.status === 'ok') {
                     showNotification(data.message);
                     updateProfile();
                     loadQuests();
                     loadAchievements();
-                } else {
-                    alert(data.message);
-                }
-            } catch (e) {
-                alert('Error: ' + e.message);
-            }
+                } else alert(data.message);
+            } catch (e) { alert('Error: ' + e.message); }
         }
 
         async function loadLeaderboard() {
             try {
-                const res = await fetch(`${API}/leaderboard`);
+                const res = await fetch(API + '/leaderboard');
                 const data = await res.json();
                 const list = document.getElementById('leaderboard-list');
                 list.innerHTML = '';
-                
                 if (!data.leaderboard || data.leaderboard.length === 0) {
-                    list.innerHTML = `<p style="padding: 2rem; text-align: center; color: var(--text-muted);">${translations[currentLang].leaderboard_empty}</p>`;
+                    list.innerHTML = '<p style="padding: 2rem; text-align: center; color: var(--text-muted);">' + translations[currentLang].leaderboard_empty + '</p>';
                     return;
                 }
-                
                 data.leaderboard.forEach((user, idx) => {
                     const rank = idx + 1;
-                    const rankClass = rank <= 3 ? `rank-${rank}` : '';
+                    const rankClass = rank <= 3 ? 'rank-' + rank : '';
                     const item = document.createElement('div');
                     item.className = 'leaderboard-item animate-fade-in';
-                    item.style.animationDelay = `${idx * 0.1}s`;
-                    item.innerHTML = `
-                        <div class="rank ${rankClass}">#${rank}</div>
-                        <div class="user-info">
-                            <div class="user-name">${user.username || 'Anonymous'}</div>
-                            <div class="user-level">${translations[currentLang].leaderboard_level} ${user.level} | ${user.streak} ${translations[currentLang].leaderboard_days}</div>
-                        </div>
-                        <div class="user-xp">${user.xp} XP</div>
-                    `;
+                    item.innerHTML = '<div class="rank ' + rankClass + '">#' + rank + '</div>' +
+                        '<div class="user-info"><div class="user-name">' + (user.username || 'Anonymous') + '</div>' +
+                        '<div class="user-level">' + translations[currentLang].leaderboard_level + ' ' + user.level + ' | ' + user.streak + ' ' + translations[currentLang].leaderboard_days + '</div></div>' +
+                        '<div class="user-xp">' + user.xp + ' XP</div>';
                     list.appendChild(item);
                 });
-            } catch (e) {
-                console.error('Leaderboard error:', e);
-                document.getElementById('leaderboard-list').innerHTML = 
-                    `<p style="padding: 2rem; text-align: center; color: var(--error);">Error: ${e.message}</p>`;
-            }
+            } catch (e) { console.error('Leaderboard error:', e); }
         }
 
         async function sendQuery() {
-            if (!currentUser) return alert(translations[currentLang].error_login);
-            
+            if (!currentUser) return alert('Login first');
             const module = document.getElementById('module').value;
             const question = document.getElementById('question').value.trim();
-            if (!question) return alert(translations[currentLang].error_question);
-            
+            if (!question) return alert('Enter question');
             const responseDiv = document.getElementById('ai-response');
             responseDiv.style.display = 'block';
-            responseDiv.innerHTML = `<p class="animate-pulse">${translations[currentLang].ai_loading}</p>`;
-            
+            responseDiv.innerHTML = '<p>' + translations[currentLang].ai_loading + '</p>';
             try {
                 const userId = currentUser.tg_id || 0;
-                const endpoint = module === 'tutor' ? `${API}/ai` : `${API}/module`;
-                const payload = module === 'tutor' 
-                    ? {telegram_id: userId, username: currentUser.username, text: question, lang: currentLang}
-                    : {telegram_id: userId, username: currentUser.username, module: module, text: question, lang: currentLang};
-                
+                const endpoint = module === 'tutor' ? API + '/ai' : API + '/module';
+                const payload = module === 'tutor' ?
+                    {telegram_id: userId, username: currentUser.username, text: question, lang: currentLang} :
+                    {telegram_id: userId, username: currentUser.username, module: module, text: question, lang: currentLang};
                 const res = await fetch(endpoint, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify(payload)
                 });
                 const data = await res.json();
-                
                 if (data.status === 'limit') {
-                    responseDiv.innerHTML = `<p style="color: var(--error);">${data.message}</p>`;
+                    responseDiv.innerHTML = '<p style="color: var(--error);">' + data.message + '</p>';
                 } else {
-                    let html = `<div style="white-space: pre-wrap; margin-bottom: 1rem;">${data.response}</div>`;
-                    html += `<p style="color: var(--success); font-weight: 600;">${translations[currentLang].ai_success} ${data.level}</p>`;
-                    if (data.new_achievements && data.new_achievements.length > 0) {
-                        html += '<div style="margin-top: 1rem; padding: 1rem; background: var(--bg-light); border-radius: 8px;">';
-                        html += `<p style="font-weight: 700; margin-bottom: 0.5rem;">${translations[currentLang].ai_new_achievements}</p>`;
-                        data.new_achievements.forEach(ach => {
-                            html += `<p>• ${ach.name} (+${ach.xp} XP)</p>`;
-                        });
-                        html += '</div>';
-                    }
+                    let html = '<div style="white-space: pre-wrap; margin-bottom: 1rem;">' + data.response + '</div>';
+                    html += '<p style="color: var(--success); font-weight: 600;">' + translations[currentLang].ai_success + ' ' + data.level + '</p>';
                     responseDiv.innerHTML = html;
                     updateProfile();
                     loadAchievements();
                 }
-            } catch (e) {
-                responseDiv.innerHTML = `<p style="color: var(--error);">Error: ${e.message}</p>`;
-            }
+            } catch (e) { responseDiv.innerHTML = '<p style="color: var(--error);">Error: ' + e.message + '</p>'; }
         }
 
         function switchTab(tabName, btn) {
@@ -1150,6 +713,88 @@
             notif.textContent = text;
             document.body.appendChild(notif);
             setTimeout(() => notif.remove(), 3000);
+        }
+
+        function renderLearningPath() {
+            const container = document.getElementById('learning-path');
+            if (!container) return;
+            container.innerHTML = '';
+            const readBooks = JSON.parse(localStorage.getItem('read_books') || '[]');
+            LEARNING_STAGES.forEach((stage, idx) => {
+                const stageDiv = document.createElement('div');
+                stageDiv.className = 'learning-stage ' + stage.status;
+                const badgeClass = stage.status === 'completed' ? 'badge-completed' :
+                                   stage.status === 'current' ? 'badge-current' : 'badge-locked';
+                const badgeText = translations[currentLang]['stage_' + stage.status];
+                const stageBooks = BOOKS_DATABASE.filter(b => {
+                    if (stage.id === 'basics') return b.category === 'math';
+                    if (stage.id === 'mechanics') return b.category === 'sopromat' || b.category === 'termo';
+                    if (stage.id === 'materials') return b.category === 'materials';
+                    if (stage.id === 'patents') return b.category === 'patents';
+                    return false;
+                });
+                const readCount = stageBooks.filter(b => readBooks.includes(b.id)).length;
+                const progress = stageBooks.length > 0 ? (readCount / stageBooks.length) * 100 : 0;
+                stageDiv.innerHTML = '<div class="stage-header">' +
+                    '<div class="stage-title">' + (idx + 1) + '. ' + stage.title[currentLang] + '</div>' +
+                    '<span class="stage-badge ' + badgeClass + '">' + badgeText + '</span></div>' +
+                    '<div style="color: var(--text-muted); font-size: 0.9rem;">' + stage.desc[currentLang] + '</div>' +
+                    '<div class="stage-topics">' + stage.topics.map(t => '<span class="topic-tag">' + t + '</span>').join('') + '</div>' +
+                    '<div class="stage-progress"><div class="progress-text"><span>Books: ' + readCount + '/' + stageBooks.length + '</span><span>' + Math.round(progress) + '%</span></div>' +
+                    '<div class="progress-bar"><div class="progress-fill" style="width: ' + progress + '%"></div></div></div>' +
+                    '<div style="margin-top: 0.75rem; color: var(--warning); font-weight: 600;">+' + stage.xp + ' XP</div>';
+                container.appendChild(stageDiv);
+            });
+        }
+
+        function renderBooks() {
+            const filtersContainer = document.getElementById('books-filters');
+            const booksContainer = document.getElementById('books-grid');
+            if (!filtersContainer || !booksContainer) return;
+            const filters = [
+                { id: 'all', label: translations[currentLang].filter_all },
+                { id: 'sopromat', label: translations[currentLang].filter_sopromat },
+                { id: 'termo', label: translations[currentLang].filter_termo },
+                { id: 'materials', label: translations[currentLang].filter_materials },
+                { id: 'patents', label: translations[currentLang].filter_patents },
+                { id: 'math', label: translations[currentLang].filter_math }
+            ];
+            filtersContainer.innerHTML = filters.map(f =>
+                '<button class="filter-btn ' + (currentBookFilter === f.id ? 'active' : '') + '" onclick="setBookFilter(\'' + f.id + '\')">' + f.label + '</button>'
+            ).join('');
+            const readBooks = JSON.parse(localStorage.getItem('read_books') || '[]');
+            const filteredBooks = currentBookFilter === 'all' ? BOOKS_DATABASE : BOOKS_DATABASE.filter(b => b.category === currentBookFilter);
+            booksContainer.innerHTML = filteredBooks.map(book => {
+                const isRead = readBooks.includes(book.id);
+                const difficultyDots = Array.from({length: 5}, (_, i) =>
+                    '<span class="difficulty-dot ' + (i < book.difficulty ? 'active' : '') + '"></span>'
+                ).join('');
+                return '<div class="book-card ' + (isRead ? 'read' : '') + '">' +
+                    '<div class="book-header"><div class="book-title">' + book.title + '</div>' +
+                    '<span class="book-category">' + book.category + '</span></div>' +
+                    '<div class="book-author">' + book.author + ', ' + book.year + '</div>' +
+                    '<div class="book-desc">' + book.desc + '</div>' +
+                    '<div class="book-meta"><span>' + translations[currentLang].book_difficulty + '</span>' +
+                    '<div class="book-difficulty">' + difficultyDots + '</div></div>' +
+                    '<div class="book-meta"><span>' + book.pages + ' ' + translations[currentLang].book_pages + '</span>' +
+                    (isRead ? '<span style="color: var(--success); font-weight: 600;">' + translations[currentLang].book_mark_read + '</span>' : '') + '</div>' +
+                    '<div class="book-actions">' +
+                    (!isRead ? '<button class="book-btn book-btn-read" onclick="markBookRead(' + book.id + ')">' + translations[currentLang].book_mark_read + '</button>' : '') +
+                    '<button class="book-btn book-btn-link" onclick="window.open(\'' + book.url + '\', \'_blank\')">' + translations[currentLang].book_open + '</button></div></div>';
+            }).join('');
+        }
+
+        function setBookFilter(filter) { currentBookFilter = filter; renderBooks(); }
+
+        function markBookRead(bookId) {
+            const readBooks = JSON.parse(localStorage.getItem('read_books') || '[]');
+            if (!readBooks.includes(bookId)) {
+                readBooks.push(bookId);
+                localStorage.setItem('read_books', JSON.stringify(readBooks));
+                showNotification('+50 XP! Book marked as read');
+                renderBooks();
+                renderLearningPath();
+            }
         }
     </script>
 </body>
