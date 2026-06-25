@@ -157,6 +157,11 @@ FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend")
 if os.path.exists(FRONTEND_DIR):
     app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 
+# Раздача PDF книг из frontend/books/
+BOOKS_DIR = os.path.join(FRONTEND_DIR, "books")
+if os.path.exists(BOOKS_DIR):
+    app.mount("/books", StaticFiles(directory=BOOKS_DIR), name="books")
+    
 @app.get("/")
 async def root():
     return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))

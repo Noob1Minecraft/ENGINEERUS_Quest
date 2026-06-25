@@ -1,6 +1,7 @@
 import os
 import asyncio
 import httpx
+import json
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
@@ -34,6 +35,7 @@ TEXTS = {
             "/start - начать заново\n"
             "/lang - сменить язык\n"
             "/profile - твой профиль\n"
+            "/stats - расширенная статистика\n"
             "/achievements - ачивки\n"
             "/daily - ежедневный квест\n"
             "/check_daily - проверить квест\n"
@@ -68,6 +70,7 @@ TEXTS = {
             "/start - қайта бастау\n"
             "/lang - тілді өзгерту\n"
             "/profile - профилің\n"
+            "/stats - толық статистика\n"
             "/achievements - жетістіктер\n"
             "/daily - күнделікті квест\n"
             "/check_daily - квестті тексеру\n"
@@ -102,6 +105,7 @@ TEXTS = {
             "/start - restart\n"
             "/lang - change language\n"
             "/profile - your profile\n"
+            "/stats - detailed statistics\n"
             "/achievements - achievements\n"
             "/daily - daily quest\n"
             "/check_daily - check quest\n"
@@ -307,6 +311,113 @@ async def cmd_profile(message: types.Message):
             text += f"\nEmail: {user['email']}"
 
         await message.answer(text)
+    except Exception as e:
+        await message.answer(f"Error: {str(e)}")
+
+
+# === НОВАЯ КОМАНДА /stats ===
+@dp.message(Command("stats"))
+async def cmd_stats(message: types.Message):
+    """Расширенная статистика пользователя"""
+    lang = await get_user_lang(message.from_user.id)
+    tg_id = message.from_user.id
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            user_resp = await client.get(f"{API_URL}/api/user/{tg_id}")
+            quests_resp = await client.get(f"{API_URL}/api/quests/completed/{tg_id}")
+            ach_resp = await client.get(f"{API_URL}/api/achievements/{tg_id}")
+            
+            user = user_resp.json()
+            quests = quests_resp.json()
+            ach = ach_resp.json()
+        
+        # Переводы для статистики
+        labels = {
+            "ru": {
+                "title": "📊 Твоя статистика",
+                "xp": "Очки опыта",
+                "level": "Уровень",
+                "streak": "Текущий стрик",
+                "days": "дн.",
+                "quests_done": "Квестов выполнено",
+                "total_requests": "Всего запросов к ИИ",
+                "material_count": "Подборов материалов",
+                "patent_count": "Патентных заявок",
+                "achievements": "Получено ачивок",
+                "premium": "Премиум",
+                "yes": "Да",
+                "no": "Нет",
+                "modules_used": "Использовано модулей",
+                "member_since": "В системе с"
+            },
+            "kk": {
+                "title": "📊 Сенің статистикаң",
+                "xp": "Тәжірибе ұпайлары",
+                "level": "Деңгей",
+                "streak": "Ағымдағы стрик",
+                "days": "күн",
+                "quests_done": "Орындалған квесттер",
+                "total_requests": "ЖИ-ге жалпы сұраулар",
+                "material_count": "Материалдарды таңдау",
+                "patent_count": "Патенттік өтінімдер",
+                "achievements": "Алынған жетістіктер",
+                "premium": "Премиум",
+                "yes": "Иә",
+                "no": "Жоқ",
+                "modules_used": "Қолданылған модульдер",
+                "member_since": "Жүйеде"
+            },
+            "en": {
+                "title": "📊 Your Statistics",
+                "xp": "Experience Points",
+                "level": "Level",
+                "streak": "Current Streak",
+                "days": "days",
+                "quests_done": "Quests Completed",
+                "total_requests": "Total AI Requests",
+                "material_count": "Material Selections",
+                "patent_count": "Patent Applications",
+                "achievements": "Achievements Earned",
+                "premium": "Premium",
+                "yes": "Yes",
+                "no": "No",
+                "modules_used": "Modules Used",
+                "member_since": "Member Since"
+            }
+        }
+        L = labels[lang]
+        
+        # Парсим modules_used
+        modules_raw = user.get("modules_used", "[]")
+        if isinstance(modules_raw, str):
+            try:
+                modules_list = json.loads(modules_raw)
+            except:
+                modules_list = []
+        else:
+            modules_list = modules_raw if isinstance(modules_raw, list) else []
+        
+        # Формируем текст статистики
+        text = f"*{L['title']}*\n\n"
+        text += f"🎯 *{L['xp']}:* {user.get('xp', 0)}\n"
+        text += f"📈 *{L['level']}:* {user.get('level', 1)}\n"
+        text += f"🔥 *{L['streak']}:* {user.get('streak', 0)} {L['days']}\n\n"
+        
+        text += f"⚔️ *{L['quests_done']}:* {len(quests.get('completed', []))}\n"
+        text += f"🤖 *{L['total_requests']}:* {user.get('requests_count', 0)}\n"
+        text += f"🛠 *{L['material_count']}:* {user.get('material_count', 0)}\n"
+        text += f"📝 *{L['patent_count']}:* {user.get('patent_count', 0)}\n\n"
+        
+        text += f"🏆 *{L['achievements']}:* {ach.get('total', 0)}\n"
+        text += f"💎 *{L['premium']}:* {L['yes'] if user.get('is_premium') else L['no']}\n"
+        text += f"🔧 *{L['modules_used']}:* {len(modules_list)}/5\n"
+        
+        if user.get("created_at"):
+            text += f"📅 *{L['member_since']}:* {user['created_at'][:10]}\n"
+        
+        await message.answer(text, parse_mode="Markdown")
+        
     except Exception as e:
         await message.answer(f"Error: {str(e)}")
 
