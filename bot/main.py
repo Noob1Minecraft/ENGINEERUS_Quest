@@ -17,6 +17,10 @@ API_URL = os.getenv("API_URL", "http://127.0.0.1:8000")
 
 dp.include_router(daily_quest_router)
 
+# === БЛОКИРОВКА ОДНОВРЕМЕННЫХ ЗАПРОСОВ ===
+# Хранит ID пользователей, которые сейчас ждут ответа от AI
+processing_users = set()
+
 TEXTS = {
     "ru": {
         "choose_lang": "Привет! Выбери язык:",
@@ -25,6 +29,7 @@ TEXTS = {
         "ask_question": "Отправь вопрос для модуля",
         "limit_msg": "Лимит: 10 запросов/день. Подключи Premium ($5/мес).",
         "error": "Ошибка. Попробуй через минуту.",
+        "busy": " Подожди, я ещё думаю над предыдущим вопросом...\nПопробуй через минуту.",
         "current_lang": "Текущий язык: Русский\n\nВыбери новый:",
         "lang_changed": "Язык изменён на русский!",
         "no_achievements": "У тебя пока нет ачивок. Начни использовать модули!",
@@ -60,6 +65,7 @@ TEXTS = {
         "ask_question": "Модульге сұрақ жібер",
         "limit_msg": "Лимит: 10 сұрау/күн. Premium қос ($5/ай).",
         "error": "Қате. Бір минуттан кейін қайтала.",
+        "busy": " Күте тұр, мен алдыңғы сұраққа жауап беріп жатырмын...\nБір минуттан кейін қайтала.",
         "current_lang": "Ағымдағы тіл: Қазақша\n\nЖаңа тілді таңда:",
         "lang_changed": "Тіл қазақшаға өзгертілді!",
         "no_achievements": "Жетістіктер жоқ. Модульдерді қолдана баста!",
@@ -95,6 +101,7 @@ TEXTS = {
         "ask_question": "Send a question for the module",
         "limit_msg": "Limit: 10 requests/day. Get Premium ($5/mo).",
         "error": "Error. Try again in a minute.",
+        "busy": " Wait, I'm still thinking about the previous question...\nTry again in a minute.",
         "current_lang": "Current language: English\n\nChoose new:",
         "lang_changed": "Language changed to English!",
         "no_achievements": "No achievements yet. Start using modules!",
@@ -220,9 +227,21 @@ async def select_module(callback: types.CallbackQuery, state: FSMContext):
 
 @dp.message(ModuleState.waiting_input)
 async def process_query(message: types.Message, state: FSMContext):
+    """Обработка вопроса пользователя с защитой от одновременных запросов"""
+    user_id = message.from_user.id
+    
+    # === ЗАЩИТА: если пользователь уже ждёт ответ ===
+    if user_id in processing_users:
+        lang = await get_user_lang(user_id)
+        await message.answer(TEXTS[lang]["busy"])
+        return
+    
+    # Добавляем в список обрабатываемых
+    processing_users.add(user_id)
+    
     data = await state.get_data()
     module = data.get("module", "tutor")
-    lang = await get_user_lang(message.from_user.id)
+    lang = await get_user_lang(user_id)
 
     await message.answer(TEXTS[lang]["thinking"])
 
@@ -231,7 +250,7 @@ async def process_query(message: types.Message, state: FSMContext):
             if module == "tutor":
                 endpoint = f"{API_URL}/api/ai"
                 payload = {
-                    "telegram_id": message.from_user.id,
+                    "telegram_id": user_id,
                     "username": message.from_user.username or "",
                     "text": message.text,
                     "lang": lang
@@ -239,7 +258,7 @@ async def process_query(message: types.Message, state: FSMContext):
             else:
                 endpoint = f"{API_URL}/api/module"
                 payload = {
-                    "telegram_id": message.from_user.id,
+                    "telegram_id": user_id,
                     "username": message.from_user.username or "",
                     "module": module,
                     "text": message.text,
@@ -271,8 +290,10 @@ async def process_query(message: types.Message, state: FSMContext):
             await message.answer(text)
     except Exception as e:
         await message.answer(f"{TEXTS[lang]['error']}: {str(e)}")
-
-    await state.clear()
+    finally:
+        # === ВАЖНО: всегда убираем пользователя из списка ===
+        processing_users.discard(user_id)
+        await state.clear()
 
 
 @dp.message(Command("profile"))
@@ -315,7 +336,6 @@ async def cmd_profile(message: types.Message):
         await message.answer(f"Error: {str(e)}")
 
 
-# === НОВАЯ КОМАНДА /stats ===
 @dp.message(Command("stats"))
 async def cmd_stats(message: types.Message):
     """Расширенная статистика пользователя"""
@@ -332,63 +352,49 @@ async def cmd_stats(message: types.Message):
             quests = quests_resp.json()
             ach = ach_resp.json()
         
-        # Переводы для статистики
         labels = {
             "ru": {
-                "title": "📊 Твоя статистика",
-                "xp": "Очки опыта",
-                "level": "Уровень",
-                "streak": "Текущий стрик",
-                "days": "дн.",
+                "title": " Твоя статистика",
+                "xp": "Очки опыта", "level": "Уровень",
+                "streak": "Текущий стрик", "days": "дн.",
                 "quests_done": "Квестов выполнено",
                 "total_requests": "Всего запросов к ИИ",
                 "material_count": "Подборов материалов",
                 "patent_count": "Патентных заявок",
                 "achievements": "Получено ачивок",
-                "premium": "Премиум",
-                "yes": "Да",
-                "no": "Нет",
+                "premium": "Премиум", "yes": "Да", "no": "Нет",
                 "modules_used": "Использовано модулей",
                 "member_since": "В системе с"
             },
             "kk": {
-                "title": "📊 Сенің статистикаң",
-                "xp": "Тәжірибе ұпайлары",
-                "level": "Деңгей",
-                "streak": "Ағымдағы стрик",
-                "days": "күн",
+                "title": " Сенің статистикаң",
+                "xp": "Тәжірибе ұпайлары", "level": "Деңгей",
+                "streak": "Ағымдағы стрик", "days": "күн",
                 "quests_done": "Орындалған квесттер",
                 "total_requests": "ЖИ-ге жалпы сұраулар",
                 "material_count": "Материалдарды таңдау",
                 "patent_count": "Патенттік өтінімдер",
                 "achievements": "Алынған жетістіктер",
-                "premium": "Премиум",
-                "yes": "Иә",
-                "no": "Жоқ",
+                "premium": "Премиум", "yes": "Иә", "no": "Жоқ",
                 "modules_used": "Қолданылған модульдер",
                 "member_since": "Жүйеде"
             },
             "en": {
-                "title": "📊 Your Statistics",
-                "xp": "Experience Points",
-                "level": "Level",
-                "streak": "Current Streak",
-                "days": "days",
+                "title": " Your Statistics",
+                "xp": "Experience Points", "level": "Level",
+                "streak": "Current Streak", "days": "days",
                 "quests_done": "Quests Completed",
                 "total_requests": "Total AI Requests",
                 "material_count": "Material Selections",
                 "patent_count": "Patent Applications",
                 "achievements": "Achievements Earned",
-                "premium": "Premium",
-                "yes": "Yes",
-                "no": "No",
+                "premium": "Premium", "yes": "Yes", "no": "No",
                 "modules_used": "Modules Used",
                 "member_since": "Member Since"
             }
         }
         L = labels[lang]
         
-        # Парсим modules_used
         modules_raw = user.get("modules_used", "[]")
         if isinstance(modules_raw, str):
             try:
@@ -398,23 +404,22 @@ async def cmd_stats(message: types.Message):
         else:
             modules_list = modules_raw if isinstance(modules_raw, list) else []
         
-        # Формируем текст статистики
         text = f"*{L['title']}*\n\n"
-        text += f"🎯 *{L['xp']}:* {user.get('xp', 0)}\n"
-        text += f"📈 *{L['level']}:* {user.get('level', 1)}\n"
-        text += f"🔥 *{L['streak']}:* {user.get('streak', 0)} {L['days']}\n\n"
+        text += f" *{L['xp']}:* {user.get('xp', 0)}\n"
+        text += f" *{L['level']}:* {user.get('level', 1)}\n"
+        text += f" *{L['streak']}:* {user.get('streak', 0)} {L['days']}\n\n"
         
-        text += f"⚔️ *{L['quests_done']}:* {len(quests.get('completed', []))}\n"
-        text += f"🤖 *{L['total_requests']}:* {user.get('requests_count', 0)}\n"
-        text += f"🛠 *{L['material_count']}:* {user.get('material_count', 0)}\n"
-        text += f"📝 *{L['patent_count']}:* {user.get('patent_count', 0)}\n\n"
+        text += f" *{L['quests_done']}:* {len(quests.get('completed', []))}\n"
+        text += f" *{L['total_requests']}:* {user.get('requests_count', 0)}\n"
+        text += f" *{L['material_count']}:* {user.get('material_count', 0)}\n"
+        text += f" *{L['patent_count']}:* {user.get('patent_count', 0)}\n\n"
         
-        text += f"🏆 *{L['achievements']}:* {ach.get('total', 0)}\n"
-        text += f"💎 *{L['premium']}:* {L['yes'] if user.get('is_premium') else L['no']}\n"
-        text += f"🔧 *{L['modules_used']}:* {len(modules_list)}/5\n"
+        text += f" *{L['achievements']}:* {ach.get('total', 0)}\n"
+        text += f" *{L['premium']}:* {L['yes'] if user.get('is_premium') else L['no']}\n"
+        text += f" *{L['modules_used']}:* {len(modules_list)}/5\n"
         
         if user.get("created_at"):
-            text += f"📅 *{L['member_since']}:* {user['created_at'][:10]}\n"
+            text += f" *{L['member_since']}:* {user['created_at'][:10]}\n"
         
         await message.answer(text, parse_mode="Markdown")
         

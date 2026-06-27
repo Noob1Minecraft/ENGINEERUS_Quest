@@ -363,3 +363,41 @@ async def get_preferred_lang(tg_id: int) -> str:
         if row and row[0]:
             return row[0]
         return "ru"
+
+import hashlib
+
+async def register_user(email: str, password: str, username: str = ""):
+    """Регистрация нового веб-пользователя"""
+    # Хэшируем пароль
+    password_hash = hashlib.sha256(password.encode()).hexdigest()
+    
+    async with get_db() as db:
+        # Проверяем, нет ли уже такого email
+        cur = await db.execute("SELECT id FROM users WHERE email = ?", (email,))
+        if await cur.fetchone():
+            return None  # Email уже занят
+        
+        # Создаём пользователя
+        await db.execute(
+            """INSERT INTO users (email, password_hash, username, last_active) 
+               VALUES (?, ?, ?, date('now'))""",
+            (email, password_hash, username)
+        )
+        await db.commit()
+        
+        # Возвращаем созданного пользователя
+        cur = await db.execute("SELECT * FROM users WHERE email = ?", (email,))
+        row = await cur.fetchone()
+        return _row_to_dict(row)
+
+async def authenticate_user(email: str, password: str):
+    """Аутентификация пользователя по email и паролю"""
+    password_hash = hashlib.sha256(password.encode()).hexdigest()
+    
+    async with get_db() as db:
+        cur = await db.execute(
+            "SELECT * FROM users WHERE email = ? AND password_hash = ?",
+            (email, password_hash)
+        )
+        row = await cur.fetchone()
+        return _row_to_dict(row) if row else None
