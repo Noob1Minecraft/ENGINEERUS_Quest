@@ -441,11 +441,21 @@ async def web_login(req: WebLoginRequest):
 
 @app.post("/api/auth/bind")
 async def bind_account(req: BindRequest):
-    """Привязать Telegram к веб-аккаунту"""
+    """Привязать Telegram к веб-аккаунту (с авто-регистрацией)"""
+    # Сначала пробуем найти существующего пользователя
     user = await database.authenticate_user(req.email, req.password)
-    if not user:
-        raise HTTPException(401, "Неверный email или пароль")
     
+    if not user:
+        # Если не найден — пробуем зарегистрировать
+        user = await database.register_user(req.email, req.password)
+        if not user:
+            raise HTTPException(401, "Неверный email или пароль (регистрация не удалась)")
+    
+    # Проверяем, не привязан ли уже этот email к другому Telegram
+    if user.get("telegram_id") and user["telegram_id"] != req.telegram_id:
+        raise HTTPException(400, "Этот email уже привязан к другому Telegram-аккаунту")
+    
+    # Привязываем Telegram к аккаунту
     async with database.get_db() as db:
         await db.execute(
             "UPDATE users SET telegram_id = ? WHERE email = ?",
