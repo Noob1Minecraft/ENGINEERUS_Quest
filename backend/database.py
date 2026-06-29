@@ -422,25 +422,27 @@ async def register_user(email: str, password: str, username: str = ""):
 
 async def authenticate_user(email: str, password: str):
     """Аутентификация пользователя по email и паролю"""
+    # Нормализуем email
+    email_normalized = email.strip().lower()
     password_hash = hashlib.sha256(password.encode()).hexdigest()
     
-    print(f" LOGIN попытка: email={email}")
+    print(f" LOGIN попытка: email={email_normalized}")
     print(f" Хэш пароля: {password_hash[:20]}...")
     
     async with get_db() as db:
-        # Сначала проверяем, есть ли пользователь с таким email
-        cur = await db.execute("SELECT email, password_hash FROM users WHERE email = ?", (email,))
+        # Ищем по нормализованному email
+        cur = await db.execute("SELECT email, password_hash FROM users WHERE LOWER(TRIM(email)) = ?", (email_normalized,))
         row = await cur.fetchone()
         
         if not row:
-            print(f" Пользователь с email={email} НЕ НАЙДЕН в БД")
+            print(f"Пользователь с email={email_normalized} НЕ НАЙДЕН в БД")
             return None
         
         db_email, db_hash = row
-        print(f" Пользователь найден. Хэш в БД: {db_hash[:20] if db_hash else 'None'}...")
+        print(f"Пользователь найден. Хэш в БД: {db_hash[:20] if db_hash else 'None'}...")
         
         if not db_hash:
-            print(f" У пользователя НЕТ пароля в БД!")
+            print(f"У пользователя НЕТ пароля в БД!")
             return None
         
         if db_hash != password_hash:
@@ -448,7 +450,7 @@ async def authenticate_user(email: str, password: str):
             return None
         
         # Всё ок — возвращаем пользователя
-        cur = await db.execute("SELECT * FROM users WHERE email = ?", (email,))
+        cur = await db.execute("SELECT * FROM users WHERE LOWER(TRIM(email)) = ?", (email_normalized,))
         row = await cur.fetchone()
         print(f" Вход успешен!")
         return _row_to_dict(row)

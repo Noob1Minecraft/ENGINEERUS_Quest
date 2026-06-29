@@ -18,7 +18,6 @@ API_URL = os.getenv("API_URL", "http://127.0.0.1:8000")
 dp.include_router(daily_quest_router)
 
 # === БЛОКИРОВКА ОДНОВРЕМЕННЫХ ЗАПРОСОВ ===
-# Хранит ID пользователей, которые сейчас ждут ответа от AI
 processing_users = set()
 
 TEXTS = {
@@ -29,7 +28,7 @@ TEXTS = {
         "ask_question": "Отправь вопрос для модуля",
         "limit_msg": "Лимит: 10 запросов/день. Подключи Premium ($5/мес).",
         "error": "Ошибка. Попробуй через минуту.",
-        "busy": " Подожди, я ещё думаю над предыдущим вопросом...\nПопробуй через минуту.",
+        "busy": "Подожди, я ещё думаю над предыдущим вопросом...\nПопробуй через минуту.",
         "current_lang": "Текущий язык: Русский\n\nВыбери новый:",
         "lang_changed": "Язык изменён на русский!",
         "no_achievements": "У тебя пока нет ачивок. Начни использовать модули!",
@@ -52,7 +51,9 @@ TEXTS = {
         "bind_usage": "Привязка веб-аккаунта\n\nИспользуй:\n/bind email пароль\n\nПример:\n/bind user@example.com mypassword123",
         "bind_success": "Аккаунт привязан! Теперь твой прогресс синхронизируется с сайтом.",
         "bind_error": "Ошибка привязки. Проверь email и пароль.",
-        "bind_already": "Ты уже привязан к аккаунту: {email}",
+        "bind_already": "Ты уже привязан к аккаунту: {email}\n\nХочешь изменить на {new_email}?\n\nНапиши /confirm_bind {new_email} {password} для подтверждения",
+        "bind_confirm_success": "Email изменён на: {email}",
+        "bind_confirm_error": "Ошибка смены email. Попробуй снова.",
         "whoami_bound": "Ты привязан к аккаунту: {email}\n\nПрогресс синхронизирован с сайтом.",
         "whoami_not_bound": "Ты не привязан к веб-аккаунту.\n\nИспользуй /bind для привязки.",
         "unbind_success": "Привязка удалена.",
@@ -65,7 +66,7 @@ TEXTS = {
         "ask_question": "Модульге сұрақ жібер",
         "limit_msg": "Лимит: 10 сұрау/күн. Premium қос ($5/ай).",
         "error": "Қате. Бір минуттан кейін қайтала.",
-        "busy": " Күте тұр, мен алдыңғы сұраққа жауап беріп жатырмын...\nБір минуттан кейін қайтала.",
+        "busy": "Күте тұр, мен алдыңғы сұраққа жауап беріп жатырмын...\nБір минуттан кейін қайтала.",
         "current_lang": "Ағымдағы тіл: Қазақша\n\nЖаңа тілді таңда:",
         "lang_changed": "Тіл қазақшаға өзгертілді!",
         "no_achievements": "Жетістіктер жоқ. Модульдерді қолдана баста!",
@@ -88,7 +89,9 @@ TEXTS = {
         "bind_usage": "Веб-аккаунтты байланыстыру\n\nПайдалан:\n/bind email пароль\n\nМысал:\n/bind user@example.com mypassword123",
         "bind_success": "Аккаунт байланыстырылды! Енді прогрессің сайтпен синхрондалады.",
         "bind_error": "Байланыстыру қатесі. Email мен парольді тексер.",
-        "bind_already": "Сен аккаунтқа байланыстырылған: {email}",
+        "bind_already": "Сен аккаунтқа байланыстырылған: {email}\n\n{new_email} деп өзгерткің келе ме?\n\nРастау үшін /confirm_bind {new_email} {password} жаз",
+        "bind_confirm_success": "Email {email} деп өзгертілді",
+        "bind_confirm_error": "Email өзгерту қатесі. Қайталап көр.",
         "whoami_bound": "Сен аккаунтқа байланыстырылған: {email}\n\nПрогресс сайтпен синхрондалған.",
         "whoami_not_bound": "Сен веб-аккаунтқа байланыстырылмаған.\n\nБайланыстыру үшін /bind пайдалан.",
         "unbind_success": "Байланыс жойылды.",
@@ -101,7 +104,7 @@ TEXTS = {
         "ask_question": "Send a question for the module",
         "limit_msg": "Limit: 10 requests/day. Get Premium ($5/mo).",
         "error": "Error. Try again in a minute.",
-        "busy": " Wait, I'm still thinking about the previous question...\nTry again in a minute.",
+        "busy": "Wait, I'm still thinking about the previous question...\nTry again in a minute.",
         "current_lang": "Current language: English\n\nChoose new:",
         "lang_changed": "Language changed to English!",
         "no_achievements": "No achievements yet. Start using modules!",
@@ -124,7 +127,9 @@ TEXTS = {
         "bind_usage": "Link web account\n\nUse:\n/bind email password\n\nExample:\n/bind user@example.com mypassword123",
         "bind_success": "Account linked! Your progress now syncs with the website.",
         "bind_error": "Link error. Check email and password.",
-        "bind_already": "You're already linked to: {email}",
+        "bind_already": "You're already linked to: {email}\n\nWant to change to {new_email}?\n\nType /confirm_bind {new_email} {password} to confirm",
+        "bind_confirm_success": "Email changed to: {email}",
+        "bind_confirm_error": "Error changing email. Try again.",
         "whoami_bound": "You're linked to: {email}\n\nProgress synced with website.",
         "whoami_not_bound": "You're not linked to a web account.\n\nUse /bind to link.",
         "unbind_success": "Link removed.",
@@ -230,13 +235,11 @@ async def process_query(message: types.Message, state: FSMContext):
     """Обработка вопроса пользователя с защитой от одновременных запросов"""
     user_id = message.from_user.id
     
-    # === ЗАЩИТА: если пользователь уже ждёт ответ ===
     if user_id in processing_users:
         lang = await get_user_lang(user_id)
         await message.answer(TEXTS[lang]["busy"])
         return
     
-    # Добавляем в список обрабатываемых
     processing_users.add(user_id)
     
     data = await state.get_data()
@@ -291,7 +294,6 @@ async def process_query(message: types.Message, state: FSMContext):
     except Exception as e:
         await message.answer(f"{TEXTS[lang]['error']}: {str(e)}")
     finally:
-        # === ВАЖНО: всегда убираем пользователя из списка ===
         processing_users.discard(user_id)
         await state.clear()
 
@@ -354,7 +356,7 @@ async def cmd_stats(message: types.Message):
         
         labels = {
             "ru": {
-                "title": " Твоя статистика",
+                "title": "Твоя статистика",
                 "xp": "Очки опыта", "level": "Уровень",
                 "streak": "Текущий стрик", "days": "дн.",
                 "quests_done": "Квестов выполнено",
@@ -367,7 +369,7 @@ async def cmd_stats(message: types.Message):
                 "member_since": "В системе с"
             },
             "kk": {
-                "title": " Сенің статистикаң",
+                "title": "Сенің статистикаң",
                 "xp": "Тәжірибе ұпайлары", "level": "Деңгей",
                 "streak": "Ағымдағы стрик", "days": "күн",
                 "quests_done": "Орындалған квесттер",
@@ -380,7 +382,7 @@ async def cmd_stats(message: types.Message):
                 "member_since": "Жүйеде"
             },
             "en": {
-                "title": " Your Statistics",
+                "title": "Your Statistics",
                 "xp": "Experience Points", "level": "Level",
                 "streak": "Current Streak", "days": "days",
                 "quests_done": "Quests Completed",
@@ -405,21 +407,21 @@ async def cmd_stats(message: types.Message):
             modules_list = modules_raw if isinstance(modules_raw, list) else []
         
         text = f"*{L['title']}*\n\n"
-        text += f" *{L['xp']}:* {user.get('xp', 0)}\n"
-        text += f" *{L['level']}:* {user.get('level', 1)}\n"
-        text += f" *{L['streak']}:* {user.get('streak', 0)} {L['days']}\n\n"
+        text += f"*{L['xp']}:* {user.get('xp', 0)}\n"
+        text += f"*{L['level']}:* {user.get('level', 1)}\n"
+        text += f"*{L['streak']}:* {user.get('streak', 0)} {L['days']}\n\n"
         
-        text += f" *{L['quests_done']}:* {len(quests.get('completed', []))}\n"
-        text += f" *{L['total_requests']}:* {user.get('requests_count', 0)}\n"
-        text += f" *{L['material_count']}:* {user.get('material_count', 0)}\n"
-        text += f" *{L['patent_count']}:* {user.get('patent_count', 0)}\n\n"
+        text += f"*{L['quests_done']}:* {len(quests.get('completed', []))}\n"
+        text += f"*{L['total_requests']}:* {user.get('requests_count', 0)}\n"
+        text += f"*{L['material_count']}:* {user.get('material_count', 0)}\n"
+        text += f"*{L['patent_count']}:* {user.get('patent_count', 0)}\n\n"
         
-        text += f" *{L['achievements']}:* {ach.get('total', 0)}\n"
-        text += f" *{L['premium']}:* {L['yes'] if user.get('is_premium') else L['no']}\n"
-        text += f" *{L['modules_used']}:* {len(modules_list)}/5\n"
+        text += f"*{L['achievements']}:* {ach.get('total', 0)}\n"
+        text += f"*{L['premium']}:* {L['yes'] if user.get('is_premium') else L['no']}\n"
+        text += f"*{L['modules_used']}:* {len(modules_list)}/5\n"
         
         if user.get("created_at"):
-            text += f" *{L['member_since']}:* {user['created_at'][:10]}\n"
+            text += f"*{L['member_since']}:* {user['created_at'][:10]}\n"
         
         await message.answer(text, parse_mode="Markdown")
         
@@ -455,6 +457,7 @@ async def cmd_help(message: types.Message):
 
 @dp.message(Command("bind"))
 async def cmd_bind(message: types.Message):
+    """Привязать или изменить email"""
     lang = await get_user_lang(message.from_user.id)
 
     args = message.text.split(maxsplit=2)
@@ -471,9 +474,16 @@ async def cmd_bind(message: types.Message):
             if user_resp.status_code == 200:
                 user = user_resp.json()
                 if user.get("email"):
-                    await message.answer(TEXTS[lang]["bind_already"].format(email=user["email"]))
+                    # Уже привязан - предлагаем подтвердить смену
+                    msg = TEXTS[lang]["bind_already"].format(
+                        email=user["email"],
+                        new_email=email,
+                        password=password
+                    )
+                    await message.answer(msg)
                     return
 
+            # Привязываем новый аккаунт
             resp = await client.post(
                 f"{API_URL}/api/auth/bind",
                 json={
@@ -489,6 +499,63 @@ async def cmd_bind(message: types.Message):
             else:
                 await message.answer(TEXTS[lang]["bind_error"])
     except Exception as e:
+        await message.answer(f"Error: {str(e)}")
+
+
+@dp.message(Command("confirm_bind"))
+async def cmd_confirm_bind(message: types.Message):
+    """Подтвердить смену email"""
+    print(f" ПОЛУЧЕНА КОМАНДА /confirm_bind от {message.from_user.id}")
+    print(f" Текст команды: {message.text}")
+    
+    lang = await get_user_lang(message.from_user.id)
+
+    args = message.text.split(maxsplit=2)
+    print(f" Аргументы: {args}")
+    
+    if len(args) < 3:
+        await message.answer("Используй: /confirm_bind email пароль")
+        return
+
+    email = args[1]
+    password = args[2]
+    
+    print(f" Меняем email на: {email}")
+
+    try:
+        async with httpx.AsyncClient() as client:
+            # Сначала отвязываем старый email
+            print(f" Отвязываем старый email...")
+            unbind_resp = await client.post(
+                f"{API_URL}/api/auth/unbind",
+                json={"telegram_id": message.from_user.id},
+                timeout=10.0
+            )
+            print(f" Unbind статус: {unbind_resp.status_code}")
+            
+            # Привязываем новый email
+            print(f" Привязываем новый email...")
+            bind_resp = await client.post(
+                f"{API_URL}/api/auth/bind",
+                json={
+                    "telegram_id": message.from_user.id,
+                    "email": email,
+                    "password": password
+                },
+                timeout=10.0
+            )
+            print(f" Bind статус: {bind_resp.status_code}")
+            print(f" Bind ответ: {bind_resp.text}")
+
+            if bind_resp.status_code == 200:
+                msg = TEXTS[lang]["bind_confirm_success"].format(email=email)
+                await message.answer(msg)
+                print(f" Email успешно изменён!")
+            else:
+                await message.answer(TEXTS[lang]["bind_confirm_error"])
+                print(f" Ошибка привязки: {bind_resp.status_code}")
+    except Exception as e:
+        print(f" Ошибка: {e}")
         await message.answer(f"Error: {str(e)}")
 
 
@@ -535,6 +602,23 @@ async def cmd_unbind(message: types.Message):
 
 async def main():
     print(f"Bot started. API: {API_URL}")
+    
+    # Регистрируем команды в меню Telegram
+    await bot.set_my_commands([
+        types.BotCommand(command="start", description="Начать работу"),
+        types.BotCommand(command="help", description="Помощь"),
+        types.BotCommand(command="profile", description="Твой профиль"),
+        types.BotCommand(command="stats", description="Полная статистика"),
+        types.BotCommand(command="bind", description="Привязать аккаунт"),
+        types.BotCommand(command="confirm_bind", description="Подтвердить смену email"),
+        types.BotCommand(command="lang", description="Сменить язык"),
+        types.BotCommand(command="daily", description="Ежедневный квест"),
+        types.BotCommand(command="achievements", description="Ачивки"),
+        types.BotCommand(command="whoami", description="Проверить привязку"),
+        types.BotCommand(command="unbind", description="Отвязать аккаунт"),
+    ])
+    print("Команды зарегистрированы в меню Telegram")
+    
     await dp.start_polling(bot)
 
 

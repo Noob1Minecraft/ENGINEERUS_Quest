@@ -946,29 +946,29 @@
             <div id="instructions-tab" class="tab-content">
     <h2 style="font-size: 2rem; margin-bottom: 1.5rem;" data-i18n="instructions_title">Как пользоваться</h2>
     
-    <!-- === БАННЕР СИНХРОНИЗАЦИИ === -->
+    <!-- БАННЕР СИНХРОНИЗАЦИИ -->
     <div class="card" style="border-left: 4px solid var(--warning); background: linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%);">
         <h3 style="margin-bottom: 1rem; color: var(--warning); display: flex; align-items: center; gap: 0.5rem;">
-             Синхронизация с Telegram-ботом
+            Синхронизация с Telegram-ботом
         </h3>
         <p style="margin-bottom: 1rem; color: var(--text);">
             Чтобы твой прогресс синхронизировался между сайтом и Telegram-ботом, выполни следующие шаги <strong>в правильном порядке</strong>:
         </p>
         
         <div style="background: var(--surface); padding: 1.5rem; border-radius: 12px; margin-bottom: 1rem;">
-            <h4 style="color: var(--primary); margin-bottom: 1rem;">📱 Шаг 1: Сначала Telegram-бот</h4>
+            <h4 style="color: var(--primary); margin-bottom: 1rem;">Шаг 1: Сначала Telegram-бот</h4>
             <ol style="line-height: 2; padding-left: 1.5rem;">
                 <li>Открой Telegram и найди нашего бота</li>
-                <li>Напиши <code style="background: var(--bg); padding: 0.2rem 0.5rem; border-radius: 4px;">/start</code> → выбери язык</li>
+                <li>Напиши <code style="background: var(--bg); padding: 0.2rem 0.5rem; border-radius: 4px;">/start</code> и выбери язык</li>
                 <li>Напиши <code style="background: var(--bg); padding: 0.2rem 0.5rem; border-radius: 4px;">/bind email пароль</code><br>
                     <span style="color: var(--text-muted); font-size: 0.875rem;">(например: <code>/bind teka.artuk@gmail.com mypassword123</code>)</span>
                 </li>
-                <li>Проверь привязку: <code style="background: var(--bg); padding: 0.2rem 0.5rem; border-radius: 4px;">/whoami</code></li>
+                <li>Проверь привязку командой <code style="background: var(--bg); padding: 0.2rem 0.5rem; border-radius: 4px;">/whoami</code></li>
             </ol>
         </div>
 
         <div style="background: var(--surface); padding: 1.5rem; border-radius: 12px; margin-bottom: 1rem;">
-            <h4 style="color: var(--primary); margin-bottom: 1rem;">🌐 Шаг 2: Потом сайт</h4>
+            <h4 style="color: var(--primary); margin-bottom: 1rem;">Шаг 2: Потом сайт</h4>
             <ol style="line-height: 2; padding-left: 1.5rem;">
                 <li>Открой сайт Engineerus Quest</li>
                 <li>Нажми <strong>"Вход"</strong> (не регистрация!)</li>
@@ -978,7 +978,7 @@
         </div>
 
         <div style="background: #D1FAE5; padding: 1rem; border-radius: 12px; border-left: 4px solid var(--success);">
-            <strong> Что будет работать:</strong>
+            <strong>Что будет работать:</strong>
             <ul style="line-height: 1.8; padding-left: 1.5rem; margin-top: 0.5rem;">
                 <li>XP, уровни и ачивки — общие для сайта и бота</li>
                 <li>Выполненные квесты отображаются везде</li>
@@ -988,14 +988,14 @@
         </div>
 
         <div style="background: #FEE2E2; padding: 1rem; border-radius: 12px; border-left: 4px solid var(--error); margin-top: 1rem;">
-            <strong> Важно:</strong>
+            <strong>Важно:</strong>
             <p style="margin-top: 0.5rem;">
                 Не регистрируйся на сайте отдельно! Сначала привяжи аккаунт через бота, потом используй тот же email для входа на сайт.
             </p>
         </div>
     </div>
 
-    <!-- Остальные блоки -->
+    <!-- Начало работы -->
     <div class="card">
         <h3 style="margin-bottom: 1rem; color: var(--primary);" data-i18n="getting_started">Начало работы</h3>
         <ol style="line-height: 2; padding-left: 1.5rem;">
@@ -1008,8 +1008,9 @@
         </ol>
     </div>
 
+    <!-- Команды Telegram-бота -->
     <div class="card">
-        <h3 style="margin-bottom: 1rem; color: var(--primary);">🤖 Команды Telegram-бота</h3>
+        <h3 style="margin-bottom: 1rem; color: var(--primary);">Команды Telegram-бота</h3>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem;">
             <div style="background: var(--bg); padding: 1rem; border-radius: 8px;">
                 <code style="color: var(--primary); font-weight: 700;">/start</code>
@@ -1046,68 +1047,7 @@
         </div>
     </div>
 
-    <div class="card">
-        <h3 style="margin-bottom: 1rem; color: var(--primary);" data-i18n="gamification">Геймификация</h3>
-        <ul style="line-height: 2; padding-left: 1.5rem;">
-            <li><strong data-i18n="xp_points">XP очки</strong> — <span data-i18n="xp_points_desc">Зарабатывайте опыт за каждое выполненное задание</span></li>
-            <li><strong data-i18n="levels">Уровни</strong> — <span data-i18n="levels_desc">Повышайте уровень каждые 100 XP</span></li>
-            <li><strong data-i18n="streak">Серия</strong> — <span data-i18n="streak_desc">Поддерживайте ежедневную активность</span></li>
-            <li><strong data-i18n="leaderboard">Таблица лидеров</strong> — <span data-i18n="leaderboard_desc">Соревнуйтесь с другими студентами</span></li>
-        </ul>
-    </div>
-</div>
-
-    <!-- Остальные блоки -->
-    <div class="card">
-        <h3 style="margin-bottom: 1rem; color: var(--primary);" data-i18n="getting_started">Начало работы</h3>
-        <ol style="line-height: 2; padding-left: 1.5rem;">
-            <li><strong>Привяжи Telegram-бот</strong> — команда <code>/bind</code> в боте</li>
-            <li><strong>Войди на сайт</strong> — используй тот же email и пароль</li>
-            <li><strong>Выполняй квесты</strong> — получай XP и повышай уровень</li>
-            <li><strong>Используй ИИ-помощник</strong> — задавай вопросы по инженерии</li>
-            <li><strong>Изучай книги</strong> — доступ к подборке по Mechanical, Electrical и Robotics</li>
-            <li><strong>Поддерживай стрик</strong> — заходи каждый день!</li>
-        </ol>
-    </div>
-
-    <div class="card">
-        <h3 style="margin-bottom: 1rem; color: var(--primary);"> Команды Telegram-бота</h3>
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem;">
-            <div style="background: var(--bg); padding: 1rem; border-radius: 8px;">
-                <code style="color: var(--primary); font-weight: 700;">/start</code>
-                <p style="color: var(--text-muted); font-size: 0.875rem; margin-top: 0.5rem;">Начать работу с ботом</p>
-            </div>
-            <div style="background: var(--bg); padding: 1rem; border-radius: 8px;">
-                <code style="color: var(--primary); font-weight: 700;">/bind email пароль</code>
-                <p style="color: var(--text-muted); font-size: 0.875rem; margin-top: 0.5rem;">Привязать аккаунт</p>
-            </div>
-            <div style="background: var(--bg); padding: 1rem; border-radius: 8px;">
-                <code style="color: var(--primary); font-weight: 700;">/profile</code>
-                <p style="color: var(--text-muted); font-size: 0.875rem; margin-top: 0.5rem;">Краткая статистика</p>
-            </div>
-            <div style="background: var(--bg); padding: 1rem; border-radius: 8px;">
-                <code style="color: var(--primary); font-weight: 700;">/stats</code>
-                <p style="color: var(--text-muted); font-size: 0.875rem; margin-top: 0.5rem;">Полная статистика</p>
-            </div>
-            <div style="background: var(--bg); padding: 1rem; border-radius: 8px;">
-                <code style="color: var(--primary); font-weight: 700;">/daily</code>
-                <p style="color: var(--text-muted); font-size: 0.875rem; margin-top: 0.5rem;">Ежедневный квест</p>
-            </div>
-            <div style="background: var(--bg); padding: 1rem; border-radius: 8px;">
-                <code style="color: var(--primary); font-weight: 700;">/achievements</code>
-                <p style="color: var(--text-muted); font-size: 0.875rem; margin-top: 0.5rem;">Список ачивок</p>
-            </div>
-            <div style="background: var(--bg); padding: 1rem; border-radius: 8px;">
-                <code style="color: var(--primary); font-weight: 700;">/whoami</code>
-                <p style="color: var(--text-muted); font-size: 0.875rem; margin-top: 0.5rem;">Проверить привязку</p>
-            </div>
-            <div style="background: var(--bg); padding: 1rem; border-radius: 8px;">
-                <code style="color: var(--primary); font-weight: 700;">/lang</code>
-                <p style="color: var(--text-muted); font-size: 0.875rem; margin-top: 0.5rem;">Сменить язык</p>
-            </div>
-        </div>
-    </div>
-
+    <!-- Геймификация -->
     <div class="card">
         <h3 style="margin-bottom: 1rem; color: var(--primary);" data-i18n="gamification">Геймификация</h3>
         <ul style="line-height: 2; padding-left: 1.5rem;">
@@ -1127,14 +1067,33 @@
         let currentBookFilter = 'all';
         let currentOnboardingStep = 0;
 
-        const onboardingSteps = [
+       
+        function getOnboardingSteps() {
+    const steps = {
+        ru: [
             { title: "Добро пожаловать!", text: "Engineerus Quest — твоя AI-платформа для обучения инженерии!" },
             { title: "Выполняй квесты", text: "Получай XP за инженерные задачи и челленджи" },
             { title: "Используй ИИ", text: "Задавай любые вопросы по инженерии — от термодинамики до робототехники!" },
             { title: "Изучай книги", text: "Доступ к подборке книг по Mechanical, Electrical и Robotics" },
             { title: "Поехали!", text: "Ты готов начать свой путь инженера!" }
-        ];
-
+        ],
+        kk: [
+            { title: "Қош келдің!", text: "Engineerus Quest — инженерияны оқуға арналған AI-платформа!" },
+            { title: "Квесттерді орында", text: "Инженерлік тапсырмалар мен челленджтер үшін XP ал" },
+            { title: "ЖИ-ді қолдан", text: "Инженерия туралы кез келген сұрақ қой — термодинамикадан робототехникаға дейін!" },
+            { title: "Кітаптарды оқы", text: "Mechanical, Electrical және Robotics бойынша кітаптарға қолжетімділік" },
+            { title: "Бастайық!", text: "Сен инженер жолын бастауға дайынсың!" }
+        ],
+        en: [
+            { title: "Welcome!", text: "Engineerus Quest — your AI-powered engineering learning platform!" },
+            { title: "Complete Quests", text: "Earn XP for engineering tasks and challenges" },
+            { title: "Use AI", text: "Ask any engineering question — from thermodynamics to robotics!" },
+            { title: "Study Books", text: "Access curated books on Mechanical, Electrical and Robotics" },
+            { title: "Let's Go!", text: "You're ready to start your engineering journey!" }
+        ]
+    };
+    return steps[currentLang] || steps.ru;
+}
         const BOOKS_DATABASE = {
             mechanical: [
                 { id: 1, title: 'Сопротивление материалов', author: 'Александров А.', lang: 'ru', category: 'mechanical', url: 'https://twirpx.com/file/2847563/', desc: 'Простое введение в сопротивление материалов', type: 'pdf' },
@@ -1477,31 +1436,46 @@
             }, 1000);
         }
 
-        function renderOnboardingStep() {
-            const step = onboardingSteps[currentOnboardingStep];
-            document.getElementById('onboardingStepCounter').textContent = `Step ${currentOnboardingStep + 1} of ${onboardingSteps.length}`;
-            document.getElementById('onboardingTitle').textContent = step.title;
-            document.getElementById('onboardingText').textContent = step.text;
-            
-            const progressContainer = document.getElementById('onboardingProgress');
-            progressContainer.innerHTML = onboardingSteps.map((_, i) => 
-                `<div class="onboarding-dot ${i === currentOnboardingStep ? 'active' : ''}"></div>`
-            ).join('');
-            
-            document.getElementById('prevBtn').style.display = currentOnboardingStep === 0 ? 'none' : 'inline-block';
-            document.getElementById('nextBtn').textContent = currentOnboardingStep === onboardingSteps.length - 1 ? 
-                (currentLang === 'ru' ? 'Начать!' : currentLang === 'kk' ? 'Бастау!' : 'Start!') : 
-                (currentLang === 'ru' ? 'Далее' : currentLang === 'kk' ? 'Келесі' : 'Next');
-        }
-
-        function nextStep() {
-            if (currentOnboardingStep < onboardingSteps.length - 1) {
-                currentOnboardingStep++;
-                renderOnboardingStep();
-            } else {
-                closeOnboarding();
-            }
-        }
+      function renderOnboardingStep() {
+    const steps = getOnboardingSteps();
+    const step = steps[currentOnboardingStep];
+    
+    document.getElementById('onboardingStepCounter').textContent = 
+        (currentLang === 'ru' ? `Шаг ${currentOnboardingStep + 1} из ${steps.length}` :
+         currentLang === 'kk' ? `${currentOnboardingStep + 1}-қадам / ${steps.length}` :
+         `Step ${currentOnboardingStep + 1} of ${steps.length}`);
+    
+    document.getElementById('onboardingTitle').textContent = step.title;
+    document.getElementById('onboardingText').textContent = step.text;
+    
+    const progressContainer = document.getElementById('onboardingProgress');
+    progressContainer.innerHTML = steps.map((_, i) => 
+        `<div class="onboarding-dot ${i === currentOnboardingStep ? 'active' : ''}"></div>`
+    ).join('');
+    
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    
+    prevBtn.style.display = currentOnboardingStep === 0 ? 'none' : 'inline-block';
+    
+    const isLast = currentOnboardingStep === steps.length - 1;
+    if (currentLang === 'ru') {
+        nextBtn.textContent = isLast ? 'Начать!' : 'Далее';
+    } else if (currentLang === 'kk') {
+        nextBtn.textContent = isLast ? 'Бастау!' : 'Келесі';
+    } else {
+        nextBtn.textContent = isLast ? 'Start!' : 'Next';
+    }
+}
+      function nextStep() {
+    const steps = getOnboardingSteps();
+    if (currentOnboardingStep < steps.length - 1) {
+        currentOnboardingStep++;
+        renderOnboardingStep();
+    } else {
+        closeOnboarding();
+    }
+}
 
         function prevStep() {
             if (currentOnboardingStep > 0) {

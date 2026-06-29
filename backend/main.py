@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException
+from fastapi import Body, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -624,6 +624,57 @@ async def get_user_achievements(tg_id: int):
             result.append({"code": code, **ACHIEVEMENTS[code], "earned_at": earned_at})
     return {"achievements": result, "total": len(result)}
 
+# === API: ПОИСК ПОЛЬЗОВАТЕЛЯ ПО EMAIL ===
+@app.get("/api/user/by-email/{email}")
+async def get_user_by_email(email: str):
+    """Получить профиль пользователя по email"""
+    # Нормализуем email: убираем пробелы, приводим к нижнему регистру
+    email_normalized = email.strip().lower()
+    logger.info(f" Поиск пользователя по email: {email_normalized}")
+    
+    async with database.get_db() as db:
+        # Ищем по нормализованному email
+        cur = await db.execute(
+            "SELECT * FROM users WHERE LOWER(TRIM(email)) = ?", 
+            (email_normalized,)
+        )
+        row = await cur.fetchone()
+        
+        if not row:
+            logger.warning(f" Пользователь с email={email_normalized} не найден")
+            
+            # Показываем всех пользователей для отладки
+            cur = await db.execute("SELECT telegram_id, email, username FROM users")
+            all_users = await cur.fetchall()
+            logger.info(f" Все пользователи в БД: {all_users}")
+            
+            raise HTTPException(
+                404, 
+                "Пользователь не найден. Сначала привяжи аккаунт через бота: /bind email пароль"
+            )
+        
+        user = database._row_to_dict(row)
+        logger.info(f" Пользователь найден: id={user.get('id')}, tg_id={user.get('telegram_id')}, email={user.get('email')}")
+    
+    return {
+        "id": user.get("id"),
+        "telegram_id": user.get("telegram_id"),
+        "username": user.get("username") or "Инженер",
+        "email": user.get("email"),
+        "xp": safe_int(user.get("xp")),
+        "level": safe_int(user.get("level"), 1),
+        "streak": safe_int(user.get("streak")),
+        "is_premium": bool(user.get("is_premium")),
+        "daily_requests": safe_int(user.get("daily_requests")),
+        "last_request_date": user.get("last_request_date"),
+        "requests_count": safe_int(user.get("requests_count")),
+        "material_count": safe_int(user.get("material_count")),
+        "patent_count": safe_int(user.get("patent_count")),
+        "modules_used": user.get("modules_used", "[]"),
+        "preferred_lang": user.get("preferred_lang", "ru"),
+        "created_at": user.get("created_at")
+    }
+
 # === API: МУЛЬТИЯЗЫЧНОСТЬ ===
 @app.post("/api/user/lang")
 async def set_user_language(req: SetLangRequest):
@@ -753,6 +804,35 @@ async def get_references(category: str = None):
             {"id": r[0], "title": r[1], "authors": r[2], "year": r[3], 
              "url": r[4], "pdf_path": r[5], "category": r[6]} for r in rows
         ]}
+
+
+@app.post("/api/auth/reset-password")
+async def reset_password(req: dict = Body(...)):
+    """Сбросить пароль пользователя"""
+    email = req.get("email")
+    new_password = req.get("new_password")
+    
+    if not email or not new_password:
+        raise HTTPException(400, "Email и новый пароль обязательны")
+    
+    # Хэшируем новый пароль
+    import hashlib
+    new_hash = hashlib.sha256(new_password.encode()).hexdigest()
+    
+    async with database.get_db() as db:
+        # Проверяем что пользователь существует
+        cur = await db.execute("SELECT id FROM users WHERE email = ?", (email,))
+        if not await cur.fetchone():
+            raise HTTPException(404, "Пользователь не найден")
+        
+        # Обновляем пароль
+        await db.execute(
+            "UPDATE users SET password_hash = ? WHERE email = ?",
+            (new_hash, email)
+        )
+        await db.commit()
+    
+    return {"status": "ok", "message": "Пароль обновлён"}
 
 @app.post("/api/references")
 async def add_reference(req: dict):
