@@ -1,8 +1,9 @@
-fastapi
-uvicorn
-aiosqlite
-httpx
-aiogram
-python-dotenv
-passlib[bcrypt]
-pydantic
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+aiosqlite==0.19.0
+httpx==0.26.0
+python-dotenv==1.0.0
+pydantic==2.5.3
+bcrypt==4.1.2
+starlette==0.35.1
+gunicorn==21.2.0

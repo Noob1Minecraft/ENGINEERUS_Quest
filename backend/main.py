@@ -16,6 +16,15 @@ from prompts import AI_PROMPTS, MODULE_PROMPTS
 load_dotenv(Path(__file__).parent.parent / ".env")
 logger = logging.getLogger(__name__)
 
+# === ТВОИ 2 GROQ КЛЮЧА ===
+GROQ_KEYS = [
+    os.getenv("GROQ_API_KEY_1", ""),
+    os.getenv("GROQ_API_KEY_2", ""),
+]
+GROQ_KEYS = [k for k in GROQ_KEYS if k]  # Убираем пустые
+GROQ_MODEL = "llama-3.3-70b-versatile"    # Одна стабильная модель
+_key_index = 0
+
 # === СПИСОК КВЕСТОВ ===
 QUESTS = {
     "first_contact": {
@@ -76,7 +85,6 @@ ACHIEVEMENTS = {
     "all_modules": {"name": "Инженер-универсал", "xp": 100, "desc": "Использовал все модули"}
 }
 
-# Декларативные правила ачивок
 ACHIEVEMENT_RULES = {
     "first_step": lambda u: int(u.get("requests_count", 0) or 0) >= 1,
     "material_master": lambda u: int(u.get("material_count", 0) or 0) >= 5,
@@ -133,9 +141,7 @@ Requirements:
 7. Use bullet points and headers for structure"""
 }
 
-# === ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ БЕЗОПАСНОГО INT ===
 def safe_int(value, default=0):
-    """Безопасная конвертация в int"""
     if value is None:
         return default
     try:
@@ -146,18 +152,16 @@ def safe_int(value, default=0):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await database.init_db()
-    print(" База данных инициализирована")
+    print(f"База данных инициализирована. Загружено Groq ключей: {len(GROQ_KEYS)}")
     yield
 
 app = FastAPI(title="Engineerus Quest API", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# Раздача фронтенда
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend")
 if os.path.exists(FRONTEND_DIR):
     app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 
-# Раздача PDF книг из frontend/books/
 BOOKS_DIR = os.path.join(FRONTEND_DIR, "books")
 if os.path.exists(BOOKS_DIR):
     app.mount("/books", StaticFiles(directory=BOOKS_DIR), name="books")
@@ -214,50 +218,60 @@ class BindRequest(BaseModel):
 class UnbindRequest(BaseModel):
     telegram_id: int
 
-# === ИИ ФУНКЦИЯ (МУЛЬТИЯЗЫЧНАЯ) ===
+# === ПРОСТАЯ ФУНКЦИЯ ИИ — ТОЛЬКО ТВОИ 2 КЛЮЧА ===
 async def call_ai(prompt: str, lang: str = "ru") -> str:
-    """Отвечает на выбранном языке ПОДРОБНО"""
-    ollama_url = os.getenv("OLLAMA_URL", "http://localhost:11434")
-    model = os.getenv("OLLAMA_MODEL", "llama3")
+    """Отвечает через Groq API, используя только твои 2 ключа по очереди"""
+    
+    if not GROQ_KEYS:
+        return "Ошибка: Groq API ключи не настроены в .env"
     
     system_prompt = SYSTEM_PROMPTS.get(lang, SYSTEM_PROMPTS["ru"])
     
-    try:
-        async with httpx.AsyncClient() as client:
-            url = f"{ollama_url}/api/chat"
-            payload = {
-                "model": model,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": prompt}
-                ],
-                "stream": False,
-                "options": {"temperature": 0.7, "num_predict": 2048}
-            }
-            
-            resp = await client.post(url, json=payload, timeout=180.0)
-            
-            if resp.status_code != 200:
-                return f"Ошибка Ollama ({resp.status_code})."
-            
-            data = resp.json()
-            return data["message"]["content"]
-            
-    except httpx.ConnectError:
-        return " Ollama не запущена! Открой приложение Ollama."
-    except httpx.TimeoutException:
-        return " AI думает слишком долго. Попробуй вопрос покороче."
-    except Exception as e:
-        logger.error(f"Ошибка: {str(e)}", exc_info=True)
-        return f" Ошибка соединения с AI: {str(e)}"
+    # Пробуем каждый ключ по очереди
+    for i in range(len(GROQ_KEYS)):
+        global _key_index
+        api_key = GROQ_KEYS[_key_index % len(GROQ_KEYS)]
+        _key_index += 1
+        
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(
+                    "https://api.groq.com/openai/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": GROQ_MODEL,
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": prompt}
+                        ],
+                        "temperature": 0.7,
+                        "max_tokens": 2048
+                    },
+                    timeout=180.0
+                )
+                
+                if resp.status_code == 200:
+                    return resp.json()["choices"][0]["message"]["content"]
+                elif resp.status_code == 429:
+                    logger.warning(f"Ключ {_key_index} исчерпан, пробуем следующий")
+                    continue
+                else:
+                    logger.error(f"Groq error {resp.status_code}: {resp.text[:200]}")
+                    return f"Ошибка AI ({resp.status_code})"
+        except Exception as e:
+            logger.error(f"Ошибка: {e}")
+            continue
+    
+    return "Все ключи исчерпаны. Попробуй через час."
 
 # === ФУНКЦИЯ АЧИВОК ===
 async def check_and_award_achievements(user_data: dict) -> list:
-    """Проверяет и выдаёт новые ачивки пользователю"""
     new_achievements = []
     
     try:
-        # Парсим modules_used
         modules_used = user_data.get("modules_used", "[]")
         if isinstance(modules_used, str):
             try:
@@ -268,14 +282,12 @@ async def check_and_award_achievements(user_data: dict) -> list:
             modules_used = []
         user_data["modules_used_list"] = modules_used
         
-        # Гарантируем что все числовые поля - это int
         user_data["xp"] = safe_int(user_data.get("xp"))
         user_data["requests_count"] = safe_int(user_data.get("requests_count"))
         user_data["material_count"] = safe_int(user_data.get("material_count"))
         user_data["patent_count"] = safe_int(user_data.get("patent_count"))
         user_data["streak"] = safe_int(user_data.get("streak"))
         
-        # Получаем существующие ачивки
         try:
             existing = await database.get_achievements(user_data["telegram_id"])
             existing_codes = {ex[0] for ex in existing} if existing else set()
@@ -318,9 +330,8 @@ async def handle_ai(req: AIRequest):
     user = await database.get_or_create_user(req.telegram_id, req.username)
     allowed, _ = await database.check_daily_limit(req.telegram_id, user["is_premium"])
     if not allowed:
-        return {"status": "limit", "message": " Лимит 10 запросов/день."}
+        return {"status": "limit", "message": "Лимит 10 запросов/день."}
     
-    # Берём язык из запроса или из БД
     lang = req.lang if req.lang else await database.get_preferred_lang(req.telegram_id)
     
     prompt = f"{AI_PROMPTS['tutor']}\n\nВопрос: {req.text}"
@@ -360,7 +371,6 @@ async def handle_module(req: ModuleRequest):
     
     user = await database.get_or_create_user(req.telegram_id, req.username)
     
-    # Берём язык из запроса или из БД
     lang = req.lang if req.lang else await database.get_preferred_lang(req.telegram_id)
     
     modules_used_raw = user.get("modules_used", "[]")
@@ -385,7 +395,6 @@ async def handle_module(req: ModuleRequest):
     await database.update_streak(req.telegram_id)
     await database.save_request(req.telegram_id, req.module, req.text, ai_response)
     
-    # Безопасная работа с числовыми полями
     new_mat = safe_int(user.get("material_count")) + (1 if req.module == "material" else 0)
     new_pat = safe_int(user.get("patent_count")) + (1 if req.module == "patent" else 0)
     await database.update_module_counts(req.telegram_id, new_mat, new_pat, json.dumps(modules_used))
@@ -417,10 +426,9 @@ async def register(req: RegisterRequest):
         await database.update_username(req.telegram_id, req.full_name)
     return {"status": "ok", "user": user}
 
-# === API: ВЕБ-АВТОРИЗАЦИЯ (Email + Password) ===
+# === API: ВЕБ-АВТОРИЗАЦИЯ ===
 @app.post("/api/auth/web/register")
 async def web_register(req: WebRegisterRequest):
-    """Регистрация через сайт (email + пароль)"""
     if not req.email or len(req.password) < 4:
         raise HTTPException(status_code=400, detail="Некорректные данные (пароль минимум 4 символа)")
     
@@ -432,7 +440,6 @@ async def web_register(req: WebRegisterRequest):
 
 @app.post("/api/auth/web/login")
 async def web_login(req: WebLoginRequest):
-    """Вход через сайт (email + пароль)"""
     user = await database.authenticate_user(req.email, req.password)
     if not user:
         raise HTTPException(status_code=401, detail="Неверный email или пароль")
@@ -441,24 +448,19 @@ async def web_login(req: WebLoginRequest):
 
 @app.post("/api/auth/bind")
 async def bind_account(req: BindRequest):
-    """Привязать Telegram к веб-аккаунту"""
-    logger.info(f" BIND: email={req.email}, tg_id={req.telegram_id}")
+    logger.info(f"BIND: email={req.email}, tg_id={req.telegram_id}")
     
-    # 1. Ищем пользователя по email
     async with database.get_db() as db:
         cur = await db.execute("SELECT * FROM users WHERE email = ?", (req.email,))
         row = await cur.fetchone()
     
     if row:
-        # Пользователь с email существует
         user = database._row_to_dict(row)
         existing_tg_id = user.get("telegram_id")
         
         if existing_tg_id and existing_tg_id != req.telegram_id:
-            logger.error(f" Email уже привязан к другому TG: {existing_tg_id}")
             raise HTTPException(400, f"Этот email уже привязан к другому Telegram")
         
-        # Обновляем telegram_id
         async with database.get_db() as db:
             await db.execute(
                 "UPDATE users SET telegram_id = ? WHERE email = ?",
@@ -466,17 +468,13 @@ async def bind_account(req: BindRequest):
             )
             await db.commit()
         
-        logger.info(f" Telegram привязан к существующему email")
-        return {"status": "ok", "message": " Аккаунт привязан"}
+        return {"status": "ok", "message": "Аккаунт привязан"}
     
-    # 2. Если пользователя с email нет — создаём нового
-    logger.info(f" Создаём нового пользователя с email={req.email}")
     new_user = await database.register_user(req.email, req.password)
     
     if not new_user:
         raise HTTPException(400, "Не удалось создать аккаунт")
     
-    # Привязываем telegram_id
     async with database.get_db() as db:
         await db.execute(
             "UPDATE users SET telegram_id = ? WHERE email = ?",
@@ -484,11 +482,10 @@ async def bind_account(req: BindRequest):
         )
         await db.commit()
     
-    logger.info(f" Создан новый аккаунт и привязан к Telegram")
-    return {"status": "ok", "message": " Аккаунт создан и привязан"}
+    return {"status": "ok", "message": "Аккаунт создан и привязан"}
+
 @app.post("/api/auth/unbind")
 async def unbind_account(req: UnbindRequest):
-    """Отвязать Telegram от веб-аккаунта"""
     async with database.get_db() as db:
         await db.execute(
             "UPDATE users SET telegram_id = NULL WHERE telegram_id = ?",
@@ -496,7 +493,7 @@ async def unbind_account(req: UnbindRequest):
         )
         await db.commit()
     
-    return {"status": "ok", "message": " Привязка удалена"}
+    return {"status": "ok", "message": "Привязка удалена"}
 
 # === API: ЛИДЕРБОРД ===
 @app.get("/api/leaderboard")
@@ -552,8 +549,6 @@ async def complete_quest(req: QuestCompleteRequest):
     
     await database.complete_quest(req.telegram_id, req.quest_id)
     await database.add_xp(req.telegram_id, quest["xp"])
-    
-    #  ОБНОВЛЯЕМ СТРИК при выполнении квеста!
     await database.update_streak(req.telegram_id)
     
     updated_user = await database.get_user(req.telegram_id)
@@ -561,7 +556,7 @@ async def complete_quest(req: QuestCompleteRequest):
     
     return {
         "status": "ok", 
-        "message": f" Квест выполнен! +{quest['xp']} XP",
+        "message": f"Квест выполнен! +{quest['xp']} XP",
         "quest": quest,
         "new_xp": safe_int(updated_user.get("xp")),
         "new_level": safe_int(updated_user.get("level"), 1),
@@ -577,20 +572,13 @@ async def get_completed_quests(tg_id: int):
 # === API: ПРОФИЛЬ ===
 @app.get("/api/user/{tg_id}")
 async def get_user_profile(tg_id: int):
-    logger.info(f" GET /api/user/{tg_id}")
-    
-    # Сначала ищем пользователя по telegram_id
     user = await database.get_user(tg_id)
     
     if not user:
-        # Если не найден — создаём нового
-        logger.info(f" Создаём нового пользователя tg_id={tg_id}")
         try:
             user = await database.get_or_create_user(tg_id, "")
-            if user:
-                logger.info(f" Пользователь создан: id={user.get('id')}")
         except Exception as e:
-            logger.error(f" Ошибка создания: {e}", exc_info=True)
+            logger.error(f"Ошибка создания: {e}", exc_info=True)
             raise HTTPException(500, f"Ошибка: {str(e)}")
     
     if not user:
@@ -624,16 +612,11 @@ async def get_user_achievements(tg_id: int):
             result.append({"code": code, **ACHIEVEMENTS[code], "earned_at": earned_at})
     return {"achievements": result, "total": len(result)}
 
-# === API: ПОИСК ПОЛЬЗОВАТЕЛЯ ПО EMAIL ===
 @app.get("/api/user/by-email/{email}")
 async def get_user_by_email(email: str):
-    """Получить профиль пользователя по email"""
-    # Нормализуем email: убираем пробелы, приводим к нижнему регистру
     email_normalized = email.strip().lower()
-    logger.info(f" Поиск пользователя по email: {email_normalized}")
     
     async with database.get_db() as db:
-        # Ищем по нормализованному email
         cur = await db.execute(
             "SELECT * FROM users WHERE LOWER(TRIM(email)) = ?", 
             (email_normalized,)
@@ -641,20 +624,9 @@ async def get_user_by_email(email: str):
         row = await cur.fetchone()
         
         if not row:
-            logger.warning(f" Пользователь с email={email_normalized} не найден")
-            
-            # Показываем всех пользователей для отладки
-            cur = await db.execute("SELECT telegram_id, email, username FROM users")
-            all_users = await cur.fetchall()
-            logger.info(f" Все пользователи в БД: {all_users}")
-            
-            raise HTTPException(
-                404, 
-                "Пользователь не найден. Сначала привяжи аккаунт через бота: /bind email пароль"
-            )
+            raise HTTPException(404, "Пользователь не найден")
         
         user = database._row_to_dict(row)
-        logger.info(f" Пользователь найден: id={user.get('id')}, tg_id={user.get('telegram_id')}, email={user.get('email')}")
     
     return {
         "id": user.get("id"),
@@ -678,7 +650,6 @@ async def get_user_by_email(email: str):
 # === API: МУЛЬТИЯЗЫЧНОСТЬ ===
 @app.post("/api/user/lang")
 async def set_user_language(req: SetLangRequest):
-    """Установить предпочитаемый язык пользователя"""
     if req.lang not in ["ru", "kk", "en"]:
         raise HTTPException(status_code=400, detail="Invalid language")
     await database.set_preferred_lang(req.telegram_id, req.lang)
@@ -686,17 +657,16 @@ async def set_user_language(req: SetLangRequest):
 
 @app.get("/api/user/lang/{tg_id}")
 async def get_user_language(tg_id: int):
-    """Получить предпочитаемый язык пользователя"""
     lang = await database.get_preferred_lang(tg_id)
     return {"lang": lang}
 
 # === API: ЕЖЕДНЕВНЫЕ КВЕСТЫ ===
 DAILY_QUESTS = [
-    {"type": "sopromat", "text": " Реши 3 задачи по сопромату", "xp": 50},
-    {"type": "termeh", "text": " Разберись с термехом (2 задачи)", "xp": 50},
-    {"type": "module", "text": " Изучи новый модуль в боте", "xp": 30},
-    {"type": "ai_question", "text": " Задай вопрос ИИ-помощнику", "xp": 20},
-    {"type": "article", "text": " Прочитай научную статью", "xp": 40},
+    {"type": "sopromat", "text": "Реши 3 задачи по сопромату", "xp": 50},
+    {"type": "termeh", "text": "Разберись с термехом (2 задачи)", "xp": 50},
+    {"type": "module", "text": "Изучи новый модуль в боте", "xp": 30},
+    {"type": "ai_question", "text": "Задай вопрос ИИ-помощнику", "xp": 20},
+    {"type": "article", "text": "Прочитай научную статью", "xp": 40},
 ]
 
 class DailyQuestRequest(BaseModel):
@@ -704,7 +674,6 @@ class DailyQuestRequest(BaseModel):
 
 @app.post("/api/daily/quest")
 async def get_daily_quest(req: DailyQuestRequest):
-    """Выдать ежедневный квест"""
     user = await database.get_user(req.telegram_id)
     if not user:
         user = await database.get_or_create_user(req.telegram_id, "")
@@ -713,23 +682,15 @@ async def get_daily_quest(req: DailyQuestRequest):
     today = str(date.today())
     
     if last_quest == today:
-        return {
-            "status": "already",
-            "message": " Ты уже взял квест сегодня! Заходи завтра "
-        }
+        return {"status": "already", "message": "Ты уже взял квест сегодня!"}
     
     quest = random.choice(DAILY_QUESTS)
     await database.set_daily_quest(req.telegram_id, quest["type"], today)
     
-    return {
-        "status": "ok",
-        "quest": quest,
-        "streak": safe_int(user.get("streak"))
-    }
+    return {"status": "ok", "quest": quest, "streak": safe_int(user.get("streak"))}
 
 @app.post("/api/daily/check")
 async def check_daily_quest(req: DailyQuestRequest):
-    """Проверить выполнение квеста"""
     user = await database.get_user(req.telegram_id)
     if not user:
         return {"status": "error", "message": "Пользователь не найден"}
@@ -744,10 +705,7 @@ async def check_daily_quest(req: DailyQuestRequest):
     if quest_date != today:
         await database.reset_streak(req.telegram_id)
         await database.clear_daily_quest(req.telegram_id)
-        return {
-            "status": "expired",
-            "message": " Квест просрочен. Серия сброшена. Бери новый: /daily"
-        }
+        return {"status": "expired", "message": "Квест просрочен. Бери новый: /daily"}
     
     xp_reward = 20
     for q in DAILY_QUESTS:
@@ -779,7 +737,6 @@ async def check_daily_quest(req: DailyQuestRequest):
 
 @app.get("/api/daily/status/{tg_id}")
 async def get_daily_status(tg_id: int):
-    """Показать статус серии"""
     user = await database.get_user(tg_id)
     if not user:
         return {"status": "error", "message": "Пользователь не найден"}
@@ -805,27 +762,22 @@ async def get_references(category: str = None):
              "url": r[4], "pdf_path": r[5], "category": r[6]} for r in rows
         ]}
 
-
 @app.post("/api/auth/reset-password")
 async def reset_password(req: dict = Body(...)):
-    """Сбросить пароль пользователя"""
     email = req.get("email")
     new_password = req.get("new_password")
     
     if not email or not new_password:
         raise HTTPException(400, "Email и новый пароль обязательны")
     
-    # Хэшируем новый пароль
     import hashlib
     new_hash = hashlib.sha256(new_password.encode()).hexdigest()
     
     async with database.get_db() as db:
-        # Проверяем что пользователь существует
         cur = await db.execute("SELECT id FROM users WHERE email = ?", (email,))
         if not await cur.fetchone():
             raise HTTPException(404, "Пользователь не найден")
         
-        # Обновляем пароль
         await db.execute(
             "UPDATE users SET password_hash = ? WHERE email = ?",
             (new_hash, email)
