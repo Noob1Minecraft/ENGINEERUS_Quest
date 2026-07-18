@@ -25,50 +25,80 @@ GROQ_KEYS = [k for k in GROQ_KEYS if k]  # Убираем пустые
 GROQ_MODEL = "llama-3.3-70b-versatile"    # Одна стабильная модель
 _key_index = 0
 
-# === СПИСОК КВЕСТОВ ===
+# === СПИСОК КВЕСТОВ (С ПЕРЕВОДАМИ) ===
 QUESTS = {
     "first_contact": {
         "id": "first_contact",
         "name": "Первый контакт",
+        "name_kk": "Алғашқы байланыс",
+        "name_en": "First Contact",
         "desc": "Отправь первый запрос к ИИ-репетитору",
+        "desc_kk": "ЖИ-репетиторға алғашқы сұрауды жібер",
+        "desc_en": "Send your first request to the AI tutor",
         "xp": 20,
         "reward": "Бейдж Новичок",
+        "reward_kk": "Жаңадан келген белгісі",
+        "reward_en": "Newbie Badge",
         "condition": "first_request",
         "condition_desc": "Нужно задать хотя бы 1 вопрос ИИ"
     },
     "material_scout": {
         "id": "material_scout",
         "name": "Поиск материала",
+        "name_kk": "Материал іздеу",
+        "name_en": "Material Scout",
         "desc": "Используй модуль MaterialSwap",
+        "desc_kk": "MaterialSwap модулін қолдан",
+        "desc_en": "Use the MaterialSwap module",
         "xp": 30,
         "reward": "Бейдж Исследователь",
+        "reward_kk": "Зерттеуші белгісі",
+        "reward_en": "Researcher Badge",
         "condition": "use_material",
         "condition_desc": "Сделай 1 подбор в MaterialSwap"
     },
     "streak_master": {
         "id": "streak_master",
         "name": "Серия побед",
+        "name_kk": "Жеңіс сериясы",
+        "name_en": "Streak Master",
         "desc": "Набери стрик 3 дня",
+        "desc_kk": "3 күн қатарынан кір",
+        "desc_en": "Get a 3-day streak",
         "xp": 50,
         "reward": "Бейдж Постоянец",
+        "reward_kk": "Тұрақтылық белгісі",
+        "reward_en": "Regular Badge",
         "condition": "streak_3",
         "condition_desc": "Заходи 3 дня подряд"
     },
     "xp_hunter": {
         "id": "xp_hunter",
         "name": "Охотник за XP",
+        "name_kk": "XP аңшысы",
+        "name_en": "XP Hunter",
         "desc": "Набери 50 XP",
+        "desc_kk": "50 XP жина",
+        "desc_en": "Earn 50 XP",
         "xp": 40,
         "reward": "Бейдж Опытный",
+        "reward_kk": "Тәжірибелі белгісі",
+        "reward_en": "Experienced Badge",
         "condition": "xp_50",
         "condition_desc": "Заработай 50 XP"
     },
     "module_explorer": {
         "id": "module_explorer",
         "name": "Вездеход",
+        "name_kk": "Модуль зерттеушісі",
+        "name_en": "Module Explorer",
         "desc": "Попробуй все модули",
+        "desc_kk": "Барлық модульдерді қолданып көр",
+        "desc_en": "Try all modules",
         "xp": 100,
         "reward": "Бейдж Универсал",
+        "reward_kk": "Универсал белгісі",
+        "reward_en": "Universal Badge",
         "condition": "use_all_modules",
         "condition_desc": "Используй все модули"
     }
@@ -157,7 +187,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Engineerus Quest API", lifespan=lifespan)
 # Разрешаем запросы с Vercel и локально
-ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8000").split(",")
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8000,https://engineerus-quest.vercel.app").split(",")
 app.add_middleware(CORSMiddleware, allow_origins=ALLOWED_ORIGINS, allow_methods=["*"], allow_headers=["*"])
 
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend")
