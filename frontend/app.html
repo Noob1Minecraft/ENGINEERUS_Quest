@@ -208,15 +208,18 @@
             to { opacity: 1; transform: translateY(0); }
         }
 
-        .auth-title {
-            font-size: 2rem;
-            font-weight: 800;
-            text-align: center;
-            margin-bottom: 0.5rem;
-            background: linear-gradient(135deg, var(--primary), var(--secondary));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
+       .auth-title {
+    font-size: 2rem;
+    font-weight: 800;
+    text-align: center;
+    margin-bottom: 0.5rem;
+    background: linear-gradient(135deg, var(--primary), var(--secondary));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text; /* ДОБАВЛЕНО: стандартное свойство */
+    color: transparent; /* ДОБАВЛЕНО: fallback */
+}
+
 
         .auth-subtitle {
             text-align: center;
@@ -436,14 +439,16 @@
         }
 
         .stat-value {
-            font-size: 3rem;
-            font-weight: 900;
-            background: linear-gradient(135deg, var(--primary), var(--secondary));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            display: block;
-            margin-bottom: 0.5rem;
-        }
+    font-size: 3rem;
+    font-weight: 900;
+    background: linear-gradient(135deg, var(--primary), var(--secondary));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text; /* ДОБАВЛЕНО: стандартное свойство */
+    color: transparent; /* ДОБАВЛЕНО: fallback */
+    display: block;
+    margin-bottom: 0.5rem;
+}
 
         .stat-label {
             color: var(--text-muted);
