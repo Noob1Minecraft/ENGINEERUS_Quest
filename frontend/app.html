@@ -960,17 +960,17 @@
                             <p data-i18n="roadmap_step2_desc">Механика материалов, прочность</p>
                         </div>
                         <div class="engineering-card" onclick="openBotWithPrompt('thermo')" style="text-align: center; cursor: pointer;">
-                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">🌡️</div>
+                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;"></div>
                             <h4 data-i18n="roadmap_step3_title">3. Термодинамика</h4>
                             <p data-i18n="roadmap_step3_desc">Тепловые процессы, энергия</p>
                         </div>
                         <div class="engineering-card" onclick="openBotWithPrompt('mechatronics')" style="text-align: center; cursor: pointer;">
-                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">⚙️</div>
+                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;"></div>
                             <h4 data-i18n="roadmap_step4_title">4. Мехатроника</h4>
                             <p data-i18n="roadmap_step4_desc">Робототехника, автоматизация</p>
                         </div>
                         <div class="engineering-card" onclick="openBotWithPrompt('project')" style="text-align: center; cursor: pointer;">
-                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">🚀</div>
+                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;"></div>
                             <h4 data-i18n="roadmap_step5_title">5. Проект</h4>
                             <p data-i18n="roadmap_step5_desc">Создай свой инженерный проект</p>
                         </div>
@@ -1476,7 +1476,7 @@
         function handleLogin(e) {
             e.preventDefault();
             isLoggedIn = true;
-            currentUser = { xp: 0, level: 1, streak: 0, questsCompleted: 0 };
+            currentUser = { xp: 0, level: 1, streak: 0, questsCompleted: 0, aiQueriesSent: 0};
             closeAuthModal();
             showApp();
         }
@@ -1484,7 +1484,7 @@
         function handleRegister(e) {
             e.preventDefault();
             isLoggedIn = true;
-            currentUser = { xp: 0, level: 1, streak: 0, questsCompleted: 0 };
+            currentUser = { xp: 0, level: 1, streak: 0, questsCompleted: 0, aiQueriesSent: 0 };
             closeAuthModal();
             showApp();
         }
