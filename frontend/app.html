@@ -283,9 +283,9 @@
                     <div class="engineering-grid">
                         <div class="engineering-card" onclick="openBotWithPrompt('basics')" style="text-align: center; cursor: pointer;"><div style="font-size: 2.5rem; margin-bottom: 0.5rem;"></div><h4 data-i18n="roadmap_step1_title">1. Основы</h4><p data-i18n="roadmap_step1_desc">Математика, физика, черчение</p></div>
                         <div class="engineering-card" onclick="openBotWithPrompt('sopromat')" style="text-align: center; cursor: pointer;"><div style="font-size: 2.5rem; margin-bottom: 0.5rem;"></div><h4 data-i18n="roadmap_step2_title">2. Сопромат</h4><p data-i18n="roadmap_step2_desc">Механика материалов, прочность</p></div>
-                        <div class="engineering-card" onclick="openBotWithPrompt('thermo')" style="text-align: center; cursor: pointer;"><div style="font-size: 2.5rem; margin-bottom: 0.5rem;">🌡️</div><h4 data-i18n="roadmap_step3_title">3. Термодинамика</h4><p data-i18n="roadmap_step3_desc">Тепловые процессы, энергия</p></div>
-                        <div class="engineering-card" onclick="openBotWithPrompt('mechatronics')" style="text-align: center; cursor: pointer;"><div style="font-size: 2.5rem; margin-bottom: 0.5rem;">⚙️</div><h4 data-i18n="roadmap_step4_title">4. Мехатроника</h4><p data-i18n="roadmap_step4_desc">Робототехника, автоматизация</p></div>
-                        <div class="engineering-card" onclick="openBotWithPrompt('project')" style="text-align: center; cursor: pointer;"><div style="font-size: 2.5rem; margin-bottom: 0.5rem;">🚀</div><h4 data-i18n="roadmap_step5_title">5. Проект</h4><p data-i18n="roadmap_step5_desc">Создай свой инженерный проект</p></div>
+                        <div class="engineering-card" onclick="openBotWithPrompt('thermo')" style="text-align: center; cursor: pointer;"><div style="font-size: 2.5rem; margin-bottom: 0.5rem;"></div><h4 data-i18n="roadmap_step3_title">3. Термодинамика</h4><p data-i18n="roadmap_step3_desc">Тепловые процессы, энергия</p></div>
+                        <div class="engineering-card" onclick="openBotWithPrompt('mechatronics')" style="text-align: center; cursor: pointer;"><div style="font-size: 2.5rem; margin-bottom: 0.5rem;"></div><h4 data-i18n="roadmap_step4_title">4. Мехатроника</h4><p data-i18n="roadmap_step4_desc">Робототехника, автоматизация</p></div>
+                        <div class="engineering-card" onclick="openBotWithPrompt('project')" style="text-align: center; cursor: pointer;"><div style="font-size: 2.5rem; margin-bottom: 0.5rem;"></div><h4 data-i18n="roadmap_step5_title">5. Проект</h4><p data-i18n="roadmap_step5_desc">Создай свой инженерный проект</p></div>
                     </div>
                 </div>
                 <div class="engineering-grid">
@@ -806,51 +806,93 @@
         }
 
         async function sendQuery() {
-            const question = document.getElementById('question').value.trim();
-            if (!question) { alert(currentLang === 'ru' ? 'Введите вопрос' : 'Enter a question'); return; }
-            
-            aiQueriesSent++;
-            if (currentUser) {
-                currentUser.aiQueriesSent = (currentUser.aiQueriesSent || 0) + 1;
-                currentUser.tg_id = currentUser.tg_id || generateUserId();
+    const question = document.getElementById('question').value.trim();
+    if (!question) { 
+        alert(currentLang === 'ru' ? 'Введите вопрос' : 'Enter a question'); 
+        return; 
+    }
+    
+    aiQueriesSent++;
+    if (currentUser) {
+        currentUser.aiQueriesSent = (currentUser.aiQueriesSent || 0) + 1;
+        currentUser.tg_id = currentUser.tg_id || generateUserId();
+    }
+    
+    const responseDiv = document.getElementById('ai-response');
+    const responseText = document.getElementById('ai-response-text');
+    const submitBtn = document.querySelector('.ai-submit-btn');
+    
+    responseDiv.style.display = 'block';
+    submitBtn.classList.add('loading');
+    submitBtn.disabled = true;
+    
+    // Показываем что сервер "просыпается"
+    responseText.innerHTML = '<p style="color: var(--primary); text-align: center; font-weight: 600;"> Сервер просыпается... Это может занять до 60 секунд. Пожалуйста, подождите.</p>';
+    
+    let lastError = null;
+    const maxRetries = 3;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            if (attempt > 1) {
+                responseText.innerHTML = `<p style="color: var(--warning); text-align: center;">🔄 Попытка ${attempt} из ${maxRetries}...</p>`;
+                // Ждем 3 секунды перед повторной попыткой
+                await new Promise(resolve => setTimeout(resolve, 3000));
             }
             
-            const responseDiv = document.getElementById('ai-response');
-            const responseText = document.getElementById('ai-response-text');
-            const submitBtn = document.querySelector('.ai-submit-btn');
+            const mode = document.getElementById('ai-mode').value;
+            const questionLang = /[а-яА-ЯЁё]/.test(question) ? 'ru' : /[а-қА-ҚәӘіІңғҒұҰөӨһҺ]/.test(question) ? 'kk' : 'en';
+            const module = document.getElementById('module').value;
+            const endpoint = mode === 'modules' && module !== 'tutor' ? `${API}/module` : `${API}/ai`;
+            const payload = (mode === 'modules' && module !== 'tutor') 
+                ? { telegram_id: currentUser.tg_id, module, text: question, lang: questionLang }
+                : { telegram_id: currentUser.tg_id, text: question, lang: questionLang };
             
-            responseDiv.style.display = 'block';
-            submitBtn.classList.add('loading');
-            responseText.innerHTML = '<p style="color: var(--text-muted); text-align: center;">ИИ думает...</p>';
+            // Увеличенный timeout - 90 секунд (для "пробуждения" Render)
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 90000);
             
-            try {
-                const mode = document.getElementById('ai-mode').value;
-                const questionLang = /[а-яА-ЯЁё]/.test(question) ? 'ru' : /[а-қА-ҚәӘіІңғҒұҰөӨһҺ]/.test(question) ? 'kk' : 'en';
-                const module = document.getElementById('module').value;
-                const endpoint = mode === 'modules' && module !== 'tutor' ? `${API}/module` : `${API}/ai`;
-                const payload = (mode === 'modules' && module !== 'tutor') 
-                    ? { telegram_id: currentUser.tg_id, module, text: question, lang: questionLang }
-                    : { telegram_id: currentUser.tg_id, text: question, lang: questionLang };
-                
-                const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                
-                if (res.ok) {
-                    const data = await res.json();
-                    responseText.textContent = data.response || 'Ответ получен!';
-                } else {
-                    throw new Error('API error');
-                }
-            } catch (e) {
-                console.error('AI error:', e);
-                // ИСПРАВЛЕНО: Больше никакого "Закона Ома" при ошибке. Теперь честное сообщение.
-                responseText.textContent = currentLang === 'ru' 
-                    ? 'Ошибка сети: не удалось связаться с ИИ. Проверьте интернет или попробуйте позже.'
-                    : currentLang === 'kk' ? 'Желілік қате: ЖИ-ге қосылу мүмкін болмады.' 
-                    : "Network error: Could not reach AI. Please check your connection.";
-            } finally {
+            const res = await fetch(endpoint, { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify(payload),
+                signal: controller.signal
+            });
+            
+            clearTimeout(timeoutId);
+            
+            if (res.ok) {
+                const data = await res.json();
+                responseText.textContent = data.response || 'Ответ получен!';
                 submitBtn.classList.remove('loading');
+                submitBtn.disabled = false;
+                return; // Успех! Выходим
+            } else {
+                throw new Error(`HTTP ${res.status}`);
+            }
+        } catch (e) {
+            lastError = e;
+            console.error(`Attempt ${attempt} failed:`, e);
+            
+            // Если это не таймаут и не сеть - не повторяем
+            if (e.name !== 'AbortError' && !e.message.includes('fetch')) {
+                break;
             }
         }
+    }
+    
+    // Все попытки исчерпаны
+    submitBtn.classList.remove('loading');
+    submitBtn.disabled = false;
+    
+    const errorMsg = currentLang === 'ru' 
+        ? ' Не удалось связаться с ИИ после нескольких попыток.\n\nПричина: сервер на бесплатном тарифе Render "засыпает" и ему нужно время для пробуждения.\n\nЧто делать:\n1. Подождите 1-2 минуты\n2. Откройте сайт в новой вкладке (это "разбудит" сервер)\n3. Попробуйте снова\n\nИли используйте Telegram-бота @engineerus_bot - он работает стабильнее.'
+        : currentLang === 'kk' 
+        ? ' ЖИ-ге қосылу мүмкін болмады.\n\nСебебі: Render тегін тарифінде сервер "ұйықтайды".\n\nНе істеу керек:\n1. 1-2 минут күтіңіз\n2. Сайтты жаңа қойындыда ашыңыз\n3. Қайта көріңіз'
+        : " Could not reach AI after multiple attempts.\n\nReason: Render free tier server 'sleeps' and needs time to wake up.\n\nWhat to do:\n1. Wait 1-2 minutes\n2. Open the site in a new tab (this 'wakes up' the server)\n3. Try again\n\nOr use Telegram bot @engineerus_bot - it works more reliably.";
+    
+    responseText.textContent = errorMsg;
+}
 
         function openBotWithPrompt(step) {
             const prompts = {
