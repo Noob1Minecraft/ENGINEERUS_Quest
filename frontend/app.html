@@ -477,7 +477,7 @@
             background: var(--surface);
             border-radius: var(--radius);
             padding: 2.5rem;
-            box-shadow: var(--shadow);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
             margin-bottom: 2rem;
             border: 2px solid var(--border);
             transition: all 0.3s;
@@ -866,8 +866,7 @@
         <header class="app-header">
             <div class="app-header-content">
                 <nav class="app-nav">
-                    <a href="#home" class="active" data-i18n="nav_home">Главная</a>
-                    <a href="#profile" data-i18n="nav_profile">Профиль</a>
+                    <a href="#profile" class="active" data-i18n="nav_home">Главная</a>
                     <a href="#quests" data-i18n="nav_quests">Квесты</a>
                     <a href="#leaderboard" data-i18n="nav_leaderboard">Таблица лидеров</a>
                     <a href="#learning" data-i18n="nav_learning">Обучение</a>
@@ -925,11 +924,11 @@
 
             <!-- Вкладки -->
             <div class="tabs">
-                <button class="tab active" onclick="switchTab('quests')" data-i18n="tab_quests">Квесты</button>
-                <button class="tab" onclick="switchTab('leaderboard')" data-i18n="tab_leaderboard">Лидеры</button>
-                <button class="tab" onclick="switchTab('learning')" data-i18n="tab_learning">Обучение</button>
-                <button class="tab" onclick="switchTab('ai')" data-i18n="tab_ai">ИИ-помощник</button>
-                <button class="tab" onclick="switchTab('instructions')" data-i18n="tab_instructions">Инструкция</button>
+                <button class="tab active" onclick="switchTab('quests', this)" data-i18n="tab_quests">Квесты</button>
+                <button class="tab" onclick="switchTab('leaderboard', this)" data-i18n="tab_leaderboard">Лидеры</button>
+                <button class="tab" onclick="switchTab('learning', this)" data-i18n="tab_learning">Обучение</button>
+                <button class="tab" onclick="switchTab('ai', this)" data-i18n="tab_ai">ИИ-помощник</button>
+                <button class="tab" onclick="switchTab('instructions', this)" data-i18n="tab_instructions">Инструкция</button>
             </div>
 
             <!-- Квесты -->
@@ -952,22 +951,22 @@
                     <h3 style="font-size: 1.5rem; margin-bottom: 1.5rem; text-align: center; color: var(--primary);" data-i18n="roadmap_title">Путь инженера: 5 шагов к мастерству</h3>
                     <div class="engineering-grid">
                         <div class="engineering-card" onclick="openBotWithPrompt('basics')" style="text-align: center; cursor: pointer;">
-                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">📐</div>
+                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;"></div>
                             <h4 data-i18n="roadmap_step1_title">1. Основы</h4>
                             <p data-i18n="roadmap_step1_desc">Математика, физика, черчение</p>
                         </div>
                         <div class="engineering-card" onclick="openBotWithPrompt('sopromat')" style="text-align: center; cursor: pointer;">
-                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">🔧</div>
+                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;"></div>
                             <h4 data-i18n="roadmap_step2_title">2. Сопромат</h4>
                             <p data-i18n="roadmap_step2_desc">Механика материалов, прочность</p>
                         </div>
                         <div class="engineering-card" onclick="openBotWithPrompt('thermo')" style="text-align: center; cursor: pointer;">
-                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">🌡️</div>
+                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;"></div>
                             <h4 data-i18n="roadmap_step3_title">3. Термодинамика</h4>
                             <p data-i18n="roadmap_step3_desc">Тепловые процессы, энергия</p>
                         </div>
                         <div class="engineering-card" onclick="openBotWithPrompt('mechatronics')" style="text-align: center; cursor: pointer;">
-                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">⚙️</div>
+                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;"></div>
                             <h4 data-i18n="roadmap_step4_title">4. Мехатроника</h4>
                             <p data-i18n="roadmap_step4_desc">Робототехника, автоматизация</p>
                         </div>
@@ -1323,7 +1322,7 @@
                 stat_xp: 'XP ҰПАЙЛАРЫ',
                 stat_level: 'ДЕҢГЕЙ',
                 stat_streak: 'КҮН ҚАТАРЫНАН',
-                stat_quests: 'ОРЫНДАЛАН ТАПСЫРМАЛАР',
+                stat_quests: 'ОРЫНДАЛҒАН ТАПСЫРМАЛАР',
                 progress_to_level: 'Келесі деңгейге дейін:',
                 tab_quests: 'Тапсырмалар',
                 tab_leaderboard: 'Көшбасшылар',
@@ -1492,6 +1491,8 @@
             document.getElementById('appPage').classList.add('active');
             document.getElementById('appLangText').textContent = { ru: 'RU', en: 'EN', kk: 'KZ' }[currentLang];
             initOnboarding();
+            loadQuests();
+            loadLeaderboard();
         }
 
         function showLanding() {
@@ -1499,13 +1500,128 @@
             document.getElementById('appPage').classList.remove('active');
         }
 
-        // === ВКЛАДКИ ===
-        function switchTab(tabName) {
+        // === ИСПРАВЛЕННАЯ ФУНКЦИЯ ПЕРЕКЛЮЧЕНИЯ ВКЛАДОК ===
+        function switchTab(tabName, btnElement) {
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
             
-            event.target.classList.add('active');
+            btnElement.classList.add('active');
             document.getElementById(tabName + '-tab').classList.add('active');
+        }
+
+        // === ЗАГРУЗКА КВЕСТОВ ===
+        async function loadQuests() {
+            const list = document.getElementById('quests-list');
+            if (!list) return;
+            
+            list.innerHTML = '<p style="text-align: center; color: var(--text-muted); padding: 2rem;">Загрузка...</p>';
+            
+            try {
+                const res = await fetch(`${API}/quests`);
+                if (!res.ok) throw new Error('Failed to load quests');
+                
+                const data = await res.json();
+                const quests = data.quests;
+                
+                list.innerHTML = '';
+                
+                if (Object.keys(quests).length === 0) {
+                    list.innerHTML = '<p style="text-align: center; color: var(--text-muted); padding: 2rem;">Квесты загружаются...</p>';
+                    return;
+                }
+                
+                Object.values(quests).forEach(quest => {
+                    const card = document.createElement('div');
+                    card.className = 'quest-card';
+                    card.innerHTML = `
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                            <h3 style="font-size: 1.25rem; font-weight: 700;">${quest.name}</h3>
+                            <span style="background: var(--warning); color: white; padding: 0.25rem 0.75rem; border-radius: 20px; font-weight: 700;">+${quest.xp} XP</span>
+                        </div>
+                        <p style="color: var(--text-muted); margin-bottom: 1rem;">${quest.desc}</p>
+                        <div style="background: var(--bg); padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.875rem; display: inline-block; margin-bottom: 1rem;">
+                            Награда: ${quest.reward}
+                        </div>
+                        <button onclick="completeQuest('${quest.id}')" style="width: 100%;">Проверить выполнение</button>
+                    `;
+                    list.appendChild(card);
+                });
+            } catch (e) {
+                console.error('Quests error:', e);
+                list.innerHTML = '<p style="text-align: center; color: var(--error); padding: 2rem;">Не удалось загрузить квесты. Попробуйте позже.</p>';
+            }
+        }
+
+        // === ЗАГРУЗКА ЛИДЕРБОРДА ===
+        async function loadLeaderboard() {
+            const list = document.getElementById('leaderboard-list');
+            if (!list) return;
+            
+            list.innerHTML = '<p style="text-align: center; color: var(--text-muted); padding: 2rem;">Загрузка...</p>';
+            
+            try {
+                const res = await fetch(`${API}/leaderboard`);
+                if (!res.ok) throw new Error('Failed to load leaderboard');
+                
+                const data = await res.json();
+                const leaderboard = data.leaderboard;
+                
+                list.innerHTML = '';
+                
+                if (!leaderboard || leaderboard.length === 0) {
+                    list.innerHTML = '<p style="text-align: center; color: var(--text-muted); padding: 2rem;">Пока нет участников</p>';
+                    return;
+                }
+                
+                leaderboard.forEach((user, idx) => {
+                    const rank = idx + 1;
+                    const rankClass = rank <= 3 ? `rank-${rank}` : '';
+                    const item = document.createElement('div');
+                    item.className = 'leaderboard-item';
+                    item.innerHTML = `
+                        <div class="rank ${rankClass}">#${rank}</div>
+                        <div class="user-info">
+                            <div class="user-name">${user.username || 'Аноним'}</div>
+                            <div class="user-level">Уровень ${user.level} | ${user.streak} дн.</div>
+                        </div>
+                        <div class="user-xp">${user.xp} XP</div>
+                    `;
+                    list.appendChild(item);
+                });
+            } catch (e) {
+                console.error('Leaderboard error:', e);
+                list.innerHTML = '<p style="text-align: center; color: var(--error); padding: 2rem;">Не удалось загрузить таблицу лидеров</p>';
+            }
+        }
+
+        // === ВЫПОЛНЕНИЕ КВЕСТА ===
+        async function completeQuest(questId) {
+            if (!currentUser || !currentUser.tg_id) {
+                alert('Сначала привяжи Telegram-аккаунт!\n\nНапиши боту: /bind email пароль');
+                return;
+            }
+            
+            try {
+                const res = await fetch(`${API}/quests/complete`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        telegram_id: currentUser.tg_id, 
+                        quest_id: questId 
+                    })
+                });
+                const data = await res.json();
+                
+                if (data.status === 'ok') {
+                    alert(data.message);
+                    await loadQuests();
+                    await loadLeaderboard();
+                } else {
+                    alert(data.message);
+                }
+            } catch (e) {
+                alert('Ошибка: ' + e.message);
+            }
         }
 
         // === ONBOARDING ===
@@ -1664,20 +1780,19 @@
         }
 
         async function sendQuery() {
-            if (!currentUser) return alert('Сначала войдите в аккаунт');
-            
-            const mode = document.getElementById('ai-mode').value;
             const question = document.getElementById('question').value.trim();
-            if (!question) return alert(currentLang === 'ru' ? 'Введите вопрос' : currentLang === 'kk' ? 'Сұрақ енгізіңіз' : 'Enter a question');
+            if (!question) {
+                alert(currentLang === 'ru' ? 'Введите вопрос' : currentLang === 'kk' ? 'Сұрақ енгізіңіз' : 'Enter a question');
+                return;
+            }
             
             const responseDiv = document.getElementById('ai-response');
             responseDiv.style.display = 'block';
-            responseDiv.innerHTML = '<p> ' + (currentLang === 'ru' ? 'ИИ думает...' : currentLang === 'kk' ? 'ЖИ ойлануда...' : 'AI is thinking...') + '</p>';
+            responseDiv.innerHTML = '<p style="color: var(--text-muted);"> ' + (currentLang === 'ru' ? 'ИИ думает...' : currentLang === 'kk' ? 'ЖИ ойлануда...' : 'AI is thinking...') + '</p>';
             
-            // Здесь будет реальный запрос к API
             setTimeout(() => {
-                responseDiv.innerHTML = '<div style="white-space: pre-wrap;">Ответ AI на ваш вопрос...</div>';
-            }, 1000);
+                responseDiv.innerHTML = '<div style="white-space: pre-wrap; padding: 1rem; background: var(--bg); border-radius: 8px; margin-top: 1rem;"><strong>Ответ AI:</strong>\n\nСпасибо за ваш вопрос! Здесь будет ответ от AI-помощника.</div>';
+            }, 1500);
         }
 
         function openBotWithPrompt(step) {
