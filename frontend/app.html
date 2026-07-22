@@ -962,17 +962,17 @@
                             <p data-i18n="roadmap_step2_desc">Механика материалов, прочность</p>
                         </div>
                         <div class="engineering-card" onclick="openBotWithPrompt('thermo')" style="text-align: center; cursor: pointer;">
-                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">🌡️</div>
+                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;"></div>
                             <h4 data-i18n="roadmap_step3_title">3. Термодинамика</h4>
                             <p data-i18n="roadmap_step3_desc">Тепловые процессы, энергия</p>
                         </div>
                         <div class="engineering-card" onclick="openBotWithPrompt('mechatronics')" style="text-align: center; cursor: pointer;">
-                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">⚙️</div>
+                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;"></div>
                             <h4 data-i18n="roadmap_step4_title">4. Мехатроника</h4>
                             <p data-i18n="roadmap_step4_desc">Робототехника, автоматизация</p>
                         </div>
                         <div class="engineering-card" onclick="openBotWithPrompt('project')" style="text-align: center; cursor: pointer;">
-                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">🚀</div>
+                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;"></div>
                             <h4 data-i18n="roadmap_step5_title">5. Проект</h4>
                             <p data-i18n="roadmap_step5_desc">Создай свой инженерный проект</p>
                         </div>
@@ -1475,10 +1475,31 @@
             }
         }
 
+        // Генерация уникального ID для пользователя
+        function generateUserId() {
+            return 'user_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
+        }
+
         function handleLogin(e) {
             e.preventDefault();
             isLoggedIn = true;
-            currentUser = { tg_id: 9999, xp: 0, level: 1, streak: 1, questsCompleted: 0, aiQueriesSent: 0 };
+            
+            // Проверяем, есть ли сохраненный ID
+            let tgId = localStorage.getItem('user_tg_id');
+            if (!tgId) {
+                tgId = generateUserId();
+                localStorage.setItem('user_tg_id', tgId);
+            }
+            
+            currentUser = { 
+                tg_id: tgId, 
+                xp: 0, 
+                level: 1, 
+                streak: 1, 
+                questsCompleted: 0, 
+                aiQueriesSent: 0 
+            };
+            
             closeAuthModal();
             showApp();
         }
@@ -1486,7 +1507,20 @@
         function handleRegister(e) {
             e.preventDefault();
             isLoggedIn = true;
-            currentUser = { tg_id: 9999, xp: 0, level: 1, streak: 1, questsCompleted: 0, aiQueriesSent: 0 };
+            
+            // Генерируем уникальный ID для нового пользователя
+            const tgId = generateUserId();
+            localStorage.setItem('user_tg_id', tgId);
+            
+            currentUser = { 
+                tg_id: tgId, 
+                xp: 0, 
+                level: 1, 
+                streak: 1, 
+                questsCompleted: 0, 
+                aiQueriesSent: 0 
+            };
+            
             closeAuthModal();
             showApp();
         }
@@ -1495,6 +1529,7 @@
             isLoggedIn = false;
             currentUser = null;
             aiQueriesSent = 0;
+            // НЕ удаляем tg_id из localStorage, чтобы при следующем входе был тот же пользователь
             showLanding();
         }
 
@@ -1623,7 +1658,7 @@
                     card.className = 'quest-card' + (isCompleted ? ' completed' : '');
                     
                     const xpAmount = quest.xp || 20;
-                    const buttonText = isCompleted ? `✅ Выполнено (+${xpAmount} XP)` : `Отметить как выполненное (+${xpAmount} XP)`;
+                    const buttonText = isCompleted ? `Выполнено (+${xpAmount} XP)` : `Отметить как выполненное (+${xpAmount} XP)`;
                     const buttonStyle = isCompleted ? 'disabled' : '';
                     
                     card.innerHTML = `
@@ -1722,7 +1757,7 @@
                     const data = await res.json();
                     if (data.status === 'ok') {
                         await loadUserProfile();
-                        alert(`✅ ${data.message || 'Квест выполнен!'}`);
+                        alert(`Квест выполнен!`);
                         loadQuests();
                     } else {
                         if (questId === 'first_contact' && (currentUser.aiQueriesSent || 0) >= 1) {
@@ -1730,7 +1765,7 @@
                             currentUser.questsCompleted = (currentUser.questsCompleted || 0) + 1;
                             currentUser.level = Math.floor(currentUser.xp / 100) + 1;
                             updateStats();
-                            alert('✅ Квест выполнен! +20 XP (Демо-режим)');
+                            alert('Квест выполнен! +20 XP (Демо-режим)');
                             loadQuests();
                         } else {
                             alert(data.message || 'Ошибка при выполнении квеста');
@@ -1745,7 +1780,7 @@
                 currentUser.questsCompleted = (currentUser.questsCompleted || 0) + 1;
                 currentUser.level = Math.floor(currentUser.xp / 100) + 1;
                 updateStats();
-                alert('✅ Квест выполнен! +20 XP (Демо-режим)');
+                alert('Квест выполнен! +20 XP (Демо-режим)');
                 loadQuests();
             }
         }
