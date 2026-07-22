@@ -457,12 +457,14 @@
             margin-top: 1rem;
             box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
         }
-        .quest-completion-btn:hover {
+        .quest-completion-btn:hover:not(:disabled) {
             transform: translateY(-2px);
             box-shadow: 0 8px 20px rgba(37, 99, 235, 0.4);
         }
-        .quest-completion-btn:active {
-            transform: translateY(0);
+        .quest-completion-btn:disabled {
+            background: var(--success);
+            cursor: not-allowed;
+            opacity: 0.8;
         }
         .leaderboard-item {
             display: flex;
@@ -950,27 +952,27 @@
                     <h3 style="font-size: 1.5rem; margin-bottom: 1.5rem; text-align: center; color: var(--primary);" data-i18n="roadmap_title">Путь инженера: 5 шагов к мастерству</h3>
                     <div class="engineering-grid">
                         <div class="engineering-card" onclick="openBotWithPrompt('basics')" style="text-align: center; cursor: pointer;">
-                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;"></div>
+                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">📐</div>
                             <h4 data-i18n="roadmap_step1_title">1. Основы</h4>
                             <p data-i18n="roadmap_step1_desc">Математика, физика, черчение</p>
                         </div>
                         <div class="engineering-card" onclick="openBotWithPrompt('sopromat')" style="text-align: center; cursor: pointer;">
-                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;"></div>
+                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">🔧</div>
                             <h4 data-i18n="roadmap_step2_title">2. Сопромат</h4>
                             <p data-i18n="roadmap_step2_desc">Механика материалов, прочность</p>
                         </div>
                         <div class="engineering-card" onclick="openBotWithPrompt('thermo')" style="text-align: center; cursor: pointer;">
-                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;"></div>
+                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">🌡️</div>
                             <h4 data-i18n="roadmap_step3_title">3. Термодинамика</h4>
                             <p data-i18n="roadmap_step3_desc">Тепловые процессы, энергия</p>
                         </div>
                         <div class="engineering-card" onclick="openBotWithPrompt('mechatronics')" style="text-align: center; cursor: pointer;">
-                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;"></div>
+                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">⚙️</div>
                             <h4 data-i18n="roadmap_step4_title">4. Мехатроника</h4>
                             <p data-i18n="roadmap_step4_desc">Робототехника, автоматизация</p>
                         </div>
                         <div class="engineering-card" onclick="openBotWithPrompt('project')" style="text-align: center; cursor: pointer;">
-                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;"></div>
+                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">🚀</div>
                             <h4 data-i18n="roadmap_step5_title">5. Проект</h4>
                             <p data-i18n="roadmap_step5_desc">Создай свой инженерный проект</p>
                         </div>
@@ -1576,6 +1578,20 @@
                 const data = await res.json();
                 const quests = data.quests;
                 
+                // Получаем список выполненных квестов
+                let completedIds = [];
+                if (currentUser && currentUser.tg_id) {
+                    try {
+                        const completedRes = await fetch(`${API}/quests/completed/${currentUser.tg_id}`);
+                        if (completedRes.ok) {
+                            const completedData = await completedRes.json();
+                            completedIds = completedData.completed || [];
+                        }
+                    } catch (e) {
+                        console.error('Не удалось загрузить выполненные квесты', e);
+                    }
+                }
+                
                 list.innerHTML = '';
                 
                 if (Object.keys(quests).length === 0) {
@@ -1584,18 +1600,24 @@
                 }
                 
                 Object.values(quests).forEach(quest => {
+                    const isCompleted = completedIds.includes(quest.id);
                     const card = document.createElement('div');
-                    card.className = 'quest-card';
+                    card.className = 'quest-card' + (isCompleted ? ' completed' : '');
+                    
+                    const xpAmount = quest.xp || 20;
+                    const buttonText = isCompleted ? `✅ Выполнено (+${xpAmount} XP)` : `Отметить как выполненное (+${xpAmount} XP)`;
+                    const buttonStyle = isCompleted ? 'disabled' : '';
+                    
                     card.innerHTML = `
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
                             <h3 style="font-size: 1.25rem; font-weight: 700;">${quest.name}</h3>
-                            <span style="background: var(--warning); color: white; padding: 0.25rem 0.75rem; border-radius: 20px; font-weight: 700;">+${quest.xp} XP</span>
+                            <span style="background: var(--warning); color: white; padding: 0.25rem 0.75rem; border-radius: 20px; font-weight: 700;">+${xpAmount} XP</span>
                         </div>
                         <p style="color: var(--text-muted); margin-bottom: 1rem;">${quest.desc}</p>
                         <div style="background: var(--bg); padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.875rem; display: inline-block; margin-bottom: 1rem;">
                             Награда: ${quest.reward}
                         </div>
-                        <button onclick="completeQuest('${quest.id}')" class="quest-completion-btn">✓ Отметить как выполненное</button>
+                        <button onclick="completeQuest('${quest.id}')" class="quest-completion-btn" ${buttonStyle}>${buttonText}</button>
                     `;
                     list.appendChild(card);
                 });
@@ -1872,7 +1894,6 @@
                 return;
             }
             
-            // ГАРАНТИРОВАННО увеличиваем счетчик СРАЗУ
             aiQueriesSent++;
             if (currentUser) {
                 currentUser.aiQueriesSent = (currentUser.aiQueriesSent || 0) + 1;
@@ -1920,7 +1941,6 @@
                 }
             } catch (e) {
                 console.error('AI error:', e);
-                // Демо-ответ, если сервер не отвечает
                 responseText.textContent = currentLang === 'ru' 
                     ? 'Закон Ома: I = U/R. Сила тока прямо пропорциональна напряжению и обратно пропорциональна сопротивлению.'
                     : currentLang === 'kk'
