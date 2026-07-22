@@ -1,7 +1,0 @@
-fastapi
-uvicorn
-aiosqlite
-httpx
-python-dotenv
-pydantic
-starlette
