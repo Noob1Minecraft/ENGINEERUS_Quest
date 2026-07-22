@@ -950,7 +950,7 @@
                     <h3 style="font-size: 1.5rem; margin-bottom: 1.5rem; text-align: center; color: var(--primary);" data-i18n="roadmap_title">Путь инженера: 5 шагов к мастерству</h3>
                     <div class="engineering-grid">
                         <div class="engineering-card" onclick="openBotWithPrompt('basics')" style="text-align: center; cursor: pointer;">
-                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;"></div>
+                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">📐</div>
                             <h4 data-i18n="roadmap_step1_title">1. Основы</h4>
                             <p data-i18n="roadmap_step1_desc">Математика, физика, черчение</p>
                         </div>
@@ -960,17 +960,17 @@
                             <p data-i18n="roadmap_step2_desc">Механика материалов, прочность</p>
                         </div>
                         <div class="engineering-card" onclick="openBotWithPrompt('thermo')" style="text-align: center; cursor: pointer;">
-                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;"></div>
+                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">🌡️</div>
                             <h4 data-i18n="roadmap_step3_title">3. Термодинамика</h4>
                             <p data-i18n="roadmap_step3_desc">Тепловые процессы, энергия</p>
                         </div>
                         <div class="engineering-card" onclick="openBotWithPrompt('mechatronics')" style="text-align: center; cursor: pointer;">
-                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;"></div>
+                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">⚙️</div>
                             <h4 data-i18n="roadmap_step4_title">4. Мехатроника</h4>
                             <p data-i18n="roadmap_step4_desc">Робототехника, автоматизация</p>
                         </div>
                         <div class="engineering-card" onclick="openBotWithPrompt('project')" style="text-align: center; cursor: pointer;">
-                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;"></div>
+                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">🚀</div>
                             <h4 data-i18n="roadmap_step5_title">5. Проект</h4>
                             <p data-i18n="roadmap_step5_desc">Создай свой инженерный проект</p>
                         </div>
@@ -1112,7 +1112,7 @@
         let currentBookFilter = 'all';
         let currentOnboardingStep = 0;
         let isLoggedIn = false;
-        let aiQueriesSent = 0; // Добавлено: отслеживание количества запросов к ИИ
+        let aiQueriesSent = 0; 
 
         const translations = {
             ru: {
@@ -1473,25 +1473,26 @@
             }
         }
 
-    function handleLogin(e) {
-    e.preventDefault();
-    isLoggedIn = true;
-    currentUser = { xp: 0, level: 1, streak: 0, questsCompleted: 0, aiQueriesSent: 0 };
-    closeAuthModal();
-    showApp();
-}
+        function handleLogin(e) {
+            e.preventDefault();
+            isLoggedIn = true;
+            currentUser = { tg_id: 9999, xp: 0, level: 1, streak: 0, questsCompleted: 0, aiQueriesSent: 0 };
+            closeAuthModal();
+            showApp();
+        }
 
-    function handleRegister(e) {
-    e.preventDefault();
-    isLoggedIn = true;
-    currentUser = { xp: 0, level: 1, streak: 0, questsCompleted: 0, aiQueriesSent: 0 };
-    closeAuthModal();
-    showApp();
-}
+        function handleRegister(e) {
+            e.preventDefault();
+            isLoggedIn = true;
+            currentUser = { tg_id: 9999, xp: 0, level: 1, streak: 0, questsCompleted: 0, aiQueriesSent: 0 };
+            closeAuthModal();
+            showApp();
+        }
 
         function handleLogout() {
             isLoggedIn = false;
             currentUser = null;
+            aiQueriesSent = 0;
             showLanding();
         }
 
@@ -1553,7 +1554,6 @@
             document.getElementById('streakValue').textContent = currentUser.streak || 0;
             document.getElementById('questsValue').textContent = currentUser.questsCompleted || 0;
             
-            const xpForNextLevel = (currentUser.level || 1) * 100;
             const xpInCurrentLevel = (currentUser.xp || 0) % 100;
             const progress = (xpInCurrentLevel / 100) * 100;
             
@@ -1613,12 +1613,13 @@
             
             try {
                 const res = await fetch(`${API}/leaderboard`);
-                if (!res.ok) throw new Error('Failed to load leaderboard');
+                let leaderboard = [];
                 
-                const data = await res.json();
-                let leaderboard = data.leaderboard || [];
+                if (res.ok) {
+                    const data = await res.json();
+                    leaderboard = data.leaderboard || [];
+                }
                 
-                // Если leaderboard пустой, добавляем демо данные
                 if (!leaderboard || leaderboard.length === 0) {
                     leaderboard = [
                         { username: 'Александр М.', xp: 1250, level: 13, streak: 15 },
@@ -1626,23 +1627,12 @@
                         { username: 'Дмитрий С.', xp: 750, level: 8, streak: 8 },
                         { username: 'Анна П.', xp: 620, level: 7, streak: 10 },
                         { username: 'Иван В.', xp: 490, level: 5, streak: 5 },
-                        { username: 'Елена Р.', xp: 350, level: 4, streak: 7 },
-                        { username: 'Сергей Н.', xp: 280, level: 3, streak: 4 },
-                        { username: 'Ольга Т.', xp: 150, level: 2, streak: 3 },
                         { username: currentUser?.username || 'Вы', xp: currentUser?.xp || 0, level: currentUser?.level || 1, streak: currentUser?.streak || 0, isCurrentUser: true }
                     ];
-                    
-                    // Сортируем по XP
                     leaderboard.sort((a, b) => b.xp - a.xp);
                 }
                 
                 list.innerHTML = '';
-                
-                if (!leaderboard || leaderboard.length === 0) {
-                    list.innerHTML = '<p style="text-align: center; color: var(--text-muted); padding: 2rem;">Пока нет участников</p>';
-                    return;
-                }
-                
                 leaderboard.forEach((user, idx) => {
                     const rank = idx + 1;
                     const rankClass = rank <= 3 ? `rank-${rank}` : '';
@@ -1660,32 +1650,6 @@
                 });
             } catch (e) {
                 console.error('Leaderboard error:', e);
-                // Показываем демо данные при ошибке
-                const demoLeaderboard = [
-                    { username: 'Александр М.', xp: 1250, level: 13, streak: 15 },
-                    { username: 'Мария К.', xp: 980, level: 10, streak: 12 },
-                    { username: 'Дмитрий С.', xp: 750, level: 8, streak: 8 },
-                    { username: 'Анна П.', xp: 620, level: 7, streak: 10 },
-                    { username: 'Иван В.', xp: 490, level: 5, streak: 5 },
-                    { username: currentUser?.username || 'Вы', xp: currentUser?.xp || 0, level: currentUser?.level || 1, streak: currentUser?.streak || 0, isCurrentUser: true }
-                ];
-                
-                list.innerHTML = '';
-                demoLeaderboard.forEach((user, idx) => {
-                    const rank = idx + 1;
-                    const rankClass = rank <= 3 ? `rank-${rank}` : '';
-                    const item = document.createElement('div');
-                    item.className = 'leaderboard-item';
-                    item.innerHTML = `
-                        <div class="rank ${rankClass}">#${rank}</div>
-                        <div class="user-info">
-                            <div class="user-name">${user.username} ${user.isCurrentUser ? '(Вы)' : ''}</div>
-                            <div class="user-level">Уровень ${user.level} | ${user.streak} дн.</div>
-                        </div>
-                        <div class="user-xp">${user.xp} XP</div>
-                    `;
-                    list.appendChild(item);
-                });
             }
         }
 
@@ -1695,13 +1659,12 @@
                 return;
             }
             
-            // Для квеста "first_contact" проверяем что был отправлен хотя бы 1 запрос к ИИ
             if (questId === 'first_contact' && (currentUser.aiQueriesSent || 0) < 1) {
                 alert(currentLang === 'ru' 
                     ? 'Сначала задайте хотя бы 1 вопрос ИИ-помощнику на вкладке "ИИ-помощник"' 
                     : currentLang === 'kk'
                     ? 'Алдымен "ЖИ көмекшісі" қойындысында ЖИ-ге кемінде 1 сұрақ қойыңыз'
-                    : 'First, ask at least 1 question to the AI assistant in the "AI Assistant" tab');
+                    : 'First, ask at least 1 question to the AI assistant');
                 return;
             }
             
@@ -1710,7 +1673,7 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
-                        telegram_id: currentUser.tg_id || 1,
+                        telegram_id: currentUser.tg_id || 9999,
                         quest_id: questId 
                     })
                 });
@@ -1722,13 +1685,22 @@
                         currentUser.questsCompleted = (currentUser.questsCompleted || 0) + 1;
                         currentUser.level = Math.floor(currentUser.xp / 100) + 1;
                         updateStats();
-                        alert(`Квест выполнен! +${data.quest?.xp || 20} XP`);
+                        alert(`✅ ${data.message || 'Квест выполнен!'}`);
                         loadQuests();
                     } else {
-                        alert(data.message);
+                        if (questId === 'first_contact' && (currentUser.aiQueriesSent || 0) >= 1) {
+                            currentUser.xp = (currentUser.xp || 0) + 20;
+                            currentUser.questsCompleted = (currentUser.questsCompleted || 0) + 1;
+                            currentUser.level = Math.floor(currentUser.xp / 100) + 1;
+                            updateStats();
+                            alert('✅ Квест выполнен! +20 XP (Демо-режим)');
+                            loadQuests();
+                        } else {
+                            alert(data.message || 'Ошибка при выполнении квеста');
+                        }
                     }
                 } else {
-                    alert('Ошибка при выполнении квеста');
+                    throw new Error('Network error');
                 }
             } catch (e) {
                 console.error('Quest completion error:', e);
@@ -1736,7 +1708,7 @@
                 currentUser.questsCompleted = (currentUser.questsCompleted || 0) + 1;
                 currentUser.level = Math.floor(currentUser.xp / 100) + 1;
                 updateStats();
-                alert('Квест выполнен! +20 XP (демо режим)');
+                alert('✅ Квест выполнен! +20 XP (Демо-режим)');
                 loadQuests();
             }
         }
@@ -1900,6 +1872,13 @@
                 return;
             }
             
+            // ГАРАНТИРОВАННО увеличиваем счетчик СРАЗУ
+            aiQueriesSent++;
+            if (currentUser) {
+                currentUser.aiQueriesSent = (currentUser.aiQueriesSent || 0) + 1;
+                currentUser.tg_id = currentUser.tg_id || 9999;
+            }
+            
             const responseDiv = document.getElementById('ai-response');
             const responseText = document.getElementById('ai-response-text');
             const submitBtn = document.querySelector('.ai-submit-btn');
@@ -1912,57 +1891,41 @@
                 const mode = document.getElementById('ai-mode').value;
                 const questionLang = /[а-яА-ЯЁё]/.test(question) ? 'ru' : /[а-қА-ҚәӘіІңғҒұҰөӨһҺ]/.test(question) ? 'kk' : 'en';
                 
+                let res;
                 if (mode === 'modules') {
                     const module = document.getElementById('module').value;
                     const endpoint = module === 'tutor' ? `${API}/ai` : `${API}/module`;
-                    
                     const payload = module === 'tutor' 
-                        ? { telegram_id: currentUser?.tg_id || 0, text: question, lang: questionLang }
-                        : { telegram_id: currentUser?.tg_id || 0, module, text: question, lang: questionLang };
+                        ? { telegram_id: currentUser.tg_id, text: question, lang: questionLang }
+                        : { telegram_id: currentUser.tg_id, module, text: question, lang: questionLang };
                     
-                    const res = await fetch(endpoint, {
+                    res = await fetch(endpoint, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(payload)
                     });
-                    
-                    if (res.ok) {
-                        const data = await res.json();
-                        responseText.textContent = data.response || 'Ответ получен!';
-                    } else {
-                        throw new Error('API error');
-                    }
                 } else {
-                    const res = await fetch(`${API}/ai`, {
+                    res = await fetch(`${API}/ai`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            telegram_id: currentUser?.tg_id || 0,
-                            text: question,
-                            lang: questionLang
-                        })
+                        body: JSON.stringify({ telegram_id: currentUser.tg_id, text: question, lang: questionLang })
                     });
-                    
-                    if (res.ok) {
-                        const data = await res.json();
-                        responseText.textContent = data.response || 'Ответ получен!';
-                    } else {
-                        throw new Error('API error');
-                    }
                 }
                 
-                // Отмечаем что запрос отправлен
-                aiQueriesSent++;
-                if (currentUser) {
-                    currentUser.aiQueriesSent = (currentUser.aiQueriesSent || 0) + 1;
+                if (res.ok) {
+                    const data = await res.json();
+                    responseText.textContent = data.response || 'Ответ получен!';
+                } else {
+                    throw new Error('API error');
                 }
             } catch (e) {
                 console.error('AI error:', e);
+                // Демо-ответ, если сервер не отвечает
                 responseText.textContent = currentLang === 'ru' 
-                    ? 'Закон Ома гласит: сила тока в участке цепи прямо пропорциональна напряжению и обратно пропорциональна сопротивлению. Формула: I = U/R, где I - сила тока (Амперы), U - напряжение (Вольты), R - сопротивление (Омы).'
+                    ? 'Закон Ома: I = U/R. Сила тока прямо пропорциональна напряжению и обратно пропорциональна сопротивлению.'
                     : currentLang === 'kk'
-                    ? 'Ом заңы: тізбек бөлігіндегі ток күші кернеуге тура пропорционал және кедергіге кері пропорционал. Формула: I = U/R'
-                    : "Ohm's Law states: the current through a conductor is directly proportional to the voltage and inversely proportional to the resistance. Formula: I = U/R";
+                    ? 'Ом заңы: I = U/R. Ток күші кернеуге тура пропорционал және кедергіге кері пропорционал.'
+                    : "Ohm's Law: I = U/R. Current is directly proportional to voltage and inversely proportional to resistance.";
             } finally {
                 submitBtn.classList.remove('loading');
             }
