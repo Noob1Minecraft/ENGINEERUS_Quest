@@ -34,6 +34,8 @@
 
         @keyframes fadeIn { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes modalSlideIn { from { opacity: 0; transform: translateY(50px) scale(0.9); } to { opacity: 1; transform: translateY(0) scale(1); } }
+        @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 
         .landing-page { display: block; }
         .landing-header {
@@ -309,6 +311,7 @@
             transition: all 0.3s;
             padding: 0.5rem 1rem;
             border-radius: 8px;
+            cursor: pointer;
         }
         .app-nav a:hover, .app-nav a.active {
             color: var(--primary);
@@ -430,6 +433,7 @@
             border-left: 4px solid var(--primary);
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
             transition: all 0.3s;
+            animation: slideUp 0.5s ease-out;
         }
         .quest-card:hover {
             transform: translateX(5px);
@@ -438,6 +442,27 @@
         .quest-card.completed {
             border-left-color: var(--success);
             opacity: 0.8;
+        }
+        .quest-completion-btn {
+            width: 100%;
+            padding: 1rem;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-weight: 700;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 1rem;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+        }
+        .quest-completion-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(37, 99, 235, 0.4);
+        }
+        .quest-completion-btn:active {
+            transform: translateY(0);
         }
         .leaderboard-item {
             display: flex;
@@ -448,6 +473,7 @@
             margin-bottom: 0.5rem;
             border-radius: 8px;
             transition: all 0.3s;
+            animation: slideUp 0.3s ease-out;
         }
         .leaderboard-item:hover {
             background: var(--bg);
@@ -670,6 +696,84 @@
             color: var(--error);
             transform: scale(1.2);
         }
+        
+        /* AI Assistant Styles */
+        .ai-container {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            border-radius: 16px;
+            padding: 2rem;
+            border: 2px solid var(--border);
+        }
+        .ai-input-group {
+            margin-bottom: 1.5rem;
+        }
+        .ai-input-group label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--text);
+        }
+        .ai-input-group select,
+        .ai-input-group textarea {
+            width: 100%;
+            padding: 1rem;
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            font-family: inherit;
+            font-size: 1rem;
+            transition: all 0.3s;
+            background: white;
+        }
+        .ai-input-group select:focus,
+        .ai-input-group textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+        .ai-response-box {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            border-left: 4px solid var(--primary);
+            margin-top: 1.5rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            animation: slideUp 0.5s ease-out;
+        }
+        .ai-response-title {
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 1rem;
+            font-size: 1.1rem;
+        }
+        .ai-response-text {
+            color: var(--text);
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+        .ai-submit-btn {
+            width: 100%;
+            padding: 1.2rem;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-weight: 700;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+        }
+        .ai-submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(37, 99, 235, 0.4);
+        }
+        .ai-submit-btn:active {
+            transform: translateY(0);
+        }
+        .ai-submit-btn.loading {
+            opacity: 0.7;
+            cursor: wait;
+        }
         @media (max-width: 768px) {
             .hero-title { font-size: 2.5rem; }
             .stats-grid { grid-template-columns: 1fr; }
@@ -766,12 +870,12 @@
         <header class="app-header">
             <div class="app-header-content">
                 <nav class="app-nav">
-                    <a href="#profile" class="active" data-i18n="nav_home">Главная</a>
-                    <a href="#quests" data-i18n="nav_quests">Квесты</a>
-                    <a href="#leaderboard" data-i18n="nav_leaderboard">Таблица лидеров</a>
-                    <a href="#learning" data-i18n="nav_learning">Обучение</a>
-                    <a href="#ai" data-i18n="nav_ai">ИИ-помощник</a>
-                    <a href="#instructions" data-i18n="nav_instructions">Инструкция</a>
+                    <a onclick="navigateTo('profile')" class="active" data-i18n="nav_home">Главная</a>
+                    <a onclick="navigateTo('quests')" data-i18n="nav_quests">Квесты</a>
+                    <a onclick="navigateTo('leaderboard')" data-i18n="nav_leaderboard">Таблица лидеров</a>
+                    <a onclick="navigateTo('learning')" data-i18n="nav_learning">Обучение</a>
+                    <a onclick="navigateTo('ai')" data-i18n="nav_ai">ИИ-помощник</a>
+                    <a onclick="navigateTo('instructions')" data-i18n="nav_instructions">Инструкция</a>
                 </nav>
                 
                 <div style="display: flex; gap: 1rem; align-items: center;">
@@ -793,15 +897,15 @@
                 <h2 class="profile-title" data-i18n="profile_title">Твой профиль</h2>
                 <div class="stats-grid">
                     <div class="stat-card">
-                        <span class="stat-value" id="xpValue">490</span>
+                        <span class="stat-value" id="xpValue">0</span>
                         <span class="stat-label" data-i18n="stat_xp">XP ОЧКИ</span>
                     </div>
                     <div class="stat-card">
-                        <span class="stat-value" id="levelValue">5</span>
+                        <span class="stat-value" id="levelValue">1</span>
                         <span class="stat-label" data-i18n="stat_level">УРОВЕНЬ</span>
                     </div>
                     <div class="stat-card">
-                        <span class="stat-value" id="streakValue">1</span>
+                        <span class="stat-value" id="streakValue">0</span>
                         <span class="stat-label" data-i18n="stat_streak">ДНЕЙ ПОДРЯД</span>
                     </div>
                     <div class="stat-card">
@@ -812,11 +916,11 @@
 
                 <div class="xp-container">
                     <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-                        <span style="font-weight: 600;"><span data-i18n="progress_to_level">До следующего уровня:</span> <span id="nextLevel">6</span></span>
-                        <span style="font-weight: 600; color: var(--primary);"><span id="xpCurrent">90</span> / 100 XP</span>
+                        <span style="font-weight: 600;"><span data-i18n="progress_to_level">До следующего уровня:</span> <span id="nextLevel">2</span></span>
+                        <span style="font-weight: 600; color: var(--primary);"><span id="xpCurrent">0</span> / 100 XP</span>
                     </div>
                     <div class="xp-bar-wrapper">
-                        <div class="xp-bar" id="xpBar" style="width: 90%;">90 / 100 XP</div>
+                        <div class="xp-bar" id="xpBar" style="width: 0%;">0 / 100 XP</div>
                     </div>
                 </div>
             </section>
@@ -846,7 +950,7 @@
                     <h3 style="font-size: 1.5rem; margin-bottom: 1.5rem; text-align: center; color: var(--primary);" data-i18n="roadmap_title">Путь инженера: 5 шагов к мастерству</h3>
                     <div class="engineering-grid">
                         <div class="engineering-card" onclick="openBotWithPrompt('basics')" style="text-align: center; cursor: pointer;">
-                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">📐</div>
+                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;"></div>
                             <h4 data-i18n="roadmap_step1_title">1. Основы</h4>
                             <p data-i18n="roadmap_step1_desc">Математика, физика, черчение</p>
                         </div>
@@ -856,17 +960,17 @@
                             <p data-i18n="roadmap_step2_desc">Механика материалов, прочность</p>
                         </div>
                         <div class="engineering-card" onclick="openBotWithPrompt('thermo')" style="text-align: center; cursor: pointer;">
-                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">🌡️</div>
+                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;"></div>
                             <h4 data-i18n="roadmap_step3_title">3. Термодинамика</h4>
                             <p data-i18n="roadmap_step3_desc">Тепловые процессы, энергия</p>
                         </div>
                         <div class="engineering-card" onclick="openBotWithPrompt('mechatronics')" style="text-align: center; cursor: pointer;">
-                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">⚙️</div>
+                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;"></div>
                             <h4 data-i18n="roadmap_step4_title">4. Мехатроника</h4>
                             <p data-i18n="roadmap_step4_desc">Робототехника, автоматизация</p>
                         </div>
                         <div class="engineering-card" onclick="openBotWithPrompt('project')" style="text-align: center; cursor: pointer;">
-                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">🚀</div>
+                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;"></div>
                             <h4 data-i18n="roadmap_step5_title">5. Проект</h4>
                             <p data-i18n="roadmap_step5_desc">Создай свой инженерный проект</p>
                         </div>
@@ -911,14 +1015,16 @@
 
             <div id="ai-tab" class="tab-content">
                 <h2 style="font-size: 2rem; margin-bottom: 1.5rem;" data-i18n="ai_title">ИИ-помощник</h2>
-                <div class="card">
-                    <label data-i18n="ai_mode">Режим ИИ:</label>
-                    <select id="ai-mode" onchange="toggleAIMode()">
-                        <option value="modules" data-i18n="ai_mode_modules">Модульный ИИ (по конкретным темам)</option>
-                        <option value="general" data-i18n="ai_mode_general">Общий ИИ (ответит на любой вопрос)</option>
-                    </select>
+                <div class="ai-container">
+                    <div class="ai-input-group">
+                        <label data-i18n="ai_mode">Режим ИИ:</label>
+                        <select id="ai-mode" onchange="toggleAIMode()">
+                            <option value="modules" data-i18n="ai_mode_modules">Модульный ИИ (по конкретным темам)</option>
+                            <option value="general" data-i18n="ai_mode_general">Общий ИИ (ответит на любой вопрос)</option>
+                        </select>
+                    </div>
 
-                    <div id="module-section">
+                    <div id="module-section" class="ai-input-group">
                         <label data-i18n="select_module">Выберите модуль:</label>
                         <select id="module">
                             <option value="tutor" data-i18n="module_tutor">TUTOR AI (Общий репетитор)</option>
@@ -929,10 +1035,17 @@
                         </select>
                     </div>
 
-                    <label data-i18n="your_question">Ваш вопрос:</label>
-                    <textarea id="question" rows="4" placeholder="Спросите что угодно об инженерии..." data-i18n-placeholder="question_placeholder"></textarea>
-                    <button onclick="sendQuery()" style="margin-top: 1.5rem; width: 100%; padding: 1rem; font-size: 1.1rem;" data-i18n="send_to_ai">Отправить ИИ</button>
-                    <div id="ai-response" style="display: none; margin-top: 1.5rem; padding: 1.5rem; background: var(--bg); border-radius: var(--radius); border-left: 4px solid var(--primary);"></div>
+                    <div class="ai-input-group">
+                        <label data-i18n="your_question">Ваш вопрос:</label>
+                        <textarea id="question" rows="4" placeholder="Спросите что угодно об инженерии..." data-i18n-placeholder="question_placeholder"></textarea>
+                    </div>
+                    
+                    <button onclick="sendQuery()" class="ai-submit-btn" data-i18n="send_to_ai">Отправить ИИ</button>
+                    
+                    <div id="ai-response" class="ai-response-box" style="display: none;">
+                        <div class="ai-response-title" data-i18n="ai_response_title">Ответ AI:</div>
+                        <div class="ai-response-text" id="ai-response-text"></div>
+                    </div>
                 </div>
             </div>
 
@@ -1071,6 +1184,7 @@
                 your_question: 'Ваш вопрос:',
                 question_placeholder: 'Спросите что угодно об инженерии...',
                 send_to_ai: 'Отправить ИИ',
+                ai_response_title: 'Ответ AI:',
                 sync_title: 'Синхронизация с Telegram-ботом',
                 sync_desc: 'Чтобы твой прогресс синхронизировался между сайтом и Telegram-ботом, выполни следующие шаги в правильном порядке:',
                 step1_title: 'Шаг 1: Сначала Telegram-бот',
@@ -1162,6 +1276,7 @@
                 your_question: 'Your Question:',
                 question_placeholder: 'Ask anything about engineering...',
                 send_to_ai: 'Send to AI',
+                ai_response_title: 'AI Response:',
                 sync_title: 'Telegram Bot Synchronization',
                 sync_desc: 'To sync your progress between the website and Telegram bot, follow these steps in the correct order:',
                 step1_title: 'Step 1: Telegram Bot First',
@@ -1253,6 +1368,7 @@
                 your_question: 'Сіздің сұрағыңыз:',
                 question_placeholder: 'Инженерия туралы сұрақ қойыңыз...',
                 send_to_ai: 'ЖИ-ге жіберу',
+                ai_response_title: 'ЖИ жауабы:',
                 sync_title: 'Telegram-ботпен синхрондау',
                 sync_desc: 'Прогрессің сайт пен Telegram-бот арасында синхрондалуы үшін келесі қадамдарды дұрыс тәртіпте орында:',
                 step1_title: '1-қадам: Алдымен Telegram-бот',
@@ -1359,6 +1475,7 @@
         function handleLogin(e) {
             e.preventDefault();
             isLoggedIn = true;
+            currentUser = { xp: 0, level: 1, streak: 0, questsCompleted: 0 };
             closeAuthModal();
             showApp();
         }
@@ -1366,12 +1483,14 @@
         function handleRegister(e) {
             e.preventDefault();
             isLoggedIn = true;
+            currentUser = { xp: 0, level: 1, streak: 0, questsCompleted: 0 };
             closeAuthModal();
             showApp();
         }
 
         function handleLogout() {
             isLoggedIn = false;
+            currentUser = null;
             showLanding();
         }
 
@@ -1382,11 +1501,39 @@
             initOnboarding();
             loadQuests();
             loadLeaderboard();
+            updateStats();
         }
 
         function showLanding() {
             document.getElementById('landingPage').style.display = 'block';
             document.getElementById('appPage').classList.remove('active');
+        }
+
+        function navigateTo(section) {
+            document.querySelectorAll('.app-nav a').forEach(a => a.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            
+            const tabMap = {
+                'profile': null,
+                'quests': 'quests-tab',
+                'leaderboard': 'leaderboard-tab',
+                'learning': 'learning-tab',
+                'ai': 'ai-tab',
+                'instructions': 'instructions-tab'
+            };
+            
+            if (tabMap[section]) {
+                document.getElementById(tabMap[section]).classList.add('active');
+                const tabIndex = Object.keys(tabMap).indexOf(section) - 1;
+                if (tabIndex >= 0) {
+                    document.querySelectorAll('.tab')[tabIndex].classList.add('active');
+                }
+            }
+            
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
         function switchTab(tabName, btnElement) {
@@ -1395,6 +1542,24 @@
             
             btnElement.classList.add('active');
             document.getElementById(tabName + '-tab').classList.add('active');
+        }
+
+        function updateStats() {
+            if (!currentUser) return;
+            
+            document.getElementById('xpValue').textContent = currentUser.xp || 0;
+            document.getElementById('levelValue').textContent = currentUser.level || 1;
+            document.getElementById('streakValue').textContent = currentUser.streak || 0;
+            document.getElementById('questsValue').textContent = currentUser.questsCompleted || 0;
+            
+            const xpForNextLevel = (currentUser.level || 1) * 100;
+            const xpInCurrentLevel = (currentUser.xp || 0) % 100;
+            const progress = (xpInCurrentLevel / 100) * 100;
+            
+            document.getElementById('xpCurrent').textContent = xpInCurrentLevel;
+            document.getElementById('nextLevel').textContent = (currentUser.level || 1) + 1;
+            document.getElementById('xpBar').style.width = progress + '%';
+            document.getElementById('xpBar').textContent = xpInCurrentLevel + ' / 100 XP';
         }
 
         async function loadQuests() {
@@ -1429,7 +1594,7 @@
                         <div style="background: var(--bg); padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.875rem; display: inline-block; margin-bottom: 1rem;">
                             Награда: ${quest.reward}
                         </div>
-                        <button onclick="completeQuest('${quest.id}')" style="width: 100%;">Проверить выполнение</button>
+                        <button onclick="completeQuest('${quest.id}')" class="quest-completion-btn">✓ Отметить как выполненное</button>
                     `;
                     list.appendChild(card);
                 });
@@ -1481,8 +1646,8 @@
         }
 
         async function completeQuest(questId) {
-            if (!currentUser || !currentUser.tg_id) {
-                alert('Сначала привяжи Telegram-аккаунт!\n\nНапиши боту: /bind email пароль');
+            if (!currentUser) {
+                alert('Сначала войдите в систему');
                 return;
             }
             
@@ -1491,21 +1656,34 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
-                        telegram_id: currentUser.tg_id, 
+                        telegram_id: currentUser.tg_id || 1,
                         quest_id: questId 
                     })
                 });
-                const data = await res.json();
                 
-                if (data.status === 'ok') {
-                    alert(data.message);
-                    await loadQuests();
-                    await loadLeaderboard();
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.status === 'ok') {
+                        currentUser.xp = (currentUser.xp || 0) + (data.quest?.xp || 20);
+                        currentUser.questsCompleted = (currentUser.questsCompleted || 0) + 1;
+                        currentUser.level = Math.floor(currentUser.xp / 100) + 1;
+                        updateStats();
+                        alert(`Квест выполнен! +${data.quest?.xp || 20} XP`);
+                        loadQuests();
+                    } else {
+                        alert(data.message);
+                    }
                 } else {
-                    alert(data.message);
+                    alert('Ошибка при выполнении квеста');
                 }
             } catch (e) {
-                alert('Ошибка: ' + e.message);
+                console.error('Quest completion error:', e);
+                currentUser.xp = (currentUser.xp || 0) + 20;
+                currentUser.questsCompleted = (currentUser.questsCompleted || 0) + 1;
+                currentUser.level = Math.floor(currentUser.xp / 100) + 1;
+                updateStats();
+                alert('Квест выполнен! +20 XP (демо режим)');
+                loadQuests();
             }
         }
 
@@ -1669,12 +1847,65 @@
             }
             
             const responseDiv = document.getElementById('ai-response');
-            responseDiv.style.display = 'block';
-            responseDiv.innerHTML = '<p style="color: var(--text-muted);"> ' + (currentLang === 'ru' ? 'ИИ думает...' : currentLang === 'kk' ? 'ЖИ ойлануда...' : 'AI is thinking...') + '</p>';
+            const responseText = document.getElementById('ai-response-text');
+            const submitBtn = document.querySelector('.ai-submit-btn');
             
-            setTimeout(() => {
-                responseDiv.innerHTML = '<div style="white-space: pre-wrap; padding: 1rem; background: var(--bg); border-radius: 8px; margin-top: 1rem;"><strong>Ответ AI:</strong>\n\nСпасибо за ваш вопрос! Здесь будет ответ от AI-помощника.</div>';
-            }, 1500);
+            responseDiv.style.display = 'block';
+            submitBtn.classList.add('loading');
+            responseText.innerHTML = '<p style="color: var(--text-muted); text-align: center;">' + (currentLang === 'ru' ? 'ИИ думает...' : currentLang === 'kk' ? 'ЖИ ойлануда...' : 'AI is thinking...') + '</p>';
+            
+            try {
+                const mode = document.getElementById('ai-mode').value;
+                const questionLang = /[а-яА-ЯЁё]/.test(question) ? 'ru' : /[а-қА-ҚәӘіІңғҒұҰөӨһҺ]/.test(question) ? 'kk' : 'en';
+                
+                if (mode === 'modules') {
+                    const module = document.getElementById('module').value;
+                    const endpoint = module === 'tutor' ? `${API}/ai` : `${API}/module`;
+                    
+                    const payload = module === 'tutor' 
+                        ? { telegram_id: currentUser?.tg_id || 0, text: question, lang: questionLang }
+                        : { telegram_id: currentUser?.tg_id || 0, module, text: question, lang: questionLang };
+                    
+                    const res = await fetch(endpoint, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    
+                    if (res.ok) {
+                        const data = await res.json();
+                        responseText.textContent = data.response || 'Ответ получен!';
+                    } else {
+                        throw new Error('API error');
+                    }
+                } else {
+                    const res = await fetch(`${API}/ai`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            telegram_id: currentUser?.tg_id || 0,
+                            text: question,
+                            lang: questionLang
+                        })
+                    });
+                    
+                    if (res.ok) {
+                        const data = await res.json();
+                        responseText.textContent = data.response || 'Ответ получен!';
+                    } else {
+                        throw new Error('API error');
+                    }
+                }
+            } catch (e) {
+                console.error('AI error:', e);
+                responseText.textContent = currentLang === 'ru' 
+                    ? 'Извините, произошла ошибка. Пожалуйста, попробуйте позже.' 
+                    : currentLang === 'kk'
+                    ? 'Кешіріңіз, қате орын алды. Кейінірек қайта көріңіз.'
+                    : 'Sorry, an error occurred. Please try again later.';
+            } finally {
+                submitBtn.classList.remove('loading');
+            }
         }
 
         function openBotWithPrompt(step) {
