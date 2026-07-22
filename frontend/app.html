@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Engineerus Quest - AI Learning Platform</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'></text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>">
     <style>
         :root {
             --primary: #2563EB;
@@ -48,7 +48,6 @@
         .animate-pulse { animation: pulse 2s infinite; }
         .animate-glow { animation: glow 2s infinite; }
 
-        /* === ФОРМА ВХОДА === */
         .auth-container {
             min-height: 100vh;
             display: flex;
@@ -160,7 +159,6 @@
             display: none;
         }
 
-        /* === ОСНОВНОЙ САЙТ === */
         .app-container { display: none; }
         .app-container.active { display: block; }
 
@@ -720,7 +718,6 @@
     </style>
 </head>
 <body>
-    <!-- === ЭКРАН ВХОДА / РЕГИСТРАЦИИ === -->
     <div class="auth-container" id="authContainer">
         <div class="auth-box">
             <h1 class="auth-title">Engineerus Quest</h1>
@@ -734,14 +731,12 @@
             <div class="auth-error" id="authError"></div>
             <div class="auth-success" id="authSuccess"></div>
             
-            <!-- Форма входа -->
             <form class="auth-form active" id="loginForm" onsubmit="handleLogin(event)">
                 <input type="email" class="auth-input" id="loginEmail" placeholder="Email" required>
                 <input type="password" class="auth-input" id="loginPassword" placeholder="Пароль" required>
                 <button type="submit" class="auth-btn">Войти</button>
             </form>
             
-            <!-- Форма регистрации -->
             <form class="auth-form" id="registerForm" onsubmit="handleRegister(event)">
                 <input type="email" class="auth-input" id="regEmail" placeholder="Email" required>
                 <input type="password" class="auth-input" id="regPassword" placeholder="Пароль (мин. 4 символа)" required minlength="4">
@@ -759,7 +754,6 @@
         </div>
     </div>
 
-    <!-- === ОСНОВНОЕ ПРИЛОЖЕНИЕ === -->
     <div class="app-container" id="appContainer">
         <div class="onboarding-overlay" id="onboardingOverlay" style="display: none;">
             <div class="onboarding-modal">
@@ -876,38 +870,36 @@
             <div id="learning-tab" class="tab-content">
                 <h2 style="font-size: 2rem; margin-bottom: 1.5rem;" data-i18n="learning_title">Путь обучения инженера</h2>
                 
-                <!-- НОВЫЙ БЛОК: Путь инженера (Roadmap) -->
                 <div style="margin-bottom: 3rem;">
                     <h3 style="font-size: 1.5rem; margin-bottom: 1.5rem; text-align: center; color: var(--primary);" data-i18n="roadmap_title">Путь инженера: 5 шагов к мастерству</h3>
                     <div class="engineering-grid">
                         <div class="engineering-card" onclick="openBotWithPrompt('basics')" style="text-align: center; cursor: pointer;">
-                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;"></div>
+                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">📐</div>
                             <h4 style="margin-bottom: 0.5rem;" data-i18n="roadmap_step1_title">1. Основы</h4>
                             <p style="font-size: 0.9rem; color: var(--text-muted);" data-i18n="roadmap_step1_desc">Математика, физика, черчение</p>
                         </div>
                         <div class="engineering-card" onclick="openBotWithPrompt('sopromat')" style="text-align: center; cursor: pointer;">
-                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;"></div>
+                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">🔧</div>
                             <h4 style="margin-bottom: 0.5rem;" data-i18n="roadmap_step2_title">2. Сопромат</h4>
                             <p style="font-size: 0.9rem; color: var(--text-muted);" data-i18n="roadmap_step2_desc">Механика материалов, прочность</p>
                         </div>
                         <div class="engineering-card" onclick="openBotWithPrompt('thermo')" style="text-align: center; cursor: pointer;">
-                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;"></div>
+                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">🌡️</div>
                             <h4 style="margin-bottom: 0.5rem;" data-i18n="roadmap_step3_title">3. Термодинамика</h4>
                             <p style="font-size: 0.9rem; color: var(--text-muted);" data-i18n="roadmap_step3_desc">Тепловые процессы, энергия</p>
                         </div>
                         <div class="engineering-card" onclick="openBotWithPrompt('mechatronics')" style="text-align: center; cursor: pointer;">
-                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;"></div>
+                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">⚙️</div>
                             <h4 style="margin-bottom: 0.5rem;" data-i18n="roadmap_step4_title">4. Мехатроника</h4>
                             <p style="font-size: 0.9rem; color: var(--text-muted);" data-i18n="roadmap_step4_desc">Робототехника, автоматизация</p>
                         </div>
                         <div class="engineering-card" onclick="openBotWithPrompt('project')" style="text-align: center; cursor: pointer;">
-                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;"></div>
+                            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">🚀</div>
                             <h4 style="margin-bottom: 0.5rem;" data-i18n="roadmap_step5_title">5. Проект</h4>
                             <p style="font-size: 0.9rem; color: var(--text-muted);" data-i18n="roadmap_step5_desc">Создай свой инженерный проект</p>
                         </div>
                     </div>
                 </div>
-                <!-- КОНЕЦ НОВОГО БЛОКА -->
 
                 <div class="engineering-grid">
                     <div class="engineering-card" onclick="showBooks('mechanical')">
@@ -975,111 +967,109 @@
                 </div>
             </div>
 
+            <!-- ОБНОВЛЁННАЯ ВКЛАДКА ИНСТРУКЦИЙ С ПЕРЕВОДАМИ -->
             <div id="instructions-tab" class="tab-content">
                 <h2 style="font-size: 2rem; margin-bottom: 1.5rem;" data-i18n="instructions_title">Как пользоваться</h2>
                 
-                <!-- БАННЕР СИНХРОНИЗАЦИИ -->
                 <div class="card" style="border-left: 4px solid var(--warning); background: linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%);">
-                    <h3 style="margin-bottom: 1rem; color: var(--warning); display: flex; align-items: center; gap: 0.5rem;">
+                    <h3 style="margin-bottom: 1rem; color: var(--warning); display: flex; align-items: center; gap: 0.5rem;" data-i18n="sync_title">
                         Синхронизация с Telegram-ботом
                     </h3>
-                    <p style="margin-bottom: 1rem; color: var(--text);">
-                        Чтобы твой прогресс синхронизировался между сайтом и Telegram-ботом, выполни следующие шаги <strong>в правильном порядке</strong>:
+                    <p style="margin-bottom: 1rem; color: var(--text);" data-i18n="sync_desc">
+                        Чтобы твой прогресс синхронизировался между сайтом и Telegram-ботом, выполни следующие шаги в правильном порядке:
                     </p>
                     
                     <div style="background: var(--surface); padding: 1.5rem; border-radius: 12px; margin-bottom: 1rem;">
-                        <h4 style="color: var(--primary); margin-bottom: 1rem;">Шаг 1: Сначала Telegram-бот</h4>
-                        <ol style="line-height: 2; padding-left: 1.5rem;">
-                            <li>Открой Telegram и найди нашего бота</li>
-                            <li>Напиши <code style="background: var(--bg); padding: 0.2rem 0.5rem; border-radius: 4px;">/start</code> и выбери язык</li>
-                            <li>Напиши <code style="background: var(--bg); padding: 0.2rem 0.5rem; border-radius: 4px;">/bind email пароль</code><br>
-                                <span style="color: var(--text-muted); font-size: 0.875rem;">(например: <code>/bind teka.artuk@gmail.com mypassword123</code>)</span>
+                        <h4 style="color: var(--primary); margin-bottom: 1rem;" data-i18n="step1_title">Шаг 1: Сначала Telegram-бот</h4>
+                        <ol style="line-height: 2.2; padding-left: 1.5rem;">
+                            <li><span data-i18n="step1_item1">Открой Telegram и найди нашего бота</span></li>
+                            <li><span data-i18n="step1_item2">Напиши</span> <code style="background: var(--bg); padding: 0.2rem 0.5rem; border-radius: 4px;">/start</code> <span data-i18n="step1_item3">и выбери язык</span></li>
+                            <li><span data-i18n="step1_item4">Напиши</span> <code style="background: var(--bg); padding: 0.2rem 0.5rem; border-radius: 4px;">/bind email пароль</code></li>
+                            <li style="margin-left: 1rem; color: var(--text-muted); font-size: 0.875rem;">
+                                <span data-i18n="step1_item5">(например:</span> <code>/bind teka.artuk@gmail.com mypassword123</code>)
                             </li>
-                            <li>Проверь привязку командой <code style="background: var(--bg); padding: 0.2rem 0.5rem; border-radius: 4px;">/whoami</code></li>
+                            <li><span data-i18n="step1_item6">Проверь привязку командой</span> <code style="background: var(--bg); padding: 0.2rem 0.5rem; border-radius: 4px;">/whoami</code></li>
                         </ol>
                     </div>
 
                     <div style="background: var(--surface); padding: 1.5rem; border-radius: 12px; margin-bottom: 1rem;">
-                        <h4 style="color: var(--primary); margin-bottom: 1rem;">Шаг 2: Потом сайт</h4>
-                        <ol style="line-height: 2; padding-left: 1.5rem;">
-                            <li>Открой сайт Engineerus Quest</li>
-                            <li>Нажми <strong>"Вход"</strong> (не регистрация!)</li>
-                            <li>Введи <strong>тот же email и пароль</strong>, что использовал в боте</li>
-                            <li>Твой прогресс автоматически синхронизируется!</li>
+                        <h4 style="color: var(--primary); margin-bottom: 1rem;" data-i18n="step2_title">Шаг 2: Потом сайт</h4>
+                        <ol style="line-height: 2.2; padding-left: 1.5rem;">
+                            <li><span data-i18n="step2_item1">Открой сайт Engineerus Quest</span></li>
+                            <li><span data-i18n="step2_item2">Нажми</span> <strong>"Вход"</strong> <span data-i18n="step2_item3">(не регистрация!)</span></li>
+                            <li><span data-i18n="step2_item4">Введи</span> <strong>тот же email</strong> <span data-i18n="step2_item5">и пароль, что использовал в боте</span></li>
+                            <li><span data-i18n="step2_item6">Твой прогресс автоматически синхронизируется!</span></li>
                         </ol>
                     </div>
 
                     <div style="background: #D1FAE5; padding: 1rem; border-radius: 12px; border-left: 4px solid var(--success);">
-                        <strong>Что будет работать:</strong>
+                        <strong data-i18n="sync_works_title">Что будет работать:</strong>
                         <ul style="line-height: 1.8; padding-left: 1.5rem; margin-top: 0.5rem;">
-                            <li>XP, уровни и ачивки — общие для сайта и бота</li>
-                            <li>Выполненные квесты отображаются везде</li>
-                            <li>Стрик (серия дней) синхронизируется</li>
-                            <li>Запросы к ИИ считаются вместе</li>
+                            <li data-i18n="sync_works_1">XP, уровни и ачивки — общие для сайта и бота</li>
+                            <li data-i18n="sync_works_2">Выполненные квесты отображаются везде</li>
+                            <li data-i18n="sync_works_3">Стрик (серия дней) синхронизируется</li>
+                            <li data-i18n="sync_works_4">Запросы к ИИ считаются вместе</li>
                         </ul>
                     </div>
 
                     <div style="background: #FEE2E2; padding: 1rem; border-radius: 12px; border-left: 4px solid var(--error); margin-top: 1rem;">
-                        <strong>Важно:</strong>
-                        <p style="margin-top: 0.5rem;">
+                        <strong data-i18n="sync_important_title">Важно:</strong>
+                        <p style="margin-top: 0.5rem;" data-i18n="sync_important">
                             Не регистрируйся на сайте отдельно! Сначала привяжи аккаунт через бота, потом используй тот же email для входа на сайт.
                         </p>
                     </div>
                 </div>
 
-                <!-- Начало работы -->
                 <div class="card">
                     <h3 style="margin-bottom: 1rem; color: var(--primary);" data-i18n="getting_started">Начало работы</h3>
-                    <ol style="line-height: 2; padding-left: 1.5rem;">
-                        <li><strong>Привяжи Telegram-бот</strong> — команда <code>/bind</code> в боте</li>
-                        <li><strong>Войди на сайт</strong> — используй тот же email и пароль</li>
-                        <li><strong>Выполняй квесты</strong> — получай XP и повышай уровень</li>
-                        <li><strong>Используй ИИ-помощник</strong> — задавай вопросы по инженерии</li>
-                        <li><strong>Изучай книги</strong> — доступ к подборке по Mechanical, Electrical и Robotics</li>
-                        <li><strong>Поддерживай стрик</strong> — заходи каждый день!</li>
+                    <ol style="line-height: 2.2; padding-left: 1.5rem;">
+                        <li><strong data-i18n="start_1">Привяжи Telegram-бот — команда</strong> <code>/bind</code> <span data-i18n="start_2">в боте</span></li>
+                        <li><strong data-i18n="start_3">Войди на сайт — используй тот же email и пароль</strong></li>
+                        <li><strong data-i18n="start_4">Выполняй квесты — получай XP и повышай уровень</strong></li>
+                        <li><strong data-i18n="start_5">Используй ИИ-помощник — задавай вопросы по инженерии</strong></li>
+                        <li><strong data-i18n="start_6">Изучай книги — доступ к подборке по Mechanical, Electrical и Robotics</strong></li>
+                        <li><strong data-i18n="start_7">Поддерживай стрик — заходи каждый день!</strong></li>
                     </ol>
                 </div>
 
-                <!-- Команды Telegram-бота -->
                 <div class="card">
-                    <h3 style="margin-bottom: 1rem; color: var(--primary);">Команды Telegram-бота</h3>
+                    <h3 style="margin-bottom: 1rem; color: var(--primary);" data-i18n="bot_commands_title">Команды Telegram-бота</h3>
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem;">
                         <div style="background: var(--bg); padding: 1rem; border-radius: 8px;">
                             <code style="color: var(--primary); font-weight: 700;">/start</code>
-                            <p style="color: var(--text-muted); font-size: 0.875rem; margin-top: 0.5rem;">Начать работу с ботом</p>
+                            <p style="color: var(--text-muted); font-size: 0.875rem; margin-top: 0.5rem;" data-i18n="cmd_start">Начать работу с ботом</p>
                         </div>
                         <div style="background: var(--bg); padding: 1rem; border-radius: 8px;">
                             <code style="color: var(--primary); font-weight: 700;">/bind email пароль</code>
-                            <p style="color: var(--text-muted); font-size: 0.875rem; margin-top: 0.5rem;">Привязать аккаунт</p>
+                            <p style="color: var(--text-muted); font-size: 0.875rem; margin-top: 0.5rem;" data-i18n="cmd_bind">Привязать аккаунт</p>
                         </div>
                         <div style="background: var(--bg); padding: 1rem; border-radius: 8px;">
                             <code style="color: var(--primary); font-weight: 700;">/profile</code>
-                            <p style="color: var(--text-muted); font-size: 0.875rem; margin-top: 0.5rem;">Краткая статистика</p>
+                            <p style="color: var(--text-muted); font-size: 0.875rem; margin-top: 0.5rem;" data-i18n="cmd_profile">Краткая статистика</p>
                         </div>
                         <div style="background: var(--bg); padding: 1rem; border-radius: 8px;">
                             <code style="color: var(--primary); font-weight: 700;">/stats</code>
-                            <p style="color: var(--text-muted); font-size: 0.875rem; margin-top: 0.5rem;">Полная статистика</p>
+                            <p style="color: var(--text-muted); font-size: 0.875rem; margin-top: 0.5rem;" data-i18n="cmd_stats">Полная статистика</p>
                         </div>
                         <div style="background: var(--bg); padding: 1rem; border-radius: 8px;">
                             <code style="color: var(--primary); font-weight: 700;">/daily</code>
-                            <p style="color: var(--text-muted); font-size: 0.875rem; margin-top: 0.5rem;">Ежедневный квест</p>
+                            <p style="color: var(--text-muted); font-size: 0.875rem; margin-top: 0.5rem;" data-i18n="cmd_daily">Ежедневный квест</p>
                         </div>
                         <div style="background: var(--bg); padding: 1rem; border-radius: 8px;">
                             <code style="color: var(--primary); font-weight: 700;">/achievements</code>
-                            <p style="color: var(--text-muted); font-size: 0.875rem; margin-top: 0.5rem;">Список ачивок</p>
+                            <p style="color: var(--text-muted); font-size: 0.875rem; margin-top: 0.5rem;" data-i18n="cmd_achievements">Список ачивок</p>
                         </div>
                         <div style="background: var(--bg); padding: 1rem; border-radius: 8px;">
                             <code style="color: var(--primary); font-weight: 700;">/whoami</code>
-                            <p style="color: var(--text-muted); font-size: 0.875rem; margin-top: 0.5rem;">Проверить привязку</p>
+                            <p style="color: var(--text-muted); font-size: 0.875rem; margin-top: 0.5rem;" data-i18n="cmd_whoami">Проверить привязку</p>
                         </div>
                         <div style="background: var(--bg); padding: 1rem; border-radius: 8px;">
                             <code style="color: var(--primary); font-weight: 700;">/lang</code>
-                            <p style="color: var(--text-muted); font-size: 0.875rem; margin-top: 0.5rem;">Сменить язык</p>
+                            <p style="color: var(--text-muted); font-size: 0.875rem; margin-top: 0.5rem;" data-i18n="cmd_lang">Сменить язык</p>
                         </div>
                     </div>
                 </div>
 
-                <!-- Геймификация -->
                 <div class="card">
                     <h3 style="margin-bottom: 1rem; color: var(--primary);" data-i18n="gamification">Геймификация</h3>
                     <ul style="line-height: 2; padding-left: 1.5rem;">
@@ -1208,7 +1198,63 @@
                 roadmap_step4_title: "4. Мехатроника",
                 roadmap_step4_desc: "Робототехника, автоматизация",
                 roadmap_step5_title: "5. Проект",
-                roadmap_step5_desc: "Создай свой инженерный проект"
+                roadmap_step5_desc: "Создай свой инженерный проект",
+                quest_first_contact_name: 'Первый контакт',
+                quest_first_contact_desc: 'Отправь первый запрос к ИИ-репетитору',
+                quest_first_contact_reward: 'Бейдж Новичок',
+                quest_material_scout_name: 'Поиск материала',
+                quest_material_scout_desc: 'Используй модуль MaterialSwap',
+                quest_material_scout_reward: 'Бейдж Исследователь',
+                quest_streak_master_name: 'Серия побед',
+                quest_streak_master_desc: 'Набери стрик 3 дня',
+                quest_streak_master_reward: 'Бейдж Постоянец',
+                quest_xp_hunter_name: 'Охотник за XP',
+                quest_xp_hunter_desc: 'Набери 50 XP',
+                quest_xp_hunter_reward: 'Бейдж Опытный',
+                quest_module_explorer_name: 'Вездеход',
+                quest_module_explorer_desc: 'Попробуй все модули',
+                quest_module_explorer_reward: 'Бейдж Универсал',
+                sync_title: 'Синхронизация с Telegram-ботом',
+                sync_desc: 'Чтобы твой прогресс синхронизировался между сайтом и Telegram-ботом, выполни следующие шаги в правильном порядке:',
+                step1_title: 'Шаг 1: Сначала Telegram-бот',
+                step1_item1: 'Открой Telegram и найди нашего бота',
+                step1_item2: 'Напиши',
+                step1_item3: 'и выбери язык',
+                step1_item4: 'Напиши',
+                step1_item5: '(например:',
+                step1_item6: 'Проверь привязку командой',
+                step2_title: 'Шаг 2: Потом сайт',
+                step2_item1: 'Открой сайт Engineerus Quest',
+                step2_item2: 'Нажми',
+                step2_item3: '(не регистрация!)',
+                step2_item4: 'Введи',
+                step2_item5: 'и пароль, что использовал в боте',
+                step2_item6: 'Твой прогресс автоматически синхронизируется!',
+                sync_works_title: 'Что будет работать:',
+                sync_works_1: 'XP, уровни и ачивки — общие для сайта и бота',
+                sync_works_2: 'Выполненные квесты отображаются везде',
+                sync_works_3: 'Стрик (серия дней) синхронизируется',
+                sync_works_4: 'Запросы к ИИ считаются вместе',
+                sync_important_title: 'Важно:',
+                sync_important: 'Не регистрируйся на сайте отдельно! Сначала привяжи аккаунт через бота, потом используй тот же email для входа на сайт.',
+                start_1: 'Привяжи Telegram-бот — команда',
+                start_2: 'в боте',
+                start_3: 'Войди на сайт — используй тот же email и пароль',
+                start_4: 'Выполняй квесты — получай XP и повышай уровень',
+                start_5: 'Используй ИИ-помощник — задавай вопросы по инженерии',
+                start_6: 'Изучай книги — доступ к подборке по Mechanical, Electrical и Robotics',
+                start_7: 'Поддерживай стрик — заходи каждый день!',
+                bot_commands_title: 'Команды Telegram-бота',
+                cmd_start: 'Начать работу с ботом',
+                cmd_bind: 'Привязать аккаунт',
+                cmd_profile: 'Краткая статистика',
+                cmd_stats: 'Полная статистика',
+                cmd_daily: 'Ежедневный квест',
+                cmd_achievements: 'Список ачивок',
+                cmd_whoami: 'Проверить привязку',
+                cmd_lang: 'Сменить язык',
+                active_quests: 'Активные квесты',
+                reward: 'Награда:'
             },
             kk: {
                 nav_home: "Басты бет", nav_profile: "Профиль", nav_quests: "Квесттер",
@@ -1263,7 +1309,63 @@
                 roadmap_step4_title: "4. Мехатроника",
                 roadmap_step4_desc: "Робототехника, автоматтандыру",
                 roadmap_step5_title: "5. Жоба",
-                roadmap_step5_desc: "Өз инженерлік жобаңды жаса"
+                roadmap_step5_desc: "Өз инженерлік жобаңды жаса",
+                quest_first_contact_name: 'Алғашқы байланыс',
+                quest_first_contact_desc: 'ЖИ-репетиторға алғашқы сұрауды жібер',
+                quest_first_contact_reward: 'Жаңадан келген белгісі',
+                quest_material_scout_name: 'Материал іздеу',
+                quest_material_scout_desc: 'MaterialSwap модулін қолдан',
+                quest_material_scout_reward: 'Зерттеуші белгісі',
+                quest_streak_master_name: 'Жеңіс сериясы',
+                quest_streak_master_desc: '3 күн қатарынан кір',
+                quest_streak_master_reward: 'Тұрақтылық белгісі',
+                quest_xp_hunter_name: 'XP аңшысы',
+                quest_xp_hunter_desc: '50 XP жина',
+                quest_xp_hunter_reward: 'Тәжірибелі белгісі',
+                quest_module_explorer_name: 'Модуль зерттеушісі',
+                quest_module_explorer_desc: 'Барлық модульдерді қолданып көр',
+                quest_module_explorer_reward: 'Универсал белгісі',
+                sync_title: 'Telegram-ботпен синхрондау',
+                sync_desc: 'Прогрессің сайт пен Telegram-бот арасында синхрондалуы үшін келесі қадамдарды дұрыс тәртіпте орында:',
+                step1_title: '1-қадам: Алдымен Telegram-бот',
+                step1_item1: 'Telegram-ды аш және біздің ботты тап',
+                step1_item2: 'Жаз',
+                step1_item3: 'және тілді таңда',
+                step1_item4: 'Жаз',
+                step1_item5: '(мысалы:',
+                step1_item6: 'Байланысты тексер',
+                step2_title: '2-қадам: Содан кейін сайт',
+                step2_item1: 'Engineerus Quest сайтының аш',
+                step2_item2: 'Бас',
+                step2_item3: '(тіркелу емес!)',
+                step2_item4: 'Сол',
+                step2_item5: 'және құпия сөзді енгіз, ботта қолданған',
+                step2_item6: 'Прогрессің автоматты түрде синхрондалады!',
+                sync_works_title: 'Не істейді:',
+                sync_works_1: 'XP, деңгейлер және жетістіктер — сайт пен бот үшін ортақ',
+                sync_works_2: 'Орындалған тапсырмалар барлық жерде көрсетіледі',
+                sync_works_3: 'Серия (күн қатарынан) синхрондалады',
+                sync_works_4: 'ЖИ-ге сұраулар бірге саналады',
+                sync_important_title: 'Маңызды:',
+                sync_important: 'Сайтта бөлек тіркелме! Алдымен бот арқылы аккаунтты байла, содан кейін сол email-ды сайтқа кіру үшін қолдан.',
+                start_1: 'Telegram-ботты байла — команда',
+                start_2: 'ботта',
+                start_3: 'Сайтқа кір — сол email және құпия сөзді қолдан',
+                start_4: 'Тапсырмаларды орында — XP ал және деңгей көтер',
+                start_5: 'ЖИ көмекшісін қолдан — инженерия туралы сұрақтар қой',
+                start_6: 'Кітаптарды оқы — Mechanical, Electrical және Robotics бойынша кітаптарға қолжетімділік',
+                start_7: 'Серияны сақта — күнде кір!',
+                bot_commands_title: 'Telegram-бот командасы',
+                cmd_start: 'Ботпен жұмысты бастау',
+                cmd_bind: 'Аккаунтты байлау',
+                cmd_profile: 'Қысқа статистика',
+                cmd_stats: 'Толық статистика',
+                cmd_daily: 'Күнделікті тапсырма',
+                cmd_achievements: 'Жетістіктер тізімі',
+                cmd_whoami: 'Байланысты тексеру',
+                cmd_lang: 'Тілді өзгерту',
+                active_quests: 'Белсенді тапсырмалар',
+                reward: 'Сыйлық:'
             },
             en: {
                 nav_home: "Home", nav_profile: "Profile", nav_quests: "Quests",
@@ -1318,11 +1420,66 @@
                 roadmap_step4_title: "4. Mechatronics",
                 roadmap_step4_desc: "Robotics, automation",
                 roadmap_step5_title: "5. Project",
-                roadmap_step5_desc: "Create your engineering project"
+                roadmap_step5_desc: "Create your engineering project",
+                quest_first_contact_name: 'First Contact',
+                quest_first_contact_desc: 'Send your first request to the AI tutor',
+                quest_first_contact_reward: 'Newbie Badge',
+                quest_material_scout_name: 'Material Scout',
+                quest_material_scout_desc: 'Use the MaterialSwap module',
+                quest_material_scout_reward: 'Researcher Badge',
+                quest_streak_master_name: 'Streak Master',
+                quest_streak_master_desc: 'Get a 3-day streak',
+                quest_streak_master_reward: 'Regular Badge',
+                quest_xp_hunter_name: 'XP Hunter',
+                quest_xp_hunter_desc: 'Earn 50 XP',
+                quest_xp_hunter_reward: 'Experienced Badge',
+                quest_module_explorer_name: 'Module Explorer',
+                quest_module_explorer_desc: 'Try all modules',
+                quest_module_explorer_reward: 'Universal Badge',
+                sync_title: 'Telegram Bot Synchronization',
+                sync_desc: 'To sync your progress between the website and Telegram bot, follow these steps in the correct order:',
+                step1_title: 'Step 1: Telegram Bot First',
+                step1_item1: 'Open Telegram and find our bot',
+                step1_item2: 'Type',
+                step1_item3: 'and select language',
+                step1_item4: 'Type',
+                step1_item5: '(for example:',
+                step1_item6: 'Check binding with command',
+                step2_title: 'Step 2: Then Website',
+                step2_item1: 'Open Engineerus Quest website',
+                step2_item2: 'Click',
+                step2_item3: '(not registration!)',
+                step2_item4: 'Enter the same',
+                step2_item5: 'and password you used in the bot',
+                step2_item6: 'Your progress will sync automatically!',
+                sync_works_title: 'What will work:',
+                sync_works_1: 'XP, levels and achievements — shared between website and bot',
+                sync_works_2: 'Completed quests displayed everywhere',
+                sync_works_3: 'Streak (daily activity) syncs',
+                sync_works_4: 'AI requests counted together',
+                sync_important_title: 'Important:',
+                sync_important: "Don't register on the website separately! First bind your account through the bot, then use the same email to login on the website.",
+                start_1: 'Bind Telegram bot — command',
+                start_2: 'in the bot',
+                start_3: 'Login to website — use the same email and password',
+                start_4: 'Complete quests — earn XP and level up',
+                start_5: 'Use AI assistant — ask engineering questions',
+                start_6: 'Study books — access to Mechanical, Electrical and Robotics collections',
+                start_7: 'Maintain streak — login every day!',
+                bot_commands_title: 'Telegram Bot Commands',
+                cmd_start: 'Start working with bot',
+                cmd_bind: 'Bind account',
+                cmd_profile: 'Quick stats',
+                cmd_stats: 'Full statistics',
+                cmd_daily: 'Daily quest',
+                cmd_achievements: 'Achievements list',
+                cmd_whoami: 'Check binding',
+                cmd_lang: 'Change language',
+                active_quests: 'Active Quests',
+                reward: 'Reward:'
             }
         };
 
-        // === АВТОРИЗАЦИЯ ===
         function switchAuthTab(tab) {
             document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.auth-form').forEach(f => f.classList.remove('active'));
@@ -1469,7 +1626,6 @@
             document.getElementById('appContainer').classList.remove('active');
         }
 
-        // === ОСНОВНЫЕ ФУНКЦИИ ===
         function setLanguage(lang) {
             currentLang = lang;
             localStorage.setItem('lang', lang);
@@ -1757,21 +1913,28 @@
                     completedIds = completed.completed || [];
                 }
                 
+                const t = translations[currentLang] || translations.ru;
+                
                 for (const quest of Object.values(quests.quests)) {
                     const isCompleted = completedIds.includes(quest.id);
+                    
+                    const translatedName = t[`quest_${quest.id}_name`] || quest.name;
+                    const translatedDesc = t[`quest_${quest.id}_desc`] || quest.desc;
+                    const translatedReward = t[`quest_${quest.id}_reward`] || quest.reward;
+                    
                     const card = document.createElement('div');
                     card.className = 'quest-card' + (isCompleted ? ' completed' : '');
                     card.innerHTML = `
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                            <span style="font-size: 1.25rem; font-weight: 700;">${quest.name}</span>
+                            <span style="font-size: 1.25rem; font-weight: 700;">${translatedName}</span>
                             <span style="background: var(--warning); color: white; padding: 0.25rem 0.75rem; border-radius: 20px; font-weight: 700;">+${quest.xp} XP</span>
                         </div>
-                        <div style="color: var(--text-muted); margin-bottom: 0.5rem;">${quest.desc}</div>
+                        <div style="color: var(--text-muted); margin-bottom: 0.5rem;">${translatedDesc}</div>
                         <div style="background: var(--bg); padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.875rem; display: inline-block; margin-bottom: 1rem;">
-                            ${currentLang === 'ru' ? 'Награда:' : currentLang === 'kk' ? 'Сыйлық:' : 'Reward:'} ${quest.reward}
+                            ${currentLang === 'ru' ? (t.reward || 'Награда:') : currentLang === 'kk' ? (t.reward || 'Сыйлық:') : (t.reward || 'Reward:')} ${translatedReward}
                         </div>
                         ${!isCompleted 
-                            ? `<button onclick="completeQuest('${quest.id}')" style="width: 100%;">${currentLang === 'ru' ? 'Проверить выполнение' : currentLang === 'kk' ? 'Орындалуын тексеру' : 'Check Completion'}</button>` 
+                            ? `<button onclick="completeQuest('${quest.id}')" style="width: 100%;">${currentLang === 'ru' ? (t.check_completion || 'Проверить выполнение') : currentLang === 'kk' ? (t.check_completion || 'Орындалуын тексеру') : (t.check_completion || 'Check Completion')}</button>` 
                             : `<p style="color: var(--success); font-weight: 600; margin-top: 1rem;">${currentLang === 'ru' ? '✅ Выполнено' : currentLang === 'kk' ? '✅ Орындалды' : '✅ Completed'}</p>`}
                     `;
                     list.appendChild(card);
@@ -1873,7 +2036,6 @@
             const lang = currentLang || 'ru';
             const message = encodeURIComponent(prompts[lang][step]);
             
-            //  ВАЖНО
             const botUsername = 'engineerus_bot'; 
             
             window.open(`https://t.me/${botUsername}?start=${message}`, '_blank');
@@ -1887,7 +2049,6 @@
             setTimeout(() => notif.remove(), 3000);
         }
 
-        // === ЗАПУСК ===
         window.addEventListener('DOMContentLoaded', () => {
             const savedEmail = localStorage.getItem('user_email');
             const savedTgId = localStorage.getItem('user_tg_id');
