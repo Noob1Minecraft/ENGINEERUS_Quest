@@ -2,11 +2,25 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
+import cors from "cors"; //  ДОБАВЛЕНО: импорт CORS
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000; //  Использовать PORT от Render
 
 app.use(express.json());
+
+//  ДОБАВЛЕНО: CORS middleware (ДОЛЖНО БЫТЬ ПЕРЕД ВСЕМИ РОУТАМИ)
+app.use(cors({
+  origin: [
+    'https://engineerus-quest.vercel.app',
+    'https://engineerus-quest-git-main-enginnerus.vercel.app',
+    'http://localhost:5173',
+    'http://localhost:3000'
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
 
 // Initialize Gemini client lazily or if key available
 const getGeminiAI = () => {
@@ -164,7 +178,7 @@ async function generateAIResponse(prompt: string, moduleName = "tutor", lang = "
     try {
       const systemInstruction = `${SYSTEM_PROMPTS[lang] || SYSTEM_PROMPTS.ru}\n\nСпециализация модуля: ${MODULE_PROMPTS[moduleName] || ""}`;
       const response = await ai.models.generateContent({
-        model: "gemini-3.6-flash",
+        model: "gemini-2.0-flash",
         contents: prompt,
         config: {
           systemInstruction,
@@ -181,17 +195,17 @@ async function generateAIResponse(prompt: string, moduleName = "tutor", lang = "
 
   // Smart fallback response generator
   if (lang === "kk") {
-    return `🤖 **Engineerus AI Қолдау Жауабы** (${MODULE_PROMPTS[moduleName] || "Инженерлік кеңес"}):\n\n` +
+    return ` **Engineerus AI Қолдау Жауабы** (${MODULE_PROMPTS[moduleName] || "Инженерлік кеңес"}):\n\n` +
       `• **Түйінді шешім:** Сіздің "${prompt.slice(0, 40)}..." сұранысыңыз бойынша инженерлік есептеулер жүргізілді.\n` +
       `• **Тәжірибелік қолдану:** Қазақстанның құрылыс және өндіріс нормаларына (СТ РК / ГОСТ) сәйкес беріктік шегі мен материалдар сипаттамасы ескерілді.\n` +
       `• **Келесі қадам:** Есептеулерді толық тексеру үшін формулаларды қайта қарап шығыңыз. +15 XP жинадыңыз! 🚀`;
   } else if (lang === "en") {
-    return `🤖 **Engineerus AI Tutor Response** (${MODULE_PROMPTS[moduleName] || "Engineering Advice"}):\n\n` +
+    return ` **Engineerus AI Tutor Response** (${MODULE_PROMPTS[moduleName] || "Engineering Advice"}):\n\n` +
       `• **Key Insight:** Analyzed your prompt: "${prompt.slice(0, 40)}...".\n` +
       `• **Engineering Standards:** Applied material properties and stress bounds aligned with Kazakhstan industrial standards (ISO / ST RK).\n` +
       `• **Action Step:** Review the load distribution and safety factors for optimal design performance. You earned +15 XP! 🚀`;
   } else {
-    return `🤖 **Ответ Engineerus AI** (${MODULE_PROMPTS[moduleName] || "Инженерный разбор"}):\n\n` +
+    return ` **Ответ Engineerus AI** (${MODULE_PROMPTS[moduleName] || "Инженерный разбор"}):\n\n` +
       `• **Ключевой вывод:** По вашему запросу "${prompt.slice(0, 40)}..." выполнен предварительный инженерный расчет.\n` +
       `• **Стандарты и Нормы:** Учтены коэффициенты запаса прочности и параметры материалов согласно ГОСТ и СТ РК.\n` +
       `• **Рекомендация:** Проверьте эпюры изгибающих моментов или характеристики теплопроводности. Вы заработали +15 XP! 🚀`;
