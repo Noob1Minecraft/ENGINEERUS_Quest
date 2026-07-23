@@ -3,6 +3,9 @@ import { UserProfile, Language } from '../types';
 import { TRANSLATIONS } from '../data';
 import { User, Lock, Mail, ArrowRight, X } from 'lucide-react';
 
+//  ИСПРАВЛЕНО: Добавлен API_BASE перед endpoint
+const API_BASE = import.meta.env.VITE_API_URL || '';
+
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -31,7 +34,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
     const endpoint = isRegister ? '/api/auth/web/register' : '/api/auth/web/login';
     try {
-      const res = await fetch(endpoint, {
+      //  ИСПРАВЛЕНО: Добавлен API_BASE перед endpoint
+      const res = await fetch(`${API_BASE}${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password, username }),
