@@ -2,14 +2,14 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
-import cors from "cors"; //  ДОБАВЛЕНО: импорт CORS
+import cors from "cors";
 
 const app = express();
-const PORT = process.env.PORT || 3000; //  Использовать PORT от Render
+const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 
-//  ДОБАВЛЕНО: CORS middleware (ДОЛЖНО БЫТЬ ПЕРЕД ВСЕМИ РОУТАМИ)
+//  CORS middleware (ПЕРЕД всеми роутами)
 app.use(cors({
   origin: [
     'https://engineerus-quest.vercel.app',
@@ -22,18 +22,14 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
-// Initialize Gemini client lazily or if key available
+//  Улучшенная инициализация Gemini
 const getGeminiAI = () => {
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return null;
-  return new GoogleGenAI({
-    apiKey,
-    httpOptions: {
-      headers: {
-        "User-Agent": "aistudio-build",
-      },
-    },
-  });
+  if (!apiKey) {
+    console.warn(" GEMINI_API_KEY не найден. ИИ будет работать в демо-режиме.");
+    return null;
+  }
+  return new GoogleGenAI({ apiKey });
 };
 
 // Prompts for Kazakhstan Engineering Tutor
@@ -71,7 +67,7 @@ const MODULE_PROMPTS: Record<string, string> = {
   engi_match: "EngiMatch: Поиск единомышленников, распределение ролей в инженерном стартапе/дипломном проекте (Mechanical, Electrical, Software, Civil).",
 };
 
-// In-Memory Database Store for Session & Gamification
+// In-Memory Database Store
 interface UserState {
   id: number;
   telegram_id: number;
@@ -135,10 +131,8 @@ const getOrCreateUserChats = (email: string): ChatSessionData[] => {
   return userChatsDb.get(email)!;
 };
 
-// Helper to calculate level from XP
 const getLevel = (xp: number) => Math.floor(xp / 100) + 1;
 
-// Default initial user
 const getOrCreateUser = (emailOrTg: string | number): UserState => {
   const key = String(emailOrTg);
   if (!usersDb.has(key)) {
@@ -162,7 +156,6 @@ const getOrCreateUser = (emailOrTg: string | number): UserState => {
   return usersDb.get(key)!;
 };
 
-// Leaderboard Initial Data
 const LEADERBOARD_SEED = [
   { rank: 1, name: "Арман Сериков (Satbayev Univ)", xp: 1450, level: 15, streak: 18 },
   { rank: 2, name: "Алина Киимбаева (AUES)", xp: 1220, level: 13, streak: 14 },
@@ -171,44 +164,54 @@ const LEADERBOARD_SEED = [
   { rank: 5, name: "Аружан Муратова (ENU)", xp: 620, level: 7, streak: 5 },
 ];
 
-// Fallback AI Response Generator if API Key is not configured
+//  УЛУЧШЕННАЯ функция генерации ответов ИИ
 async function generateAIResponse(prompt: string, moduleName = "tutor", lang = "ru"): Promise<string> {
   const ai = getGeminiAI();
+
   if (ai) {
     try {
       const systemInstruction = `${SYSTEM_PROMPTS[lang] || SYSTEM_PROMPTS.ru}\n\nСпециализация модуля: ${MODULE_PROMPTS[moduleName] || ""}`;
+
       const response = await ai.models.generateContent({
-        model: "gemini-2.0-flash",
-        contents: prompt,
+        model: "gemini-1.5-flash", //  Стабильная модель
+        contents: [{ role: "user", parts: [{ text: prompt }] }], //  Правильный формат SDK v1+
         config: {
           systemInstruction,
-          temperature: 0.6,
+          temperature: 0.7, //  Больше вариативности
+          topP: 0.9,
         },
       });
-      if (response.text) {
+
+      if (response.text && response.text.trim()) {
         return response.text;
       }
-    } catch (err) {
-      console.error("Gemini API Call Error:", err);
+    } catch (err: any) {
+      console.error(" Ошибка Gemini API:", err.message || err);
     }
   }
 
-  // Smart fallback response generator
+  //  Динамический fallback (если нет ключа или API упал)
+  const cleanPrompt = prompt.trim().slice(0, 120);
+  const moduleLabel = MODULE_PROMPTS[moduleName] || "Инженерный разбор";
+
   if (lang === "kk") {
-    return ` **Engineerus AI Қолдау Жауабы** (${MODULE_PROMPTS[moduleName] || "Инженерлік кеңес"}):\n\n` +
-      `• **Түйінді шешім:** Сіздің "${prompt.slice(0, 40)}..." сұранысыңыз бойынша инженерлік есептеулер жүргізілді.\n` +
-      `• **Тәжірибелік қолдану:** Қазақстанның құрылыс және өндіріс нормаларына (СТ РК / ГОСТ) сәйкес беріктік шегі мен материалдар сипаттамасы ескерілді.\n` +
-      `• **Келесі қадам:** Есептеулерді толық тексеру үшін формулаларды қайта қарап шығыңыз. +15 XP жинадыңыз! 🚀`;
+    return ` **Engineerus AI Жауабы** (${moduleLabel}):\n\n` +
+      `Сіздің сұранысыңыз: "${cleanPrompt}..."\n\n` +
+      `• **Талдау:** Сұрақ Қазақстан инженерлік стандарттары (СТ РК/ГОСТ) контекстінде қаралды.\n` +
+      `• **Ұсыныс:** Нақты есептеулер мен нормативтік талаптарды тексеруді ұсынамыз.\n` +
+      `• **Келесі қадам:** Осы модульде тағы сұрақ қойып, +15 XP алыңыз! `;
   } else if (lang === "en") {
-    return ` **Engineerus AI Tutor Response** (${MODULE_PROMPTS[moduleName] || "Engineering Advice"}):\n\n` +
-      `• **Key Insight:** Analyzed your prompt: "${prompt.slice(0, 40)}...".\n` +
-      `• **Engineering Standards:** Applied material properties and stress bounds aligned with Kazakhstan industrial standards (ISO / ST RK).\n` +
-      `• **Action Step:** Review the load distribution and safety factors for optimal design performance. You earned +15 XP! 🚀`;
+    return ` **Engineerus AI Response** (${moduleLabel}):\n\n` +
+      `Your query: "${cleanPrompt}..."\n\n` +
+      `• **Analysis:** Reviewed within Kazakhstan engineering standards (ISO/ST RK).\n` +
+      `• **Recommendation:** Verify calculations against local regulatory codes.\n` +
+      `• **Next Step:** Ask another question in this module to earn +15 XP! `;
   } else {
-    return ` **Ответ Engineerus AI** (${MODULE_PROMPTS[moduleName] || "Инженерный разбор"}):\n\n` +
-      `• **Ключевой вывод:** По вашему запросу "${prompt.slice(0, 40)}..." выполнен предварительный инженерный расчет.\n` +
-      `• **Стандарты и Нормы:** Учтены коэффициенты запаса прочности и параметры материалов согласно ГОСТ и СТ РК.\n` +
-      `• **Рекомендация:** Проверьте эпюры изгибающих моментов или характеристики теплопроводности. Вы заработали +15 XP! 🚀`;
+    return ` **Ответ Engineerus AI** (${moduleLabel}):\n\n` +
+      `Ваш запрос: "${cleanPrompt}..."\n\n` +
+      `• **Анализ:** Рассмотрено в контексте инженерных норм РК (ГОСТ/СТ РК).\n` +
+      `• **Рекомендация:** Проверьте расчёты и коэффициенты запаса прочности.\n` +
+      `• **Следующий шаг:** Задайте уточняющий вопрос, чтобы получить +15 XP! `;
   }
 }
 
@@ -216,64 +219,32 @@ async function generateAIResponse(prompt: string, moduleName = "tutor", lang = "
 app.post("/api/ai", async (req, res) => {
   const { text, lang = "ru", email = "student@engineerus.kz" } = req.body;
   const user = getOrCreateUser(email);
-
   const responseText = await generateAIResponse(text, "tutor", lang);
-
   user.xp += 10;
   user.requests_count += 1;
   user.level = getLevel(user.xp);
-
-  res.json({
-    status: "ok",
-    response: responseText,
-    xp: user.xp,
-    level: user.level,
-    streak: user.streak,
-    lang,
-  });
+  res.json({ status: "ok", response: responseText, xp: user.xp, level: user.level, streak: user.streak, lang });
 });
 
 app.post("/api/module", async (req, res) => {
   const { module: moduleName, text, lang = "ru", email = "student@engineerus.kz" } = req.body;
   const user = getOrCreateUser(email);
-
-  if (!user.modules_used.includes(moduleName)) {
-    user.modules_used.push(moduleName);
-  }
-
+  if (!user.modules_used.includes(moduleName)) user.modules_used.push(moduleName);
   if (moduleName === "material") user.material_count += 1;
   if (moduleName === "patent") user.patent_count += 1;
-
   const responseText = await generateAIResponse(text, moduleName, lang);
-
   user.xp += 15;
   user.requests_count += 1;
   user.level = getLevel(user.xp);
-
-  res.json({
-    status: "ok",
-    response: responseText,
-    xp: user.xp,
-    level: user.level,
-    lang,
-  });
+  res.json({ status: "ok", response: responseText, xp: user.xp, level: user.level, lang });
 });
 
-app.get("/api/user/:idOrEmail", (req, res) => {
-  const user = getOrCreateUser(req.params.idOrEmail);
-  res.json(user);
-});
-
-app.get("/api/user/by-email/:email", (req, res) => {
-  const user = getOrCreateUser(req.params.email);
-  res.json(user);
-});
+app.get("/api/user/:idOrEmail", (req, res) => res.json(getOrCreateUser(req.params.idOrEmail)));
+app.get("/api/user/by-email/:email", (req, res) => res.json(getOrCreateUser(req.params.email)));
 
 app.post("/api/auth/web/register", (req, res) => {
   const { email, password, username } = req.body;
-  if (!email || !password) {
-    return res.status(400).json({ detail: "Email and password required" });
-  }
+  if (!email || !password) return res.status(400).json({ detail: "Email and password required" });
   const user = getOrCreateUser(email);
   if (username) user.username = username;
   res.json({ status: "ok", user });
@@ -281,8 +252,7 @@ app.post("/api/auth/web/register", (req, res) => {
 
 app.post("/api/auth/web/login", (req, res) => {
   const { email } = req.body;
-  const user = getOrCreateUser(email || "student@engineerus.kz");
-  res.json({ status: "ok", user });
+  res.json({ status: "ok", user: getOrCreateUser(email || "student@engineerus.kz") });
 });
 
 app.post("/api/auth/bind", (req, res) => {
@@ -292,28 +262,17 @@ app.post("/api/auth/bind", (req, res) => {
   res.json({ status: "ok", message: "Account bound successfully", user });
 });
 
-// User Chat Sessions Endpoints (Persistence across logins)
 app.get("/api/chats/:email", (req, res) => {
   const email = req.params.email || "student@engineerus.kz";
-  const chats = getOrCreateUserChats(email);
-  res.json({ status: "ok", chats });
+  res.json({ status: "ok", chats: getOrCreateUserChats(email) });
 });
 
 app.post("/api/chats/save", (req, res) => {
   const { email = "student@engineerus.kz", session } = req.body;
-  if (!session || !session.id) {
-    return res.status(400).json({ error: "Session required" });
-  }
-
+  if (!session?.id) return res.status(400).json({ error: "Session required" });
   const chats = getOrCreateUserChats(email);
-  const existingIdx = chats.findIndex((s) => s.id === session.id);
-
-  if (existingIdx >= 0) {
-    chats[existingIdx] = session;
-  } else {
-    chats.unshift(session);
-  }
-
+  const idx = chats.findIndex(s => s.id === session.id);
+  if (idx >= 0) chats[idx] = session; else chats.unshift(session);
   userChatsDb.set(email, chats);
   res.json({ status: "ok", chats });
 });
@@ -321,24 +280,14 @@ app.post("/api/chats/save", (req, res) => {
 app.post("/api/chats/new", (req, res) => {
   const { email = "student@engineerus.kz", module = "tutor", title } = req.body;
   const chats = getOrCreateUserChats(email);
-
   const newSession: ChatSessionData = {
     id: 'session_' + Date.now(),
     title: title || `Новый сеанс (${chats.length + 1})`,
     module,
     createdAt: new Date().toLocaleDateString('ru-RU'),
     updatedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    messages: [
-      {
-        id: 'welcome_' + Date.now(),
-        sender: 'ai',
-        module,
-        text: 'Новый чат создан! Пожалуйста, напишите ваш инженерный вопрос.',
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      },
-    ],
+    messages: [{ id: 'welcome_' + Date.now(), sender: 'ai', module, text: 'Новый чат создан! Пожалуйста, напишите ваш инженерный вопрос.', timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }],
   };
-
   chats.unshift(newSession);
   userChatsDb.set(email, chats);
   res.json({ status: "ok", newSession, chats });
@@ -346,13 +295,8 @@ app.post("/api/chats/new", (req, res) => {
 
 app.delete("/api/chats/:email/:sessionId", (req, res) => {
   const { email, sessionId } = req.params;
-  let chats = getOrCreateUserChats(email);
-
-  chats = chats.filter((s) => s.id !== sessionId);
-  if (chats.length === 0) {
-    chats = getOrCreateUserChats(email); // preserve at least 1
-  }
-
+  let chats = getOrCreateUserChats(email).filter(s => s.id !== sessionId);
+  if (chats.length === 0) chats = getOrCreateUserChats(email);
   userChatsDb.set(email, chats);
   res.json({ status: "ok", chats });
 });
@@ -360,131 +304,50 @@ app.delete("/api/chats/:email/:sessionId", (req, res) => {
 app.patch("/api/chats/rename", (req, res) => {
   const { email = "student@engineerus.kz", sessionId, newTitle } = req.body;
   const chats = getOrCreateUserChats(email);
-  const target = chats.find((s) => s.id === sessionId);
-
-  if (target && newTitle) {
-    target.title = newTitle;
-    target.updatedAt = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  }
-
+  const target = chats.find(s => s.id === sessionId);
+  if (target && newTitle) { target.title = newTitle; target.updatedAt = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
   res.json({ status: "ok", chats });
 });
 
-app.get("/api/leaderboard", (req, res) => {
-  res.json({ leaderboard: LEADERBOARD_SEED, total: LEADERBOARD_SEED.length });
-});
+app.get("/api/leaderboard", (req, res) => res.json({ leaderboard: LEADERBOARD_SEED, total: LEADERBOARD_SEED.length }));
 
 app.get("/api/quests", (req, res) => {
   const QUESTS = {
-    first_contact: {
-      id: "first_contact",
-      name: "Первый контакт",
-      name_kk: "Алғашқы байланыс",
-      name_en: "First Contact",
-      desc: "Задай вопрос ИИ-репетитору",
-      desc_kk: "ЖИ-репетиторға алғашқы сұрауды жібер",
-      desc_en: "Ask your first question to AI Tutor",
-      xp: 20,
-      reward: "Бейдж Новичок",
-    },
-    material_scout: {
-      id: "material_scout",
-      name: "Поиск материала",
-      name_kk: "Материал іздеу",
-      name_en: "Material Scout",
-      desc: "Используй модуль MaterialSwap",
-      desc_kk: "MaterialSwap модулін қолдан",
-      desc_en: "Use the MaterialSwap module",
-      xp: 30,
-      reward: "Бейдж Исследователь",
-    },
-    streak_master: {
-      id: "streak_master",
-      name: "Серия побед",
-      name_kk: "Жеңіс сериясы",
-      name_en: "Streak Master",
-      desc: "Удерживай стрик 3 дня подряд",
-      desc_kk: "3 күн қатарынан кір",
-      desc_en: "Maintain a 3-day streak",
-      xp: 50,
-      reward: "Бейдж Постоянец",
-    },
-    xp_hunter: {
-      id: "xp_hunter",
-      name: "Охотник за XP",
-      name_kk: "XP аңшысы",
-      name_en: "XP Hunter",
-      desc: "Набери 100 XP",
-      desc_kk: "100 XP жина",
-      desc_en: "Earn 100 XP",
-      xp: 40,
-      reward: "Бейдж Опытный",
-    },
-    module_explorer: {
-      id: "module_explorer",
-      name: "Инженер-универсал",
-      name_kk: "Модуль зерттеушісі",
-      name_en: "Module Explorer",
-      desc: "Используй все 5 инженерных модулей",
-      desc_kk: "Барлық 5 модульді қолдан",
-      desc_en: "Try all 5 engineering modules",
-      xp: 100,
-      reward: "Бейдж Мастер",
-    },
+    first_contact: { id: "first_contact", name: "Первый контакт", name_kk: "Алғашқы байланыс", name_en: "First Contact", desc: "Задай вопрос ИИ-репетитору", desc_kk: "ЖИ-репетиторға алғашқы сұрауды жібер", desc_en: "Ask your first question to AI Tutor", xp: 20, reward: "Бейдж Новичок" },
+    material_scout: { id: "material_scout", name: "Поиск материала", name_kk: "Материал іздеу", name_en: "Material Scout", desc: "Используй модуль MaterialSwap", desc_kk: "MaterialSwap модулін қолдан", desc_en: "Use the MaterialSwap module", xp: 30, reward: "Бейдж Исследователь" },
+    streak_master: { id: "streak_master", name: "Серия побед", name_kk: "Жеңіс сериясы", name_en: "Streak Master", desc: "Удерживай стрик 3 дня подряд", desc_kk: "3 күн қатарынан кір", desc_en: "Maintain a 3-day streak", xp: 50, reward: "Бейдж Постоянец" },
+    xp_hunter: { id: "xp_hunter", name: "Охотник за XP", name_kk: "XP аңшысы", name_en: "XP Hunter", desc: "Набери 100 XP", desc_kk: "100 XP жина", desc_en: "Earn 100 XP", xp: 40, reward: "Бейдж Опытный" },
+    module_explorer: { id: "module_explorer", name: "Инженер-универсал", name_kk: "Модуль зерттеушісі", name_en: "Module Explorer", desc: "Используй все 5 инженерных модулей", desc_kk: "Барлық 5 модульді қолдан", desc_en: "Try all 5 engineering modules", xp: 100, reward: "Бейдж Мастер" },
   };
   res.json({ quests: QUESTS, total: 5 });
 });
 
 const QUEST_BADGES: Record<string, string> = {
-  first_contact: 'Бейдж Новичок',
-  material_scout: 'Бейдж Исследователь',
-  streak_master: 'Бейдж Постоянец',
-  xp_hunter: 'Бейдж Опытный',
-  module_explorer: 'Бейдж Универсал',
+  first_contact: 'Бейдж Новичок', material_scout: 'Бейдж Исследователь', streak_master: 'Бейдж Постоянец', xp_hunter: 'Бейдж Опытный', module_explorer: 'Бейдж Универсал',
 };
 
 app.post("/api/quests/complete", (req, res) => {
   const { quest_id, email = "student@engineerus.kz" } = req.body;
   const user = getOrCreateUser(email);
-
   if (!user.completed_quests.includes(quest_id)) {
     user.completed_quests.push(quest_id);
-    const badgeName = QUEST_BADGES[quest_id];
-    if (badgeName && !user.achievements.includes(badgeName)) {
-      user.achievements.push(badgeName);
-    }
-    user.xp += 30;
-    user.level = getLevel(user.xp);
+    const badge = QUEST_BADGES[quest_id];
+    if (badge && !user.achievements.includes(badge)) user.achievements.push(badge);
+    user.xp += 30; user.level = getLevel(user.xp);
   }
-
-  res.json({
-    status: "ok",
-    message: "Квест выполнен! +30 XP",
-    new_xp: user.xp,
-    new_level: user.level,
-    achievements: user.achievements,
-    completed_quests: user.completed_quests,
-  });
+  res.json({ status: "ok", message: "Квест выполнен! +30 XP", new_xp: user.xp, new_level: user.level, achievements: user.achievements, completed_quests: user.completed_quests });
 });
 
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
+    const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
-    });
+    app.get("*", (req, res) => res.sendFile(path.join(distPath, "index.html")));
   }
-
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Engineerus Quest server running on http://0.0.0.0:${PORT}`);
-  });
+  app.listen(PORT, "0.0.0.0", () => console.log(`Engineerus Quest server running on http://0.0.0.0:${PORT}`));
 }
 
 startServer();
