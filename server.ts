@@ -1,7 +1,7 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import { GoogleGenAI } from "@google/genai";
+import OpenAI from "openai";
 import cors from "cors";
 
 const app = express();
@@ -22,14 +22,19 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
-//  Улучшенная инициализация Gemini
-const getGeminiAI = () => {
-  const apiKey = process.env.GEMINI_API_KEY;
+//  Улучшенная инициализация 
+// === GROQ CLIENT ===
+const getGroqClient = () => {
+  // Пробуем взять основной ключ, если нет — резервный
+  const apiKey = process.env.GROQ_API_KEY || process.env.GROQ_API_KEY_2;
   if (!apiKey) {
-    console.warn(" GEMINI_API_KEY не найден. ИИ будет работать в демо-режиме.");
+    console.warn(" GROQ_API_KEY not found. Using fallback mode.");
     return null;
   }
-  return new GoogleGenAI({ apiKey });
+  return new OpenAI({
+    baseURL: "https://api.groq.com/openai/v1",
+    apiKey: apiKey,
+  });
 };
 
 // Prompts for Kazakhstan Engineering Tutor
@@ -165,53 +170,48 @@ const LEADERBOARD_SEED = [
 ];
 
 //  УЛУЧШЕННАЯ функция генерации ответов ИИ
+// === AI RESPONSE GENERATOR (GROQ + FALLBACK) ===
 async function generateAIResponse(prompt: string, moduleName = "tutor", lang = "ru"): Promise<string> {
-  const ai = getGeminiAI();
+  const client = getGroqClient();
 
-  if (ai) {
+  // 1. Попытка получить ответ от Groq
+  if (client) {
     try {
       const systemInstruction = `${SYSTEM_PROMPTS[lang] || SYSTEM_PROMPTS.ru}\n\nСпециализация модуля: ${MODULE_PROMPTS[moduleName] || ""}`;
 
-      const response = await ai.models.generateContent({
-        model: "gemini-1.5-flash", //  Стабильная модель
-        contents: [{ role: "user", parts: [{ text: prompt }] }], //  Правильный формат SDK v1+
-        config: {
-          systemInstruction,
-          temperature: 0.7, //  Больше вариативности
-          topP: 0.9,
-        },
+      const completion = await client.chat.completions.create({
+        model: "llama3-70b-8192", // Быстрая и умная модель
+        messages: [
+          { role: "system", content: systemInstruction },
+          { role: "user", content: prompt }
+        ],
+        temperature: 0.7,
+        top_p: 0.9,
+        max_tokens: 600, // Ограничение длины
       });
 
-      if (response.text && response.text.trim()) {
-        return response.text;
+      const aiText = completion.choices[0]?.message?.content?.trim();
+      if (aiText) {
+        console.log(" Groq response OK");
+        return aiText;
       }
     } catch (err: any) {
-      console.error(" Ошибка Gemini API:", err.message || err);
+      console.error(" Groq API Error:", err.message || err);
+      // Если ошибка, код упадет вниз к fallback
     }
   }
 
-  //  Динамический fallback (если нет ключа или API упал)
-  const cleanPrompt = prompt.trim().slice(0, 120);
+  // 2. Fallback (если ключа нет или API упал)
+  // Возвращаем умный шаблонный ответ, чтобы сайт не ломался
+  const cleanPrompt = prompt.trim().slice(0, 100);
   const moduleLabel = MODULE_PROMPTS[moduleName] || "Инженерный разбор";
 
   if (lang === "kk") {
-    return ` **Engineerus AI Жауабы** (${moduleLabel}):\n\n` +
-      `Сіздің сұранысыңыз: "${cleanPrompt}..."\n\n` +
-      `• **Талдау:** Сұрақ Қазақстан инженерлік стандарттары (СТ РК/ГОСТ) контекстінде қаралды.\n` +
-      `• **Ұсыныс:** Нақты есептеулер мен нормативтік талаптарды тексеруді ұсынамыз.\n` +
-      `• **Келесі қадам:** Осы модульде тағы сұрақ қойып, +15 XP алыңыз! `;
+    return ` **Engineerus AI (Demo Mode)**\n\nСұраныс: "${cleanPrompt}..."\n\n• **Талдау:** Қазақстан стандарттары (ГОСТ/СТ РК) бойынша қаралды.\n• **Кеңес:** Есептеулерді қайта тексеріңіз.\n• **XP:** +15`;
   } else if (lang === "en") {
-    return ` **Engineerus AI Response** (${moduleLabel}):\n\n` +
-      `Your query: "${cleanPrompt}..."\n\n` +
-      `• **Analysis:** Reviewed within Kazakhstan engineering standards (ISO/ST RK).\n` +
-      `• **Recommendation:** Verify calculations against local regulatory codes.\n` +
-      `• **Next Step:** Ask another question in this module to earn +15 XP! `;
+    return ` **Engineerus AI (Demo Mode)**\n\nQuery: "${cleanPrompt}..."\n\n• **Analysis:** Reviewed per Kazakhstan standards (ISO/ST RK).\n• **Advice:** Double-check your calculations.\n• **XP:** +15`;
   } else {
-    return ` **Ответ Engineerus AI** (${moduleLabel}):\n\n` +
-      `Ваш запрос: "${cleanPrompt}..."\n\n` +
-      `• **Анализ:** Рассмотрено в контексте инженерных норм РК (ГОСТ/СТ РК).\n` +
-      `• **Рекомендация:** Проверьте расчёты и коэффициенты запаса прочности.\n` +
-      `• **Следующий шаг:** Задайте уточняющий вопрос, чтобы получить +15 XP! `;
+    return ` **Engineerus AI (Demo Mode)**\n\nЗапрос: "${cleanPrompt}..."\n\n• **Анализ:** Рассмотрено в контексте норм РК (ГОСТ/СТ РК).\n• **Рекомендация:** Проверьте расчёты и коэффициенты запаса.\n• **XP:** +15`;
   }
 }
 
