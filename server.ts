@@ -179,7 +179,7 @@ async function generateAIResponse(prompt: string, moduleName = "tutor", lang = "
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: "llama-3.1-70b-versatile", // Стабильная модель
+       model: "llama-3.3-70b-versatile", // Стабильная модель
         messages: [
           { role: "system", content: systemInstruction },
           { role: "user", content: prompt }
@@ -237,7 +237,7 @@ app.get("/api/debug-groq", async (req, res) => {
         "Authorization": `Bearer ${key}`
       },
       body: JSON.stringify({
-        model: "llama-3.1-70b-versatile",
+        model: "llama-3.3-70b-versatile",
         messages: [{ role: "user", content: "Say 'Hello Engineerus' in one word" }],
         max_tokens: 10
       })
