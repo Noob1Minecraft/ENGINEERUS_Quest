@@ -174,35 +174,40 @@ const LEADERBOARD_SEED = [
 async function generateAIResponse(prompt: string, moduleName = "tutor", lang = "ru"): Promise<string> {
   const client = getGroqClient();
 
-  // 1. Попытка получить ответ от Groq
   if (client) {
     try {
+      console.log(` Отправка запроса в Groq...`);
       const systemInstruction = `${SYSTEM_PROMPTS[lang] || SYSTEM_PROMPTS.ru}\n\nСпециализация модуля: ${MODULE_PROMPTS[moduleName] || ""}`;
 
       const completion = await client.chat.completions.create({
-        model: "llama3-70b-8192", // Быстрая и умная модель
+        model: "llama-3.1-70b-versatile", //  Актуальная стабильная модель Groq
         messages: [
           { role: "system", content: systemInstruction },
           { role: "user", content: prompt }
         ],
         temperature: 0.7,
-        top_p: 0.9,
-        max_tokens: 600, // Ограничение длины
+        max_tokens: 600,
       });
 
       const aiText = completion.choices[0]?.message?.content?.trim();
+      
       if (aiText) {
-        console.log(" Groq response OK");
+        console.log(" Groq вернул ответ:", aiText.slice(0, 80) + "...");
         return aiText;
+      } else {
+        console.warn(" Groq вернул пустое поле content. Структура ответа:", JSON.stringify(completion.choices[0]));
       }
     } catch (err: any) {
-      console.error(" Groq API Error:", err.message || err);
-      // Если ошибка, код упадет вниз к fallback
+      console.error(" ОШИБКА GROQ API:", err.message || err);
+      console.error(" Код ошибки:", err.status || err.code);
+      console.error(" Полный ответ от Groq:", JSON.stringify(err.response?.data || err, null, 2));
     }
+  } else {
+    console.warn("️ Groq клиент не создан (ключ не найден в env)");
   }
 
-  // 2. Fallback (если ключа нет или API упал)
-  // Возвращаем умный шаблонный ответ, чтобы сайт не ломался
+  // === FALLBACK (срабатывает, если выше что-то пошло не так) ===
+  console.log(" Возвращаю демо-ответ (fallback mode)");
   const cleanPrompt = prompt.trim().slice(0, 100);
   const moduleLabel = MODULE_PROMPTS[moduleName] || "Инженерный разбор";
 
