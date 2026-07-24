@@ -171,52 +171,64 @@ const LEADERBOARD_SEED = [
 
 //  УЛУЧШЕННАЯ функция генерации ответов ИИ
 // === AI RESPONSE GENERATOR (GROQ + FALLBACK) ===
+// Замени всю функцию generateAIResponse на этот код:
+
 async function generateAIResponse(prompt: string, moduleName = "tutor", lang = "ru"): Promise<string> {
-  const client = getGroqClient();
+  const apiKey = process.env.GROQ_API_KEY || process.env.GROQ_API_KEY_2;
+  
+  // 1. ПРОВЕРКА КЛЮЧА
+  if (!apiKey) {
+    console.log(" GROQ KEY NOT FOUND. Using Fallback.");
+    return ` **Engineerus AI (Demo Mode)**\n\nЗапрос: "${prompt.slice(0, 50)}..."\n\n• Анализ: Демо-ответ. Проверьте расчёты.\n• XP: +15`;
+  }
 
-  if (client) {
-    try {
-      console.log(` Отправка запроса в Groq...`);
-      const systemInstruction = `${SYSTEM_PROMPTS[lang] || SYSTEM_PROMPTS.ru}\n\nСпециализация модуля: ${MODULE_PROMPTS[moduleName] || ""}`;
+  try {
+    // 2. ПОДГОТОВКА ЗАПРОСА
+    const systemInstruction = `${SYSTEM_PROMPTS[lang] || SYSTEM_PROMPTS.ru}\n\nСпециализация: ${MODULE_PROMPTS[moduleName]}`;
+    
+    console.log(" Sending request to Groq API...");
 
-      const completion = await client.chat.completions.create({
-        model: "llama-3.1-70b-versatile", //  Актуальная стабильная модель Groq
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: "llama-3.1-70b-versatile", // Стабильная модель
         messages: [
           { role: "system", content: systemInstruction },
           { role: "user", content: prompt }
         ],
         temperature: 0.7,
-        max_tokens: 600,
-      });
+        max_tokens: 500
+      })
+    });
 
-      const aiText = completion.choices[0]?.message?.content?.trim();
-      
-      if (aiText) {
-        console.log(" Groq вернул ответ:", aiText.slice(0, 80) + "...");
-        return aiText;
-      } else {
-        console.warn(" Groq вернул пустое поле content. Структура ответа:", JSON.stringify(completion.choices[0]));
-      }
-    } catch (err: any) {
-      console.error(" ОШИБКА GROQ API:", err.message || err);
-      console.error(" Код ошибки:", err.status || err.code);
-      console.error(" Полный ответ от Groq:", JSON.stringify(err.response?.data || err, null, 2));
+    // 3. ОБРАБОТКА ОТВЕТА
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error(" Groq API Error:", response.status, errorData);
+      throw new Error(`Groq API failed: ${response.status}`);
     }
-  } else {
-    console.warn("️ Groq клиент не создан (ключ не найден в env)");
-  }
 
-  // === FALLBACK (срабатывает, если выше что-то пошло не так) ===
-  console.log(" Возвращаю демо-ответ (fallback mode)");
-  const cleanPrompt = prompt.trim().slice(0, 100);
-  const moduleLabel = MODULE_PROMPTS[moduleName] || "Инженерный разбор";
+    const data = await response.json();
+    const aiText = data.choices[0]?.message?.content;
 
-  if (lang === "kk") {
-    return ` **Engineerus AI (Demo Mode)**\n\nСұраныс: "${cleanPrompt}..."\n\n• **Талдау:** Қазақстан стандарттары (ГОСТ/СТ РК) бойынша қаралды.\n• **Кеңес:** Есептеулерді қайта тексеріңіз.\n• **XP:** +15`;
-  } else if (lang === "en") {
-    return ` **Engineerus AI (Demo Mode)**\n\nQuery: "${cleanPrompt}..."\n\n• **Analysis:** Reviewed per Kazakhstan standards (ISO/ST RK).\n• **Advice:** Double-check your calculations.\n• **XP:** +15`;
-  } else {
-    return ` **Engineerus AI (Demo Mode)**\n\nЗапрос: "${cleanPrompt}..."\n\n• **Анализ:** Рассмотрено в контексте норм РК (ГОСТ/СТ РК).\n• **Рекомендация:** Проверьте расчёты и коэффициенты запаса.\n• **XP:** +15`;
+    if (aiText) {
+      console.log(" Groq Answer Received:", aiText.slice(0, 50) + "...");
+      return aiText;
+    } else {
+      console.error(" Groq returned empty answer.");
+      throw new Error("Empty response");
+    }
+
+  } catch (error: any) {
+    console.error(" Error during fetch:", error.message);
+    
+    // 4. FALLBACK (если что-то сломалось)
+    const cleanPrompt = prompt.trim().slice(0, 50);
+    return ` **Engineerus AI (Fallback)**\n\nЗапрос: "${cleanPrompt}..."\n\n• Анализ: Не удалось получить ответ от ИИ.\n• Рекомендация: Проверьте интернет или повторите позже.`;
   }
 }
 
