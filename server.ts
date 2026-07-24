@@ -1,7 +1,6 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import OpenAI from "openai";
 import cors from "cors";
 
 const app = express();
@@ -22,20 +21,8 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
-//  Улучшенная инициализация 
-// === GROQ CLIENT ===
-const getGroqClient = () => {
-  // Пробуем взять основной ключ, если нет — резервный
-  const apiKey = process.env.GROQ_API_KEY || process.env.GROQ_API_KEY_2;
-  if (!apiKey) {
-    console.warn(" GROQ_API_KEY not found. Using fallback mode.");
-    return null;
-  }
-  return new OpenAI({
-    baseURL: "https://api.groq.com/openai/v1",
-    apiKey: apiKey,
-  });
-};
+// === GROQ CLIENT (через fetch, без openai) ===
+const getGroqKey = () => process.env.GROQ_API_KEY || process.env.GROQ_API_KEY_2;
 
 // Prompts for Kazakhstan Engineering Tutor
 const SYSTEM_PROMPTS: Record<string, string> = {
@@ -169,12 +156,9 @@ const LEADERBOARD_SEED = [
   { rank: 5, name: "Аружан Муратова (ENU)", xp: 620, level: 7, streak: 5 },
 ];
 
-//  УЛУЧШЕННАЯ функция генерации ответов ИИ
 // === AI RESPONSE GENERATOR (GROQ + FALLBACK) ===
-// Замени всю функцию generateAIResponse на этот код:
-
 async function generateAIResponse(prompt: string, moduleName = "tutor", lang = "ru"): Promise<string> {
-  const apiKey = process.env.GROQ_API_KEY || process.env.GROQ_API_KEY_2;
+  const apiKey = getGroqKey();
   
   // 1. ПРОВЕРКА КЛЮЧА
   if (!apiKey) {
@@ -207,19 +191,19 @@ async function generateAIResponse(prompt: string, moduleName = "tutor", lang = "
 
     // 3. ОБРАБОТКА ОТВЕТА
     if (!response.ok) {
-      const errorData = await response.json();
+      const errorData = await response.json().catch(() => ({}));
       console.error(" Groq API Error:", response.status, errorData);
       throw new Error(`Groq API failed: ${response.status}`);
     }
 
     const data = await response.json();
-    const aiText = data.choices[0]?.message?.content;
+    const aiText = data.choices?.[0]?.message?.content?.trim();
 
     if (aiText) {
       console.log(" Groq Answer Received:", aiText.slice(0, 50) + "...");
       return aiText;
     } else {
-      console.error(" Groq returned empty answer.");
+      console.error(" Groq returned empty answer. Full response:", JSON.stringify(data).slice(0, 200));
       throw new Error("Empty response");
     }
 
@@ -231,6 +215,52 @@ async function generateAIResponse(prompt: string, moduleName = "tutor", lang = "
     return ` **Engineerus AI (Fallback)**\n\nЗапрос: "${cleanPrompt}..."\n\n• Анализ: Не удалось получить ответ от ИИ.\n• Рекомендация: Проверьте интернет или повторите позже.`;
   }
 }
+
+//  ВРЕМЕННЫЙ РОУТ ДЛЯ ДИАГНОСТИКИ GROQ
+app.get("/api/debug-groq", async (req, res) => {
+  const key = getGroqKey();
+  
+  if (!key) {
+    return res.json({ 
+      error: "API Key not found", 
+      env_keys: Object.keys(process.env).filter(k => k.includes("GROQ")),
+      hint: "Check Render → Environment → GROQ_API_KEY (exact name, no spaces)"
+    });
+  }
+
+  try {
+    console.log(" Debug: Testing Groq API connection...");
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${key}`
+      },
+      body: JSON.stringify({
+        model: "llama-3.1-70b-versatile",
+        messages: [{ role: "user", content: "Say 'Hello Engineerus' in one word" }],
+        max_tokens: 10
+      })
+    });
+
+    const data = await response.json();
+    
+    return res.json({
+      status: response.status,
+      ok: response.ok,
+      response: data.choices?.[0]?.message?.content || "EMPTY",
+      full_response: data, // для отладки
+      hint: response.ok ? " Groq работает! Проверь generateAIResponse" : " Groq вернул ошибку"
+    });
+  } catch (e: any) {
+    return res.json({ 
+      error: e.message, 
+      stack: e.stack,
+      hint: "Network error — проверь доступность api.groq.com из Render"
+    });
+  }
+});
+// === END DEBUG ROUTE ===
 
 // API Routes
 app.post("/api/ai", async (req, res) => {
