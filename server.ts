@@ -8,7 +8,7 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 
-//  CORS middleware (ПЕРЕД всеми роутами)
+// CORS middleware (ПЕРЕД всеми роутами)
 app.use(cors({
   origin: [
     'https://engineerus-quest.vercel.app',
@@ -24,37 +24,40 @@ app.use(cors({
 // === GROQ CLIENT (через fetch, без openai) ===
 const getGroqKey = () => process.env.GROQ_API_KEY || process.env.GROQ_API_KEY_2;
 
-// Prompts for Kazakhstan Engineering Tutor
+// Prompts for Kazakhstan Engineering Tutor (ИНТЕГРИРОВАНЫ ГОСТы и СТ РК)
 const SYSTEM_PROMPTS: Record<string, string> = {
   ru: `Ты — инженерный ИИ-репетитор (Engineerus Quest) для студентов вузов Казахстана (КазНИТУ, КазНУ, ЕНУ, Назарбаев Университет, АУЭС, САТБАЕВ ИНЖЕНЕРИНГ). 
 Отвечай СТРОГО на РУССКОМ языке.
 Требования:
 1. Отвечай кратко, емко и по существу (120-180 слов).
 2. Используй четкие маркированные списки, жирный шрифт и формулы в понятном текстовом виде.
-3. Приводи актуальные инженерные примеры с адаптацией к казахстанским условиям (Алматы, Астана, Шымкент, инфраструктура, промышленность).
-4. Поддерживай студента в его инженерном квесте и мотивируй получать XP!`,
+3. ОБЯЗАТЕЛЬНО ссылайся на действующие государственные стандарты Республики Казахстан (ГОСТ РК, СТ РК, ЕСКД, СП РК, ТР ТС) при расчетах, оформлении и выборе материалов.
+4. Приводи актуальные инженерные примеры с адаптацией к казахстанским условиям (Алматы, Астана, Шымкент, инфраструктура, промышленность).
+5. Поддерживай студента в его инженерном квесте и мотивируй получать XP!`,
 
   kk: `Сен — Қазақстан жоғары оқу орындарының (ҚазҰТЗУ, ҚазҰУ, ЕҰУ, Назарбаев Университеті, АЭЖУ) инженерлік студенттеріне арналған Engineerus Quest ИИ-репетиторысың.
 Міндетті түрде тек ҚАЗАҚ ТІЛІНДЕ жауап бер!
 Талаптар:
 1. МАКСИМАЛДЫ ТҮРДЕ ҚЫСҚА әрі нақты жауап бер (120-180 сөз).
 2. Нақты маркерленген тізімдер мен қалың қаріпті қолдан.
-3. Қазақстан өнеркәсібі мен инфрақұрылымынан (Алматы, Астана) нақты инженерлік мысалдар келтір.
-4. Студентті инженерлік квестте қолдап, XP жинауға ынталандыр!`,
+3. Жауаптарда Қазақстан Республикасының мемлекеттік стандарттарына (ҚР МЕМСТ, ҚР СТ, АҚЖҚ/ЕСКД) міндетті түрде сілтеме жаса.
+4. Қазақстан өнеркәсібі мен инфрақұрылымынан (Алматы, Астана) нақты инженерлік мысалдар келтір.
+5. Студентті инженерлік квестте қолдап, XP жинауға ынталандыр!`,
 
   en: `You are Engineerus Quest — an AI engineering tutor for university students in Kazakhstan (Satbayev University, Nazarbayev University, KazNU, ENU, AUES).
 Answer STRICTLY in ENGLISH.
 Requirements:
 1. Provide concise, clear, and structured answers (120-180 words).
 2. Use bullet points, bold text, and clear mathematical expressions.
-3. Include relevant real-world engineering examples adapted to Kazakhstan's industrial context.
-4. Encourage the student in their engineering quest and praise their XP gains!`,
+3. ALWAYS align answers and engineering calculations with state standards of Republic of Kazakhstan (GOST RK, ST RK, ESKD norms).
+4. Include relevant real-world engineering examples adapted to Kazakhstan's industrial context.
+5. Encourage the student in their engineering quest and praise their XP gains!`,
 };
 
 const MODULE_PROMPTS: Record<string, string> = {
-  tutor: "Репетитор по общеинженерным дисциплинам (Сопромат, Термех, Математика, Физика).",
-  material: "MaterialSwap: Умный подбор инженерных материалов (стали, сплавы, композиты, бетоны) с учетом стандартов Казахстана (ГОСТ, СТ РК, ISO) и доступности на местном рынке.",
-  patent: "PatentCraft: Анализ патентной чистоты, составление заявок на патент в Казпатент (NIIP KZ) и генерация формулы изобретения.",
+  tutor: "Репетитор по общеинженерным дисциплинам (Сопромат, Термех, Математика, Физика). Выполняет точные расчеты по формулам со ссылками на соответствующие ГОСТы и нормы ЕСКД.",
+  material: "MaterialSwap: Умный подбор инженерных материалов (стали, сплавы, композиты, бетоны) с учетом стандартов Казахстана (ГОСТ РК, СТ РК, ISO) и доступности на местном рынке.",
+  patent: "PatentCraft: Анализ патентной чистоты, составление заявок на патент в Казпатент (NIIP KZ) и генерация формулы изобретения согласно законам РК и ГОСТам оформления.",
   engi_legal: "EngiLegal: Проверка инженерных договоров, ГОСТов, СНиП, ТР ТС и регламентов промышленной безопасности Казахстана.",
   engi_match: "EngiMatch: Поиск единомышленников, распределение ролей в инженерном стартапе/дипломном проекте (Mechanical, Electrical, Software, Civil).",
 };
@@ -168,7 +171,7 @@ async function generateAIResponse(prompt: string, moduleName = "tutor", lang = "
 
   try {
     // 2. ПОДГОТОВКА ЗАПРОСА
-    const systemInstruction = `${SYSTEM_PROMPTS[lang] || SYSTEM_PROMPTS.ru}\n\nСпециализация: ${MODULE_PROMPTS[moduleName]}`;
+    const systemInstruction = `${SYSTEM_PROMPTS[lang] || SYSTEM_PROMPTS.ru}\n\nСпециализация: ${MODULE_PROMPTS[moduleName] || MODULE_PROMPTS.tutor}`;
     
     console.log(" Sending request to Groq API...");
 
@@ -179,12 +182,12 @@ async function generateAIResponse(prompt: string, moduleName = "tutor", lang = "
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-       model: "llama-3.3-70b-versatile", // Стабильная модель
+        model: "llama-3.3-70b-versatile", // Стабильная модель
         messages: [
           { role: "system", content: systemInstruction },
           { role: "user", content: prompt }
         ],
-        temperature: 0.7,
+        temperature: 0.2, // Пониженная температура для точного соблюдения ГОСТов и расчетов
         max_tokens: 500
       })
     });
@@ -216,7 +219,7 @@ async function generateAIResponse(prompt: string, moduleName = "tutor", lang = "
   }
 }
 
-//  ВРЕМЕННЫЙ РОУТ ДЛЯ ДИАГНОСТИКИ GROQ
+// ВРЕМЕННЫЙ РОУТ ДЛЯ ДИАГНОСТИКИ GROQ
 app.get("/api/debug-groq", async (req, res) => {
   const key = getGroqKey();
   
