@@ -23,6 +23,7 @@ app.use(cors({
 
 // === GROQ CLIENT (через fetch, без openai) ===
 const getGroqKey = () => process.env.GROQ_API_KEY || process.env.GROQ_API_KEY_2;
+const GROQ_MODEL = process.env.GROQ_MODEL || "qwen/qwen3.6-27b";
 
 // Prompts for Kazakhstan Engineering Tutor (ИНТЕГРИРОВАНЫ ГОСТы и СТ РК)
 const SYSTEM_PROMPTS: Record<string, string> = {
@@ -173,7 +174,7 @@ async function generateAIResponse(prompt: string, moduleName = "tutor", lang = "
     // 2. ПОДГОТОВКА ЗАПРОСА
     const systemInstruction = `${SYSTEM_PROMPTS[lang] || SYSTEM_PROMPTS.ru}\n\nСпециализация: ${MODULE_PROMPTS[moduleName] || MODULE_PROMPTS.tutor}`;
     
-    console.log(" Sending request to Groq API...");
+    console.log(` Sending request to Groq API using model ${GROQ_MODEL}...`);
 
     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
@@ -182,7 +183,7 @@ async function generateAIResponse(prompt: string, moduleName = "tutor", lang = "
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: "qwen3.6-27b", // Стабильная модель
+        model: GROQ_MODEL, // Корректное имя модели со слэшем ("qwen/qwen3.6-27b")
         messages: [
           { role: "system", content: systemInstruction },
           { role: "user", content: prompt }
@@ -240,7 +241,7 @@ app.get("/api/debug-groq", async (req, res) => {
         "Authorization": `Bearer ${key}`
       },
       body: JSON.stringify({
-        model: "qwen3.6-27b",
+        model: GROQ_MODEL,
         messages: [{ role: "user", content: "Say 'Hello Engineerus' in one word" }],
         max_tokens: 10
       })
@@ -251,6 +252,7 @@ app.get("/api/debug-groq", async (req, res) => {
     return res.json({
       status: response.status,
       ok: response.ok,
+      model_used: GROQ_MODEL,
       response: data.choices?.[0]?.message?.content || "EMPTY",
       full_response: data, // для отладки
       hint: response.ok ? " Groq работает! Проверь generateAIResponse" : " Groq вернул ошибку"
