@@ -33,20 +33,24 @@ function detectLanguage(text: string, requestedLang: string = "ru"): string {
   const kazakhRegex = /[әғқңөұүһіӘҒҚҢӨҰҮҺІ]/;
   // Любые кириллические буквы (русский язык)
   const cyrillicRegex = /[а-яА-ЯёЁ]/;
+  // Латинские буквы (английский язык)
+  const latinRegex = /[a-zA-Z]/;
 
+  // Приоритет: если есть казахские буквы — казахский
   if (kazakhRegex.test(text)) {
     return "kk";
   }
+  // Если есть кириллица — русский
   if (cyrillicRegex.test(text)) {
     return "ru";
   }
-  
-  // Если в тексте латиница, но запрошен русский, оставляем русский
-  if (requestedLang === "ru" || requestedLang === "kk") {
-    return requestedLang;
+  // Если есть латиница — английский
+  if (latinRegex.test(text)) {
+    return "en";
   }
   
-  return "en";
+  // Если в тексте только цифры/символы, оставляем запрошенный язык
+  return requestedLang;
 }
 
 // Prompts for Kazakhstan Engineering Tutor
@@ -59,7 +63,7 @@ const SYSTEM_PROMPTS: Record<string, string> = {
 Требования к ответу:
 1. Отвечай кратко, структурированно и по существу (120-180 слов).
 2. Используй четкие маркированные списки, жирный шрифт и понятный формат формул.
-3. ОБЯЗАТЕЛЬНО ссылайся на действующие государственные стандарты Республики Казахстан (ГОСТ РК, СТ РК, ЕСКД, СП РК, ТР ТС) при расчетах, оформлении и выборе материалов.
+3. ОБЯАТЕЛЬНО ссылайся на действующие государственные стандарты Республики Казахстан (ГОСТ РК, СТ РК, ЕСКД, СП РК, ТР ТС) при расчетах, оформлении и выборе материалов.
 4. Приводи актуальные инженерные примеры с адаптацией к казахстанским условиям (Алматы, Астана, Шымкент, инфраструктура, промышленность).
 5. Поддерживай студента в его инженерном квесте и мотивируй получать XP!`,
 
@@ -197,7 +201,7 @@ const LEADERBOARD_SEED = [
 async function generateAIResponse(prompt: string, moduleName = "tutor", requestedLang = "ru"): Promise<string> {
   const apiKey = getGroqKey();
   
-  // Автоматическое определение языка запроса (гарантирует отклики на русском при вводе кириллицы)
+  // Автоматическое определение языка запроса (гарантирует отклики на нужном языке при вводе символов)
   const lang = detectLanguage(prompt, requestedLang);
 
   if (!apiKey) {
@@ -230,7 +234,11 @@ async function generateAIResponse(prompt: string, moduleName = "tutor", requeste
         model: GROQ_MODEL,
         messages: [
           { role: "system", content: systemInstruction },
-          { role: "user", content: prompt }
+          { 
+            role: "user", 
+            // Дублируем приказ на языке ответа прямо в пользовательском промпте для надежности
+            content: `${prompt}\n\n[SYSTEM INSTRUCTION: You MUST reply in ${lang === 'ru' ? 'Russian' : lang === 'kk' ? 'Kazakh' : 'English'} language only. Do not use any other language.]`
+          }
         ],
         temperature: 0.2,
         max_tokens: 600
