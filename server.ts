@@ -25,31 +25,32 @@ app.use(cors({
 const getGroqKey = () => process.env.GROQ_API_KEY || process.env.GROQ_API_KEY_2;
 const GROQ_MODEL = process.env.GROQ_MODEL || "qwen/qwen3.6-27b";
 
-// Функция автоматического определения языка запроса
+// === УЛУЧШЕННОЕ ОПРЕДЕЛЕНИЕ ЯЗЫКА ===
 function detectLanguage(text: string, requestedLang: string = "ru"): string {
   if (!text) return requestedLang;
   
-  // Казахские специфические буквы
-  const kazakhRegex = /[әғқңөұүһіӘҒҚҢӨҰҮҺІ]/;
-  // Любые кириллические буквы (русский язык)
-  const cyrillicRegex = /[а-яА-ЯёЁ]/;
-  // Латинские буквы (английский язык)
-  const latinRegex = /[a-zA-Z]/;
+  // Считаем количество символов каждой раскладки
+  const kazakhChars = (text.match(/[әғқңөұүһіӘҒҚҢӨҰҮҺІ]/g) || []).length;
+  const cyrillicChars = (text.match(/[а-яА-ЯёЁ]/g) || []).length;
+  const latinChars = (text.match(/[a-zA-Z]/g) || []).length;
 
-  // Приоритет: если есть казахские буквы — казахский
-  if (kazakhRegex.test(text)) {
+  // Казахские буквы имеют высший приоритет
+  if (kazakhChars > 0) {
     return "kk";
   }
-  // Если есть кириллица — русский
-  if (cyrillicRegex.test(text)) {
+  
+  // Сравниваем кириллицу и латиницу по количеству
+  // Если кириллицы больше — русский (даже если есть английские термины)
+  if (cyrillicChars > latinChars) {
     return "ru";
   }
-  // Если есть латиница — английский
-  if (latinRegex.test(text)) {
+  
+  // Если латиницы больше — английский
+  if (latinChars > cyrillicChars) {
     return "en";
   }
   
-  // Если в тексте только цифры/символы, оставляем запрошенный язык
+  // Если поровну или нет букв — используем запрошенный язык
   return requestedLang;
 }
 
@@ -63,7 +64,7 @@ const SYSTEM_PROMPTS: Record<string, string> = {
 Требования к ответу:
 1. Отвечай кратко, структурированно и по существу (120-180 слов).
 2. Используй четкие маркированные списки, жирный шрифт и понятный формат формул.
-3. ОБЯАТЕЛЬНО ссылайся на действующие государственные стандарты Республики Казахстан (ГОСТ РК, СТ РК, ЕСКД, СП РК, ТР ТС) при расчетах, оформлении и выборе материалов.
+3. ОБЯЗАТЕЛЬНО ссылайся на действующие государственные стандарты Республики Казахстан (ГОСТ РК, СТ РК, ЕСКД, СП РК, ТР ТС) при расчетах, оформлении и выборе материалов.
 4. Приводи актуальные инженерные примеры с адаптацией к казахстанским условиям (Алматы, Астана, Шымкент, инфраструктура, промышленность).
 5. Поддерживай студента в его инженерном квесте и мотивируй получать XP!`,
 
@@ -201,7 +202,7 @@ const LEADERBOARD_SEED = [
 async function generateAIResponse(prompt: string, moduleName = "tutor", requestedLang = "ru"): Promise<string> {
   const apiKey = getGroqKey();
   
-  // Автоматическое определение языка запроса (гарантирует отклики на нужном языке при вводе символов)
+  // Автоматическое определение языка запроса
   const lang = detectLanguage(prompt, requestedLang);
 
   if (!apiKey) {
@@ -213,16 +214,16 @@ async function generateAIResponse(prompt: string, moduleName = "tutor", requeste
     const baseSystemPrompt = SYSTEM_PROMPTS[lang] || SYSTEM_PROMPTS.ru;
     const moduleInfo = MODULE_PROMPTS[moduleName] || MODULE_PROMPTS.tutor;
     
-    // Формируем жесткую инструкцию с фиксацией языка
+    // Жесткая инструкция с фиксацией языка
     const languageInstruction = lang === 'kk' 
-      ? 'ЖАУАПТЫ ТЕК ҚАЗАҚ ТІЛІНДЕ ЖАЗ!' 
+      ? 'ЖАУАПТЫ ТЕК ҚАЗАҚ ТІЛІНДЕ ЖАЗ! АҒЫЛШЫН ТІЛІН ҚОЛДАНУҒА ТЫЙЫМ САЛЫНАДЫ!' 
       : lang === 'en' 
-      ? 'WRITE THE ENTIRE RESPONSE ONLY IN ENGLISH!' 
-      : 'НАПИШИ ВЕСЬ ОТВЕТ ИСКЛЮЧИТЕЛЬНО НА РУССКОМ ЯЗЫКЕ!';
+      ? 'WRITE THE ENTIRE RESPONSE ONLY IN ENGLISH! DO NOT USE ANY OTHER LANGUAGE!' 
+      : 'НАПИШИ ВЕСЬ ОТВЕТ ИСКЛЮЧИТЕЛЬНО НА РУССКОМ ЯЗЫКЕ! ИСПОЛЬЗОВАНИЕ АНГЛИЙСКОГО ЯЗЫКА ЗАПРЕЩЕНО!';
 
     const systemInstruction = `${baseSystemPrompt}\n\nСпециализация модуля: ${moduleInfo}\n\n[ЯЗЫКОВОЙ ПРИКАЗ]: ${languageInstruction}`;
     
-    console.log(` Sending request to Groq API (${GROQ_MODEL}) in language: [${lang}]...`);
+    console.log(`📨 Sending request to Groq API (${GROQ_MODEL}) | Detected lang: [${lang}] | Cyrillic/Latin ratio in prompt`);
 
     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
@@ -236,7 +237,6 @@ async function generateAIResponse(prompt: string, moduleName = "tutor", requeste
           { role: "system", content: systemInstruction },
           { 
             role: "user", 
-            // Дублируем приказ на языке ответа прямо в пользовательском промпте для надежности
             content: `${prompt}\n\n[SYSTEM INSTRUCTION: You MUST reply in ${lang === 'ru' ? 'Russian' : lang === 'kk' ? 'Kazakh' : 'English'} language only. Do not use any other language.]`
           }
         ],
