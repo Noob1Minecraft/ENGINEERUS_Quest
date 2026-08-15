@@ -21,32 +21,65 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
-// === GROQ CLIENT (через fetch, без openai) ===
+// === GROQ CLIENT ===
 const getGroqKey = () => process.env.GROQ_API_KEY || process.env.GROQ_API_KEY_2;
 const GROQ_MODEL = process.env.GROQ_MODEL || "qwen/qwen3.6-27b";
 
-// Prompts for Kazakhstan Engineering Tutor (ИНТЕГРИРОВАНЫ ГОСТы и СТ РК)
+// Функция автоматического определения языка запроса
+function detectLanguage(text: string, requestedLang: string = "ru"): string {
+  if (!text) return requestedLang;
+  
+  // Казахские специфические буквы
+  const kazakhRegex = /[әғқңөұүһіӘҒҚҢӨҰҮҺІ]/;
+  // Любые кириллические буквы (русский язык)
+  const cyrillicRegex = /[а-яА-ЯёЁ]/;
+
+  if (kazakhRegex.test(text)) {
+    return "kk";
+  }
+  if (cyrillicRegex.test(text)) {
+    return "ru";
+  }
+  
+  // Если в тексте латиница, но запрошен русский, оставляем русский
+  if (requestedLang === "ru" || requestedLang === "kk") {
+    return requestedLang;
+  }
+  
+  return "en";
+}
+
+// Prompts for Kazakhstan Engineering Tutor
 const SYSTEM_PROMPTS: Record<string, string> = {
   ru: `Ты — инженерный ИИ-репетитор (Engineerus Quest) для студентов вузов Казахстана (КазНИТУ, КазНУ, ЕНУ, Назарбаев Университет, АУЭС, САТБАЕВ ИНЖЕНЕРИНГ). 
-Отвечай СТРОГО на РУССКОМ языке.
-Требования:
-1. Отвечай кратко, емко и по существу (120-180 слов).
-2. Используй четкие маркированные списки, жирный шрифт и формулы в понятном текстовом виде.
+
+СТРОГОЕ ПРАВИЛО ЯЗЫКА:
+Отвечай ИСКЛЮЧИТЕЛЬНО НА РУССКОМ ЯЗЫКЕ. Категорически запрещено использовать английский язык для ответа (за исключением терминов и аббревиатур XP, ISO, ГОСТ).
+
+Требования к ответу:
+1. Отвечай кратко, структурированно и по существу (120-180 слов).
+2. Используй четкие маркированные списки, жирный шрифт и понятный формат формул.
 3. ОБЯЗАТЕЛЬНО ссылайся на действующие государственные стандарты Республики Казахстан (ГОСТ РК, СТ РК, ЕСКД, СП РК, ТР ТС) при расчетах, оформлении и выборе материалов.
 4. Приводи актуальные инженерные примеры с адаптацией к казахстанским условиям (Алматы, Астана, Шымкент, инфраструктура, промышленность).
 5. Поддерживай студента в его инженерном квесте и мотивируй получать XP!`,
 
   kk: `Сен — Қазақстан жоғары оқу орындарының (ҚазҰТЗУ, ҚазҰУ, ЕҰУ, Назарбаев Университеті, АЭЖУ) инженерлік студенттеріне арналған Engineerus Quest ИИ-репетиторысың.
-Міндетті түрде тек ҚАЗАҚ ТІЛІНДЕ жауап бер!
+
+ТІЛ БОЙЫНША ҚАТАҢ ТАЛАП:
+Міндетті түрде ТЕК ҚАЗАҚ ТІЛІНДЕ жауап бер! Ағылшын тілін қолдануға ТЫЙЫМ САЛЫНАДЫ (XP, ISO, МЕМСТ сияқты аббревиатуралардан басқа).
+
 Талаптар:
-1. МАКСИМАЛДЫ ТҮРДЕ ҚЫСҚА әрі нақты жауап бер (120-180 сөз).
+1. Жауапты МАКСИМАЛДЫ ТҮРДЕ ҚЫСҚА әрі нақты бер (120-180 сөз).
 2. Нақты маркерленген тізімдер мен қалың қаріпті қолдан.
 3. Жауаптарда Қазақстан Республикасының мемлекеттік стандарттарына (ҚР МЕМСТ, ҚР СТ, АҚЖҚ/ЕСКД) міндетті түрде сілтеме жаса.
-4. Қазақстан өнеркәсібі мен инфрақұрылымынан (Алматы, Астана) нақты инженерлік мысалдар келтір.
+4. Қазақстан өнеркәсібі мен инфрақұрылымынан нақты инженерлік мысалдар келтір.
 5. Студентті инженерлік квестте қолдап, XP жинауға ынталандыр!`,
 
   en: `You are Engineerus Quest — an AI engineering tutor for university students in Kazakhstan (Satbayev University, Nazarbayev University, KazNU, ENU, AUES).
-Answer STRICTLY in ENGLISH.
+
+STRICT LANGUAGE RULE:
+Answer STRICTLY and EXCLUSIVELY in ENGLISH.
+
 Requirements:
 1. Provide concise, clear, and structured answers (120-180 words).
 2. Use bullet points, bold text, and clear mathematical expressions.
@@ -160,21 +193,32 @@ const LEADERBOARD_SEED = [
   { rank: 5, name: "Аружан Муратова (ENU)", xp: 620, level: 7, streak: 5 },
 ];
 
-// === AI RESPONSE GENERATOR (GROQ + FALLBACK) ===
-async function generateAIResponse(prompt: string, moduleName = "tutor", lang = "ru"): Promise<string> {
+// === AI RESPONSE GENERATOR ===
+async function generateAIResponse(prompt: string, moduleName = "tutor", requestedLang = "ru"): Promise<string> {
   const apiKey = getGroqKey();
   
-  // 1. ПРОВЕРКА КЛЮЧА
+  // Автоматическое определение языка запроса (гарантирует отклики на русском при вводе кириллицы)
+  const lang = detectLanguage(prompt, requestedLang);
+
   if (!apiKey) {
     console.log(" GROQ KEY NOT FOUND. Using Fallback.");
     return ` **Engineerus AI (Demo Mode)**\n\nЗапрос: "${prompt.slice(0, 50)}..."\n\n• Анализ: Демо-ответ. Проверьте расчёты.\n• XP: +15`;
   }
 
   try {
-    // 2. ПОДГОТОВКА ЗАПРОСА
-    const systemInstruction = `${SYSTEM_PROMPTS[lang] || SYSTEM_PROMPTS.ru}\n\nСпециализация: ${MODULE_PROMPTS[moduleName] || MODULE_PROMPTS.tutor}`;
+    const baseSystemPrompt = SYSTEM_PROMPTS[lang] || SYSTEM_PROMPTS.ru;
+    const moduleInfo = MODULE_PROMPTS[moduleName] || MODULE_PROMPTS.tutor;
     
-    console.log(` Sending request to Groq API using model ${GROQ_MODEL}...`);
+    // Формируем жесткую инструкцию с фиксацией языка
+    const languageInstruction = lang === 'kk' 
+      ? 'ЖАУАПТЫ ТЕК ҚАЗАҚ ТІЛІНДЕ ЖАЗ!' 
+      : lang === 'en' 
+      ? 'WRITE THE ENTIRE RESPONSE ONLY IN ENGLISH!' 
+      : 'НАПИШИ ВЕСЬ ОТВЕТ ИСКЛЮЧИТЕЛЬНО НА РУССКОМ ЯЗЫКЕ!';
+
+    const systemInstruction = `${baseSystemPrompt}\n\nСпециализация модуля: ${moduleInfo}\n\n[ЯЗЫКОВОЙ ПРИКАЗ]: ${languageInstruction}`;
+    
+    console.log(` Sending request to Groq API (${GROQ_MODEL}) in language: [${lang}]...`);
 
     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
@@ -183,17 +227,16 @@ async function generateAIResponse(prompt: string, moduleName = "tutor", lang = "
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: GROQ_MODEL, // Корректное имя модели со слэшем ("qwen/qwen3.6-27b")
+        model: GROQ_MODEL,
         messages: [
           { role: "system", content: systemInstruction },
           { role: "user", content: prompt }
         ],
-        temperature: 0.2, // Пониженная температура для точного соблюдения ГОСТов и расчетов
-        max_tokens: 500
+        temperature: 0.2,
+        max_tokens: 600
       })
     });
 
-    // 3. ОБРАБОТКА ОТВЕТА
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       console.error(" Groq API Error:", response.status, errorData);
@@ -204,36 +247,24 @@ async function generateAIResponse(prompt: string, moduleName = "tutor", lang = "
     const aiText = data.choices?.[0]?.message?.content?.trim();
 
     if (aiText) {
-      console.log(" Groq Answer Received:", aiText.slice(0, 50) + "...");
       return aiText;
     } else {
-      console.error(" Groq returned empty answer. Full response:", JSON.stringify(data).slice(0, 200));
       throw new Error("Empty response");
     }
 
   } catch (error: any) {
     console.error(" Error during fetch:", error.message);
-    
-    // 4. FALLBACK (если что-то сломалось)
     const cleanPrompt = prompt.trim().slice(0, 50);
-    return ` **Engineerus AI (Fallback)**\n\nЗапрос: "${cleanPrompt}..."\n\n• Анализ: Не удалось получить ответ от ИИ.\n• Рекомендация: Проверьте интернет или повторите позже.`;
+    return ` **Engineerus AI (Fallback)**\n\nЗапрос: "${cleanPrompt}..."\n\n• Анализ: Не удалось получить ответ от ИИ.\n• Рекомендация: Повторите попытку.`;
   }
 }
 
-// ВРЕМЕННЫЙ РОУТ ДЛЯ ДИАГНОСТИКИ GROQ
+// Роут диагностики
 app.get("/api/debug-groq", async (req, res) => {
   const key = getGroqKey();
-  
-  if (!key) {
-    return res.json({ 
-      error: "API Key not found", 
-      env_keys: Object.keys(process.env).filter(k => k.includes("GROQ")),
-      hint: "Check Render → Environment → GROQ_API_KEY (exact name, no spaces)"
-    });
-  }
+  if (!key) return res.json({ error: "API Key not found" });
 
   try {
-    console.log(" Debug: Testing Groq API connection...");
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -242,40 +273,33 @@ app.get("/api/debug-groq", async (req, res) => {
       },
       body: JSON.stringify({
         model: GROQ_MODEL,
-        messages: [{ role: "user", content: "Say 'Hello Engineerus' in one word" }],
+        messages: [{ role: "user", content: "Ответь ровно одним словом по-русски: Готов" }],
         max_tokens: 10
       })
     });
 
     const data = await response.json();
-    
     return res.json({
       status: response.status,
       ok: response.ok,
       model_used: GROQ_MODEL,
-      response: data.choices?.[0]?.message?.content || "EMPTY",
-      full_response: data, // для отладки
-      hint: response.ok ? " Groq работает! Проверь generateAIResponse" : " Groq вернул ошибку"
+      response: data.choices?.[0]?.message?.content || "EMPTY"
     });
   } catch (e: any) {
-    return res.json({ 
-      error: e.message, 
-      stack: e.stack,
-      hint: "Network error — проверь доступность api.groq.com из Render"
-    });
+    return res.json({ error: e.message });
   }
 });
-// === END DEBUG ROUTE ===
 
 // API Routes
 app.post("/api/ai", async (req, res) => {
   const { text, lang = "ru", email = "student@engineerus.kz" } = req.body;
   const user = getOrCreateUser(email);
-  const responseText = await generateAIResponse(text, "tutor", lang);
+  const detectedLang = detectLanguage(text, lang);
+  const responseText = await generateAIResponse(text, "tutor", detectedLang);
   user.xp += 10;
   user.requests_count += 1;
   user.level = getLevel(user.xp);
-  res.json({ status: "ok", response: responseText, xp: user.xp, level: user.level, streak: user.streak, lang });
+  res.json({ status: "ok", response: responseText, xp: user.xp, level: user.level, streak: user.streak, lang: detectedLang });
 });
 
 app.post("/api/module", async (req, res) => {
@@ -284,11 +308,12 @@ app.post("/api/module", async (req, res) => {
   if (!user.modules_used.includes(moduleName)) user.modules_used.push(moduleName);
   if (moduleName === "material") user.material_count += 1;
   if (moduleName === "patent") user.patent_count += 1;
-  const responseText = await generateAIResponse(text, moduleName, lang);
+  const detectedLang = detectLanguage(text, lang);
+  const responseText = await generateAIResponse(text, moduleName, detectedLang);
   user.xp += 15;
   user.requests_count += 1;
   user.level = getLevel(user.xp);
-  res.json({ status: "ok", response: responseText, xp: user.xp, level: user.level, lang });
+  res.json({ status: "ok", response: responseText, xp: user.xp, level: user.level, lang: detectedLang });
 });
 
 app.get("/api/user/:idOrEmail", (req, res) => res.json(getOrCreateUser(req.params.idOrEmail)));
