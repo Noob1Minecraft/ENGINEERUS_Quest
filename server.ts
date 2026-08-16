@@ -4,6 +4,10 @@ import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import { createApp } from "./server/app";
 import { loadServerEnv } from "./server/config/env";
+import { createSupabaseAccessTokenVerifier } from "./server/auth/supabaseJwt";
+import { createRequireAuth } from "./server/middleware/requireAuth";
+import { createAuthenticatedRateLimit } from "./server/middleware/authenticatedRateLimit";
+import { completeUserQuest, createIdempotencyKey, recordAiUsage } from "./server/services/progress";
 
 // Load environment variables from .env for local development. Hosted platforms
 // inject their environment variables directly.
@@ -12,6 +16,8 @@ dotenv.config();
 const env = loadServerEnv(process.env);
 const app = createApp(env);
 const PORT = env.PORT;
+const requireAuth = createRequireAuth(createSupabaseAccessTokenVerifier(env));
+const authenticatedRateLimit = createAuthenticatedRateLimit();
 
 // === GROQ CLIENT ===
 const getGroqKey = () => env.GROQ_API_KEY || env.GROQ_API_KEY_2;
@@ -98,26 +104,6 @@ const MODULE_PROMPTS: Record<string, string> = {
   engi_match: "EngiMatch: Поиск единомышленников, распределение ролей в инженерном стартапе/дипломном проекте (Mechanical, Electrical, Software, Civil).",
 };
 
-// In-Memory Database Store
-interface UserState {
-  id: number;
-  telegram_id: number;
-  username: string;
-  email: string;
-  xp: number;
-  level: number;
-  streak: number;
-  completed_quests: string[];
-  achievements: string[];
-  requests_count: number;
-  material_count: number;
-  patent_count: number;
-  modules_used: string[];
-  preferred_lang: string;
-}
-
-const usersDb: Map<string, UserState> = new Map();
-
 interface ChatMessageData {
   id: string;
   sender: 'user' | 'ai';
@@ -137,10 +123,12 @@ interface ChatSessionData {
   messages: ChatMessageData[];
 }
 
+// Temporary compatibility cache. It is keyed only by verified JWT sub and will
+// be replaced by the already-defined PostgreSQL chat tables in the persistence block.
 const userChatsDb: Map<string, ChatSessionData[]> = new Map();
 
-const getOrCreateUserChats = (email: string): ChatSessionData[] => {
-  if (!userChatsDb.has(email)) {
+const getOrCreateUserChats = (userId: string): ChatSessionData[] => {
+  if (!userChatsDb.has(userId)) {
     const defaultSession: ChatSessionData = {
       id: 'session_default_1',
       title: 'Инженерный консилиум (Главный)',
@@ -157,34 +145,9 @@ const getOrCreateUserChats = (email: string): ChatSessionData[] => {
         },
       ],
     };
-    userChatsDb.set(email, [defaultSession]);
+    userChatsDb.set(userId, [defaultSession]);
   }
-  return userChatsDb.get(email)!;
-};
-
-const getLevel = (xp: number) => Math.floor(xp / 100) + 1;
-
-const getOrCreateUser = (emailOrTg: string | number): UserState => {
-  const key = String(emailOrTg);
-  if (!usersDb.has(key)) {
-    usersDb.set(key, {
-      id: Math.floor(Math.random() * 90000) + 10000,
-      telegram_id: typeof emailOrTg === 'number' ? emailOrTg : 777001,
-      username: typeof emailOrTg === 'string' && emailOrTg.includes('@') ? emailOrTg.split('@')[0] : "Student_Engineer",
-      email: typeof emailOrTg === 'string' && emailOrTg.includes('@') ? emailOrTg : "student@engineerus.kz",
-      xp: 40,
-      level: 1,
-      streak: 3,
-      completed_quests: ["first_contact"],
-      achievements: ["first_step"],
-      requests_count: 2,
-      material_count: 1,
-      patent_count: 0,
-      modules_used: ["tutor", "material"],
-      preferred_lang: "ru",
-    });
-  }
-  return usersDb.get(key)!;
+  return userChatsDb.get(userId)!;
 };
 
 const LEADERBOARD_SEED = [
@@ -292,104 +255,85 @@ async function generateAIResponse(prompt: string, moduleName = "tutor", requeste
   return ` **Engineerus AI (Fallback)**\n\nЗапрос: "${cleanPrompt}..."\n\n• Анализ: Не удалось получить ответ от ИИ.\n• Рекомендация: Повторите попытку.`;
 }
 
-// Роут диагностики
-app.get("/api/debug-groq", async (req, res) => {
-  const key = getGroqKey();
-  if (!key) return res.json({ error: "API Key not found" });
+// API Routes
+app.post("/api/ai", requireAuth, authenticatedRateLimit, async (req, res) => {
+  const { text, lang = "ru" } = req.body;
+  if (typeof text !== "string" || !text.trim() || text.length > 20_000) {
+    return res.status(400).json({ error: { code: "invalid_prompt", message: "A valid prompt is required." } });
+  }
+
+  let idempotencyKey: string;
+  try {
+    idempotencyKey = createIdempotencyKey(req.header("idempotency-key"), "ai:tutor");
+  } catch {
+    return res.status(400).json({ error: { code: "invalid_idempotency_key", message: "Idempotency-Key is invalid." } });
+  }
 
   try {
-    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${key}`
-      },
-      body: JSON.stringify({
-        model: GROQ_MODEL,
-        messages: [{ role: "user", content: "Ответь ровно одним словом по-русски: Готов" }],
-        max_tokens: 10
-      })
-    });
-
-    const data = await response.json();
-    return res.json({
-      status: response.status,
-      ok: response.ok,
-      model_used: GROQ_MODEL,
-      response: data.choices?.[0]?.message?.content || "EMPTY"
-    });
-  } catch (e: any) {
-    return res.json({ error: e.message });
+    const detectedLang = detectLanguage(text, lang);
+    const responseText = await generateAIResponse(text, "tutor", detectedLang);
+    const progress = await recordAiUsage(
+      env,
+      res.locals.auth.userId,
+      "tutor",
+      10,
+      idempotencyKey,
+    );
+    return res.json({ status: "ok", response: responseText, ...progress, lang: detectedLang });
+  } catch {
+    return res.status(503).json({ error: { code: "ai_unavailable", message: "The AI service is temporarily unavailable." } });
   }
 });
 
-// API Routes
-app.post("/api/ai", async (req, res) => {
-  const { text, lang = "ru", email = "student@engineerus.kz" } = req.body;
-  const user = getOrCreateUser(email);
-  const detectedLang = detectLanguage(text, lang);
-  const responseText = await generateAIResponse(text, "tutor", detectedLang);
-  user.xp += 10;
-  user.requests_count += 1;
-  user.level = getLevel(user.xp);
-  res.json({ status: "ok", response: responseText, xp: user.xp, level: user.level, streak: user.streak, lang: detectedLang });
+app.post("/api/module", requireAuth, authenticatedRateLimit, async (req, res) => {
+  const { module: moduleName, text, lang = "ru" } = req.body;
+  const allowedModules = new Set(["tutor", "material", "patent", "engi_legal", "engi_match"]);
+  if (typeof text !== "string" || !text.trim() || text.length > 20_000 || !allowedModules.has(moduleName)) {
+    return res.status(400).json({ error: { code: "invalid_module_request", message: "A valid module request is required." } });
+  }
+
+  let idempotencyKey: string;
+  try {
+    idempotencyKey = createIdempotencyKey(req.header("idempotency-key"), `ai:${moduleName}`);
+  } catch {
+    return res.status(400).json({ error: { code: "invalid_idempotency_key", message: "Idempotency-Key is invalid." } });
+  }
+
+  try {
+    const detectedLang = detectLanguage(text, lang);
+    const responseText = await generateAIResponse(text, moduleName, detectedLang);
+    const progress = await recordAiUsage(
+      env,
+      res.locals.auth.userId,
+      moduleName,
+      15,
+      idempotencyKey,
+    );
+    return res.json({ status: "ok", response: responseText, ...progress, lang: detectedLang });
+  } catch {
+    return res.status(503).json({ error: { code: "ai_unavailable", message: "The AI service is temporarily unavailable." } });
+  }
 });
 
-app.post("/api/module", async (req, res) => {
-  const { module: moduleName, text, lang = "ru", email = "student@engineerus.kz" } = req.body;
-  const user = getOrCreateUser(email);
-  if (!user.modules_used.includes(moduleName)) user.modules_used.push(moduleName);
-  if (moduleName === "material") user.material_count += 1;
-  if (moduleName === "patent") user.patent_count += 1;
-  const detectedLang = detectLanguage(text, lang);
-  const responseText = await generateAIResponse(text, moduleName, detectedLang);
-  user.xp += 15;
-  user.requests_count += 1;
-  user.level = getLevel(user.xp);
-  res.json({ status: "ok", response: responseText, xp: user.xp, level: user.level, lang: detectedLang });
+app.get("/api/chats", requireAuth, authenticatedRateLimit, (_req, res) => {
+  res.json({ status: "ok", chats: getOrCreateUserChats(res.locals.auth.userId) });
 });
 
-app.get("/api/user/:idOrEmail", (req, res) => res.json(getOrCreateUser(req.params.idOrEmail)));
-app.get("/api/user/by-email/:email", (req, res) => res.json(getOrCreateUser(req.params.email)));
-
-app.post("/api/auth/web/register", (req, res) => {
-  const { email, password, username } = req.body;
-  if (!email || !password) return res.status(400).json({ detail: "Email and password required" });
-  const user = getOrCreateUser(email);
-  if (username) user.username = username;
-  res.json({ status: "ok", user });
-});
-
-app.post("/api/auth/web/login", (req, res) => {
-  const { email } = req.body;
-  res.json({ status: "ok", user: getOrCreateUser(email || "student@engineerus.kz") });
-});
-
-app.post("/api/auth/bind", (req, res) => {
-  const { email, telegram_id } = req.body;
-  const user = getOrCreateUser(email || "student@engineerus.kz");
-  if (telegram_id) user.telegram_id = Number(telegram_id);
-  res.json({ status: "ok", message: "Account bound successfully", user });
-});
-
-app.get("/api/chats/:email", (req, res) => {
-  const email = req.params.email || "student@engineerus.kz";
-  res.json({ status: "ok", chats: getOrCreateUserChats(email) });
-});
-
-app.post("/api/chats/save", (req, res) => {
-  const { email = "student@engineerus.kz", session } = req.body;
+app.post("/api/chats/save", requireAuth, authenticatedRateLimit, (req, res) => {
+  const { session } = req.body;
   if (!session?.id) return res.status(400).json({ error: "Session required" });
-  const chats = getOrCreateUserChats(email);
+  const userId = res.locals.auth.userId;
+  const chats = getOrCreateUserChats(userId);
   const idx = chats.findIndex(s => s.id === session.id);
   if (idx >= 0) chats[idx] = session; else chats.unshift(session);
-  userChatsDb.set(email, chats);
+  userChatsDb.set(userId, chats);
   res.json({ status: "ok", chats });
 });
 
-app.post("/api/chats/new", (req, res) => {
-  const { email = "student@engineerus.kz", module = "tutor", title } = req.body;
-  const chats = getOrCreateUserChats(email);
+app.post("/api/chats/new", requireAuth, authenticatedRateLimit, (req, res) => {
+  const { module = "tutor", title } = req.body;
+  const userId = res.locals.auth.userId;
+  const chats = getOrCreateUserChats(userId);
   const newSession: ChatSessionData = {
     id: 'session_' + Date.now(),
     title: title || `Новый сеанс (${chats.length + 1})`,
@@ -399,21 +343,21 @@ app.post("/api/chats/new", (req, res) => {
     messages: [{ id: 'welcome_' + Date.now(), sender: 'ai', module, text: 'Новый чат создан! Пожалуйста, напишите ваш инженерный вопрос.', timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }],
   };
   chats.unshift(newSession);
-  userChatsDb.set(email, chats);
+  userChatsDb.set(userId, chats);
   res.json({ status: "ok", newSession, chats });
 });
 
-app.delete("/api/chats/:email/:sessionId", (req, res) => {
-  const { email, sessionId } = req.params;
-  let chats = getOrCreateUserChats(email).filter(s => s.id !== sessionId);
-  if (chats.length === 0) chats = getOrCreateUserChats(email);
-  userChatsDb.set(email, chats);
+app.delete("/api/chats/:sessionId", requireAuth, authenticatedRateLimit, (req, res) => {
+  const { sessionId } = req.params;
+  const userId = res.locals.auth.userId;
+  const chats = getOrCreateUserChats(userId).filter(s => s.id !== sessionId);
+  userChatsDb.set(userId, chats);
   res.json({ status: "ok", chats });
 });
 
-app.patch("/api/chats/rename", (req, res) => {
-  const { email = "student@engineerus.kz", sessionId, newTitle } = req.body;
-  const chats = getOrCreateUserChats(email);
+app.patch("/api/chats/rename", requireAuth, authenticatedRateLimit, (req, res) => {
+  const { sessionId, newTitle } = req.body;
+  const chats = getOrCreateUserChats(res.locals.auth.userId);
   const target = chats.find(s => s.id === sessionId);
   if (target && newTitle) { target.title = newTitle; target.updatedAt = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
   res.json({ status: "ok", chats });
@@ -432,20 +376,18 @@ app.get("/api/quests", (req, res) => {
   res.json({ quests: QUESTS, total: 5 });
 });
 
-const QUEST_BADGES: Record<string, string> = {
-  first_contact: 'Бейдж Новичок', material_scout: 'Бейдж Исследователь', streak_master: 'Бейдж Постоянец', xp_hunter: 'Бейдж Опытный', module_explorer: 'Бейдж Универсал',
-};
-
-app.post("/api/quests/complete", (req, res) => {
-  const { quest_id, email = "student@engineerus.kz" } = req.body;
-  const user = getOrCreateUser(email);
-  if (!user.completed_quests.includes(quest_id)) {
-    user.completed_quests.push(quest_id);
-    const badge = QUEST_BADGES[quest_id];
-    if (badge && !user.achievements.includes(badge)) user.achievements.push(badge);
-    user.xp += 30; user.level = getLevel(user.xp);
+app.post("/api/quests/complete", requireAuth, authenticatedRateLimit, async (req, res) => {
+  const { quest_id: questId } = req.body;
+  if (typeof questId !== "string" || !/^[a-z0-9_-]{1,100}$/.test(questId)) {
+    return res.status(400).json({ error: { code: "invalid_quest", message: "A valid quest is required." } });
   }
-  res.json({ status: "ok", message: "Квест выполнен! +30 XP", new_xp: user.xp, new_level: user.level, achievements: user.achievements, completed_quests: user.completed_quests });
+
+  try {
+    const result = await completeUserQuest(env, res.locals.auth.userId, questId);
+    return res.json({ status: "ok", ...result });
+  } catch {
+    return res.status(503).json({ error: { code: "quest_unavailable", message: "Quest completion is temporarily unavailable." } });
+  }
 });
 
 async function startServer() {

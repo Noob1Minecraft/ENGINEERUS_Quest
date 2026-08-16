@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import { UserProfile, Language, SavedNote, ChatMessage, ChatSession } from '../types';
 import { TRANSLATIONS } from '../data';
 import { verifySystemIntegrity } from '../utils/integrity';
+import { apiFetch } from '../utils/api';
 import {
   Sparkles,
   Send,
@@ -32,9 +33,6 @@ import {
   History,
   FolderKanban
 } from 'lucide-react';
-
-//  ДОБАВЛЕНО: Базовый URL для API (подтягивается из Vercel/локального .env)
-const API_BASE = import.meta.env.VITE_API_URL || '';
 
 interface AIAssistantTabProps {
   user: UserProfile;
@@ -210,10 +208,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
 
   // Load chats for user from server
   useEffect(() => {
-    const userEmail = user.email || 'student@engineerus.kz';
-    //  ИСПРАВЛЕНО: Добавлен API_BASE
-    fetch(`${API_BASE}/api/chats/${encodeURIComponent(userEmail)}`)
-      .then((res) => res.json())
+    apiFetch<{ chats?: ChatSession[] }>('/api/chats')
       .then((data) => {
         if (data && data.chats && data.chats.length > 0) {
           setSessions(data.chats);
@@ -243,7 +238,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
       .catch((err) => {
         console.error(err);
       });
-  }, [user.email]);
+  }, [user.id]);
 
   // Sync saved notes to local storage
   useEffect(() => {
@@ -307,14 +302,9 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
   // Save current session to server
   const syncSessionToServer = async (updatedSession: ChatSession) => {
     try {
-      //  ИСПРАВЛЕНО: Добавлен API_BASE
-      await fetch(`${API_BASE}/api/chats/save`, {
+      await apiFetch('/api/chats/save', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: user.email,
-          session: updatedSession,
-        }),
+        body: JSON.stringify({ session: updatedSession }),
       });
     } catch (e) {
       console.error(e);
@@ -323,17 +313,13 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
 
   const handleCreateNewChat = async () => {
     try {
-      //  ИСПРАВЛЕНО: Добавлен API_BASE
-      const res = await fetch(`${API_BASE}/api/chats/new`, {
+      const data = await apiFetch<{ status: string; newSession?: ChatSession; chats: ChatSession[] }>('/api/chats/new', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: user.email,
           module: selectedModule,
           title: `Квест ${MODULE_CONFIG[selectedModule]?.label || 'ИИ'} (#${sessions.length + 1})`,
         }),
       });
-      const data = await res.json();
       if (data.status === 'ok' && data.newSession) {
         setSessions(data.chats);
         setActiveSessionId(data.newSession.id);
@@ -373,11 +359,9 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
       : 'Удалить выбранный чат?';
     if (confirm(confirmMsg)) {
       try {
-        //  ИСПРАВЛЕНО: Добавлен API_BASE
-        const res = await fetch(`${API_BASE}/api/chats/${encodeURIComponent(user.email)}/${sessionId}`, {
+        const data = await apiFetch<{ status: string; chats: ChatSession[] }>(`/api/chats/${encodeURIComponent(sessionId)}`, {
           method: 'DELETE',
         });
-        const data = await res.json();
         if (data.status === 'ok') {
           setSessions(data.chats);
           if (activeSessionId === sessionId) {
@@ -393,17 +377,13 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
   const handleRenameChat = async (sessionId: string, title: string) => {
     if (!title.trim()) return;
     try {
-      // ИСПРАВЛЕНО: Добавлен API_BASE
-      const res = await fetch(`${API_BASE}/api/chats/rename`, {
+      const data = await apiFetch<{ status: string; chats: ChatSession[] }>('/api/chats/rename', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: user.email,
           sessionId,
           newTitle: title,
         }),
       });
-      const data = await res.json();
       if (data.status === 'ok') {
         setSessions(data.chats);
       }
@@ -451,19 +431,14 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
     setLoading(true);
 
     try {
-      //  ИСПРАВЛЕНО: Добавлен API_BASE
-      const res = await fetch(`${API_BASE}/api/module`, {
+      const data = await apiFetch<{ status: string; response: string; xp: number; level: number }>('/api/module', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           module: selectedModule,
           text: query,
           lang,
-          email: user.email,
         }),
       });
-
-      const data = await res.json();
       if (data.status === 'ok') {
         const aiMsg: ChatMessage = {
           id: 'ai_' + Date.now(),

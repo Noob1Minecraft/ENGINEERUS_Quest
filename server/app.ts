@@ -3,6 +3,10 @@ import express, { type Express } from "express";
 import helmet from "helmet";
 import type { ServerEnv } from "./config/env";
 import { createHealthRouter } from "./routes/health";
+import { createSupabaseAccessTokenVerifier } from "./auth/supabaseJwt";
+import { createRequireAuth } from "./middleware/requireAuth";
+import { createAuthenticatedRateLimit } from "./middleware/authenticatedRateLimit";
+import { createCanonicalUserLoader, createMeRouter } from "./routes/me";
 
 const DEFAULT_ALLOWED_ORIGINS = [
   "https://engineerus-quest.vercel.app",
@@ -34,6 +38,11 @@ export function createApp(env: ServerEnv): Express {
     allowedHeaders: ["Content-Type", "Authorization"],
   }));
   app.use(createHealthRouter());
+  app.use(createMeRouter(
+    createRequireAuth(createSupabaseAccessTokenVerifier(env)),
+    createAuthenticatedRateLimit(),
+    createCanonicalUserLoader(env),
+  ));
 
   return app;
 }

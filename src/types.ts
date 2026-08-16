@@ -1,8 +1,8 @@
 export type Language = 'ru' | 'kk' | 'en';
 
 export interface UserProfile {
-  id: number;
-  telegram_id: number;
+  id: string;
+  telegram_id: number | null;
   username: string;
   email: string;
   xp: number;

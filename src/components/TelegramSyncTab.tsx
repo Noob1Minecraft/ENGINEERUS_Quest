@@ -52,8 +52,8 @@ export const TelegramSyncTab: React.FC<TelegramSyncTabProps> = ({ lang }) => {
           <p className="text-xs text-slate-400 font-medium leading-relaxed">
             {t.tgStep2Text}
           </p>
-          <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/50 text-xs font-mono font-bold text-slate-700 truncate" title="/bind student@engineerus.kz password123">
-            /bind student@engineerus.kz password123
+          <div className="bg-amber-50 p-2.5 rounded-xl border border-amber-200/70 text-xs font-bold text-amber-800">
+            {lang === 'kk' ? 'Құпия сөзді ботқа жібермеңіз' : lang === 'en' ? 'Never send a password to a bot' : 'Никогда не отправляйте пароль боту'}
           </div>
         </div>
 

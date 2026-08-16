@@ -28,22 +28,24 @@ Server-only variables:
 - `SUPABASE_URL`
 - `SUPABASE_PUBLISHABLE_KEY`
 - `SUPABASE_SECRET_KEY`
+- `SUPABASE_JWT_AUDIENCE`
 - `FRONTEND_ORIGIN`
 - `PORT`
 
 The browser Supabase client is disabled when either browser variable is absent.
-The backend Supabase factories are lazy and make no network connection until a
-caller explicitly requests a client.
+The backend Supabase factories and JWKS verifier are lazy and make no network
+connection until an authenticated request requires them. The backend accepts
+identity only from a verified access-token `sub`; email and request-body IDs are
+never ownership credentials.
 
 ## Local Supabase
 
-Install the Supabase CLI separately using an officially supported method. It is
-not an application dependency and is intentionally absent from `package.json`.
+The pinned Supabase CLI is a project dev dependency. Invoke it through npm/npx.
 
 ```bash
-supabase start
-supabase db reset
-supabase test db
+npx supabase start
+npx supabase db reset --local
+npm run test:rls
 ```
 
 `supabase db reset` applies migrations only to the local Supabase containers.
@@ -51,13 +53,15 @@ Do not run `supabase link`, `supabase db push`, or any remote migration command
 without a separately reviewed production change window.
 
 Google OAuth remains disabled in the local configuration for this Foundation
-change.
+change. The browser code is ready to call Supabase OAuth after the provider and
+redirect URLs receive a separate production configuration review.
 
 ## Application checks
 
 ```bash
 npm run typecheck
 npm run build
+npm test
 ```
 
 The liveness endpoints are `GET /health` and `GET /api/health`. They do not

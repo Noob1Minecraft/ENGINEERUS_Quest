@@ -20,6 +20,7 @@ const serverEnvSchema = z.object({
   SUPABASE_URL: optionalUrl,
   SUPABASE_PUBLISHABLE_KEY: optionalString,
   SUPABASE_SECRET_KEY: optionalString,
+  SUPABASE_JWT_AUDIENCE: z.string().trim().min(1).default("authenticated"),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema> & {

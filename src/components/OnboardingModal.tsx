@@ -66,10 +66,10 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
         : 'Синхронизация с Telegram 📱',
       icon: <BookOpen className="w-8 h-8 text-indigo-600" />,
       desc: lang === 'kk'
-        ? 'Прогресіңіз веб-сайтта да, Telegram-да да сақталуы үшін ботта /bind email пароль командасымен өз аккаунтыңызды байланыстырыңыз!'
+        ? 'Telegram-мен қауіпсіз байланыстыру кейінірек қосылады. Құпия сөзіңізді ботқа ешқашан жібермеңіз.'
         : lang === 'en'
-        ? 'Link your account using /bind email password command in the bot, so your progress is saved on both website and Telegram!'
-        : 'Привяжи свой аккаунт командой /bind email пароль в боте, чтобы твой прогресс сохранялся и на сайте, и в Telegram!',
+        ? 'Secure Telegram linking will be added later. Never send your password to a bot.'
+        : 'Безопасная привязка Telegram появится позже. Никогда не отправляйте пароль боту.',
     },
   ];
 

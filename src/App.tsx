@@ -14,8 +14,47 @@ import { AuthModal } from './components/AuthModal';
 import { OnboardingModal } from './components/OnboardingModal';
 import { Sparkles, Zap, ArrowRight, ShieldCheck, Cpu } from 'lucide-react';
 import mascotImg from './assets/images/eq_robot_mascot_1784719916472.jpg';
+import { useAuth } from './auth/AuthContext';
+import { apiFetch } from './utils/api';
+
+const GUEST_USER: UserProfile = {
+  id: 'guest',
+  telegram_id: null,
+  username: 'Студент_Инженер',
+  email: 'student@engineerus.kz',
+  xp: 0,
+  level: 1,
+  streak: 0,
+  completed_quests: [],
+  achievements: [],
+  requests_count: 0,
+  material_count: 0,
+  patent_count: 0,
+  modules_used: [],
+  preferred_lang: 'ru',
+};
+
+type MeResponse = {
+  profile: {
+    id: string;
+    username: string | null;
+    display_name: string | null;
+    preferred_lang: Language;
+    telegram_user_id: number | null;
+  };
+  progress: {
+    total_xp: number;
+    level: number;
+    streak_days: number;
+    requests_count: number;
+    material_count: number;
+    patent_count: number;
+    modules_used: string[];
+  };
+};
 
 export default function App() {
+  const auth = useAuth();
   const [lang, setLang] = useState<Language>(
     (localStorage.getItem('lang') as Language) || 'ru'
   );
@@ -24,22 +63,7 @@ export default function App() {
   const [isAuthOpen, setIsAuthOpen] = useState<boolean>(false);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState<boolean>(false);
 
-  const [user, setUser] = useState<UserProfile>({
-    id: 10001,
-    telegram_id: 777001,
-    username: 'Студент_Инженер',
-    email: 'student@engineerus.kz',
-    xp: 70,
-    level: 1,
-    streak: 3,
-    completed_quests: ['first_contact'],
-    achievements: ['Бейдж Новичок'],
-    requests_count: 2,
-    material_count: 1,
-    patent_count: 0,
-    modules_used: ['tutor', 'material'],
-    preferred_lang: 'ru',
-  });
+  const [user, setUser] = useState<UserProfile>(GUEST_USER);
 
   const t = TRANSLATIONS[lang];
 
@@ -53,16 +77,6 @@ export default function App() {
   }, [lang, t]);
 
   useEffect(() => {
-    // Fetch initial user data from server
-    fetch(`/api/user/${user.email}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data && data.email) {
-          setUser(data);
-        }
-      })
-      .catch(() => {});
-
     // Check onboarding preference
     const hasSeenOnboarding = localStorage.getItem('hasSeenOnboarding');
     if (!hasSeenOnboarding) {
@@ -70,6 +84,41 @@ export default function App() {
       localStorage.setItem('hasSeenOnboarding', 'true');
     }
   }, []);
+
+  useEffect(() => {
+    if (auth.loading) return;
+    if (!auth.user) {
+      setUser(GUEST_USER);
+      return;
+    }
+
+    let active = true;
+    apiFetch<MeResponse>('/api/me')
+      .then(({ profile, progress }) => {
+        if (!active) return;
+        setUser({
+          id: profile.id,
+          telegram_id: profile.telegram_user_id,
+          username: profile.username || profile.display_name || 'Engineer',
+          email: auth.user?.email || '',
+          xp: progress.total_xp,
+          level: progress.level,
+          streak: progress.streak_days,
+          completed_quests: [],
+          achievements: [],
+          requests_count: progress.requests_count,
+          material_count: progress.material_count,
+          patent_count: progress.patent_count,
+          modules_used: progress.modules_used,
+          preferred_lang: profile.preferred_lang,
+        });
+      })
+      .catch(() => {
+        if (active) setUser((current) => ({ ...current, email: auth.user?.email || '' }));
+      });
+
+    return () => { active = false; };
+  }, [auth.loading, auth.user]);
 
   const [selectedAiModule, setSelectedAiModule] = useState<string>('tutor');
 
@@ -86,20 +135,18 @@ export default function App() {
 
   const handleCompleteQuest = async (questId: string) => {
     try {
-      const res = await fetch('/api/quests/complete', {
+      const data = await apiFetch<Record<string, unknown>>('/api/quests/complete', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          quest_id: questId,
-          email: user.email,
-        }),
+        body: JSON.stringify({ quest_id: questId }),
       });
-      const data = await res.json();
       if (data.status === 'ok') {
         setUser((prev) => {
           const quest = QUESTS[questId];
           const newBadge = quest ? quest.reward : null;
-          const updatedAchievements = data.achievements || (
+          const serverAchievements = Array.isArray(data.achievements)
+            ? data.achievements.filter((value): value is string => typeof value === 'string')
+            : null;
+          const updatedAchievements = serverAchievements || (
             newBadge && !prev.achievements.includes(newBadge)
               ? [...prev.achievements, newBadge]
               : prev.achievements
@@ -107,8 +154,8 @@ export default function App() {
 
           return {
             ...prev,
-            xp: data.new_xp,
-            level: data.new_level,
+            xp: Number(data.total_xp ?? prev.xp),
+            level: Number(data.level ?? prev.level),
             completed_quests: Array.from(new Set([...prev.completed_quests, questId])),
             achievements: updatedAchievements,
           };
@@ -307,7 +354,6 @@ export default function App() {
         isOpen={isAuthOpen}
         onClose={() => setIsAuthOpen(false)}
         lang={lang}
-        onLoginSuccess={(loggedUser) => setUser(loggedUser)}
       />
 
       <OnboardingModal
