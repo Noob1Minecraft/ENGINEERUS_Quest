@@ -38,7 +38,7 @@ interface AIAssistantTabProps {
   user: UserProfile;
   lang: Language;
   onUpdateUser: (updated: Partial<UserProfile>) => void;
-  onCompleteQuest?: (questId: string) => void;
+  onCompleteQuest?: (questId: string) => Promise<void>;
   initialModule?: string;
 }
 
@@ -158,6 +158,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
   const [loading, setLoading] = useState<boolean>(false);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [showSessionsDrawer, setShowSessionsDrawer] = useState<boolean>(false);
+  const [persistenceError, setPersistenceError] = useState<string | null>(null);
 
   // User Multi-Chat Sessions
   const [sessions, setSessions] = useState<ChatSession[]>([]);
@@ -208,36 +209,56 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
 
   // Load chats for user from server
   useEffect(() => {
-    apiFetch<{ chats?: ChatSession[] }>('/api/chats')
-      .then((data) => {
-        if (data && data.chats && data.chats.length > 0) {
-          setSessions(data.chats);
-          setActiveSessionId(data.chats[0].id);
-        } else {
-          // create default
-          const defaultSession: ChatSession = {
-            id: 'session_' + Date.now(),
-            title: 'Инженерный консилиум (Главный)',
-            module: 'tutor',
-            createdAt: new Date().toLocaleDateString('ru-RU'),
-            updatedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            messages: [
-              {
-                id: 'welcome-msg',
-                sender: 'ai',
-                module: 'tutor',
-                text: 'Здравствуйте! Я ваш инженерный ИИ-тьютор **Engineerus**. Задайте вопрос по сопромату, ГОСТ РК, материалам или патентам.',
-                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-              },
-            ],
-          };
-          setSessions([defaultSession]);
-          setActiveSessionId(defaultSession.id);
+    if (user.id === 'guest') {
+      setSessions([]);
+      setActiveSessionId('');
+      setPersistenceError(null);
+      return;
+    }
+
+    let active = true;
+    const loadPersistentChats = async () => {
+      try {
+        setPersistenceError(null);
+        const data = await apiFetch<{ sessions: Array<Omit<ChatSession, 'messages'>> }>('/api/chats');
+        let persistentSessions = data.sessions;
+        if (persistentSessions.length === 0) {
+          const created = await apiFetch<{ session: Omit<ChatSession, 'messages'> }>('/api/chats', {
+            method: 'POST',
+            body: JSON.stringify({
+              module: 'tutor',
+              title: 'Инженерный консилиум (Главный)',
+            }),
+          });
+          persistentSessions = [created.session];
         }
-      })
-      .catch((err) => {
-        console.error(err);
-      });
+
+        const hydrated = await Promise.all(persistentSessions.map(async (session) => {
+          const result = await apiFetch<{ messages: ChatMessage[] }>(
+            `/api/chats/${encodeURIComponent(session.id)}/messages`,
+          );
+          return { ...session, messages: result.messages };
+        }));
+
+        if (active) {
+          setSessions(hydrated);
+          setActiveSessionId(hydrated[0]?.id || '');
+        }
+      } catch {
+        if (active) {
+          setSessions([]);
+          setActiveSessionId('');
+          setPersistenceError(lang === 'kk'
+            ? 'Чаттарды тұрақты сақтау орнына қосылу мүмкін болмады.'
+            : lang === 'en'
+              ? 'Persistent chat storage is unavailable.'
+              : 'Постоянное хранилище чатов временно недоступно.');
+        }
+      }
+    };
+
+    void loadPersistentChats();
+    return () => { active = false; };
   }, [user.id]);
 
   // Sync saved notes to local storage
@@ -299,54 +320,22 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
     }
   }, [messages, loading, activeSubView]);
 
-  // Save current session to server
-  const syncSessionToServer = async (updatedSession: ChatSession) => {
-    try {
-      await apiFetch('/api/chats/save', {
-        method: 'POST',
-        body: JSON.stringify({ session: updatedSession }),
-      });
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
   const handleCreateNewChat = async () => {
     try {
-      const data = await apiFetch<{ status: string; newSession?: ChatSession; chats: ChatSession[] }>('/api/chats/new', {
+      setPersistenceError(null);
+      const data = await apiFetch<{ session: Omit<ChatSession, 'messages'> }>('/api/chats', {
         method: 'POST',
         body: JSON.stringify({
           module: selectedModule,
           title: `Квест ${MODULE_CONFIG[selectedModule]?.label || 'ИИ'} (#${sessions.length + 1})`,
         }),
       });
-      if (data.status === 'ok' && data.newSession) {
-        setSessions(data.chats);
-        setActiveSessionId(data.newSession.id);
-        setShowSessionsDrawer(false);
-      }
-    } catch (e) {
-      console.error(e);
-      // fallback local
-      const newSess: ChatSession = {
-        id: 'sess_' + Date.now(),
-        title: `Чат #${sessions.length + 1}`,
-        module: selectedModule,
-        createdAt: new Date().toLocaleDateString('ru-RU'),
-        updatedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        messages: [
-          {
-            id: 'welc_' + Date.now(),
-            sender: 'ai',
-            module: selectedModule,
-            text: 'Создан новый диалог! Чем я могу помочь?',
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          },
-        ],
-      };
-      setSessions((prev) => [newSess, ...prev]);
-      setActiveSessionId(newSess.id);
+      const newSession: ChatSession = { ...data.session, messages: [] };
+      setSessions((current) => [newSession, ...current]);
+      setActiveSessionId(newSession.id);
       setShowSessionsDrawer(false);
+    } catch {
+      setPersistenceError(lang === 'kk' ? 'Чат жасалмады.' : lang === 'en' ? 'Chat could not be created.' : 'Не удалось создать чат.');
     }
   };
 
@@ -359,17 +348,16 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
       : 'Удалить выбранный чат?';
     if (confirm(confirmMsg)) {
       try {
-        const data = await apiFetch<{ status: string; chats: ChatSession[] }>(`/api/chats/${encodeURIComponent(sessionId)}`, {
+        await apiFetch<void>(`/api/chats/${encodeURIComponent(sessionId)}`, {
           method: 'DELETE',
         });
-        if (data.status === 'ok') {
-          setSessions(data.chats);
-          if (activeSessionId === sessionId) {
-            setActiveSessionId(data.chats[0]?.id || '');
-          }
+        const remaining = sessions.filter((session) => session.id !== sessionId);
+        setSessions(remaining);
+        if (activeSessionId === sessionId) {
+          setActiveSessionId(remaining[0]?.id || '');
         }
-      } catch (err) {
-        setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+      } catch {
+        setPersistenceError(lang === 'kk' ? 'Чат жойылмады.' : lang === 'en' ? 'Chat could not be deleted.' : 'Не удалось удалить чат.');
       }
     }
   };
@@ -377,20 +365,17 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
   const handleRenameChat = async (sessionId: string, title: string) => {
     if (!title.trim()) return;
     try {
-      const data = await apiFetch<{ status: string; chats: ChatSession[] }>('/api/chats/rename', {
+      const data = await apiFetch<{ session: Omit<ChatSession, 'messages'> }>(`/api/chats/${encodeURIComponent(sessionId)}`, {
         method: 'PATCH',
-        body: JSON.stringify({
-          sessionId,
-          newTitle: title,
-        }),
+        body: JSON.stringify({ title }),
       });
-      if (data.status === 'ok') {
-        setSessions(data.chats);
-      }
-    } catch (err) {
-      setSessions((prev) =>
-        prev.map((s) => (s.id === sessionId ? { ...s, title } : s))
+      setSessions((current) =>
+        current.map((session) => session.id === sessionId
+          ? { ...data.session, messages: session.messages }
+          : session)
       );
+    } catch {
+      setPersistenceError(lang === 'kk' ? 'Чат атауы өзгертілмеді.' : lang === 'en' ? 'Chat could not be renamed.' : 'Не удалось переименовать чат.');
     } finally {
       setEditingSessionId(null);
     }
@@ -399,142 +384,85 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
   const handleSendPrompt = async (textToSend?: string) => {
     const query = textToSend || promptText;
     if (!query.trim() || loading || !activeSession) return;
-
-    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    const userMsgId = 'usr_' + Date.now();
-    const userMsg: ChatMessage = {
-      id: userMsgId,
-      sender: 'user',
-      text: query,
-      module: selectedModule,
-      timestamp: timeStr,
-    };
-
-    // Update active session locally
-    const updatedMessages = [...activeSession.messages, userMsg];
-    const updatedSession: ChatSession = {
-      ...activeSession,
-      messages: updatedMessages,
-      updatedAt: timeStr,
-      // Auto-update title if it was generic default
-      title:
-        activeSession.messages.length <= 1
-          ? query.slice(0, 30) + (query.length > 30 ? '...' : '')
-          : activeSession.title,
-    };
-
-    setSessions((prev) =>
-      prev.map((s) => (s.id === activeSession.id ? updatedSession : s))
-    );
-
+    const requestId = crypto.randomUUID();
     setPromptText('');
     setLoading(true);
+    setPersistenceError(null);
 
     try {
-      const data = await apiFetch<{ status: string; response: string; xp: number; level: number }>('/api/module', {
+      const data = await apiFetch<{
+        status: string;
+        response: string;
+        user_message: ChatMessage;
+        assistant_message: ChatMessage | null;
+        xp: number;
+        level: number;
+        streak: number;
+        requests_count: number;
+        material_count: number;
+        patent_count: number;
+        modules_used: string[];
+      }>('/api/module', {
         method: 'POST',
+        headers: { 'Idempotency-Key': requestId },
         body: JSON.stringify({
+          session_id: activeSession.id,
           module: selectedModule,
           text: query,
           lang,
         }),
       });
-      if (data.status === 'ok') {
-        const aiMsg: ChatMessage = {
-          id: 'ai_' + Date.now(),
-          sender: 'ai',
-          text: data.response,
-          module: selectedModule,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          xpEarned: 15,
-          queryForAi: query,
-        };
-
-        const finalMessages = [...updatedMessages, aiMsg];
-        const finalSession: ChatSession = {
-          ...updatedSession,
-          messages: finalMessages,
-        };
-
-        setSessions((prev) =>
-          prev.map((s) => (s.id === activeSession.id ? finalSession : s))
-        );
-
-        syncSessionToServer(finalSession);
-
-        onUpdateUser({
-          xp: data.xp,
-          level: data.level,
-        });
-
-        if (onCompleteQuest) {
-          // 1. First contact quest (Ask 1st question to AI tutor)
-          onCompleteQuest('first_contact');
-
-          // 2. Material scout quest (Use MaterialSwap module)
-          if (selectedModule === 'material') {
-            onCompleteQuest('material_scout');
-          }
-
-          // 3. Module explorer quest (Track used modules)
-          try {
-            const usedRaw = localStorage.getItem('eq_used_modules');
-            const usedList: string[] = usedRaw ? JSON.parse(usedRaw) : [];
-            if (!usedList.includes(selectedModule)) {
-              const newList = [...usedList, selectedModule];
-              localStorage.setItem('eq_used_modules', JSON.stringify(newList));
-              if (newList.length >= 5) {
-                onCompleteQuest('module_explorer');
-              }
-            } else if (usedList.length >= 5) {
-              onCompleteQuest('module_explorer');
-            }
-          } catch (err) {
-            console.error(err);
-          }
-
-          // 4. XP hunter quest
-          if (data.xp >= 100) {
-            onCompleteQuest('xp_hunter');
-          }
-
-          // 5. Streak master quest
-          if (user.streak >= 3) {
-            onCompleteQuest('streak_master');
-          }
-        }
-      } else {
-        const errAiMsg: ChatMessage = {
-          id: 'ai_err_' + Date.now(),
-          sender: 'ai',
-          text: 'Произошла ошибка при обращении к ИИ. Пожалуйста, попробуйте еще раз.',
-          module: selectedModule,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        };
-        const finalSession = {
-          ...updatedSession,
-          messages: [...updatedMessages, errAiMsg],
-        };
-        setSessions((prev) =>
-          prev.map((s) => (s.id === activeSession.id ? finalSession : s))
-        );
+      if (data.status !== 'ok' || !data.assistant_message) {
+        throw new Error('Canonical AI response was not persisted.');
       }
-    } catch (err) {
-      console.error(err);
-      const errAiMsg: ChatMessage = {
-        id: 'ai_err_' + Date.now(),
-        sender: 'ai',
-        text: 'Ошибка сети или сервера. Проверьте соединение.',
-        module: selectedModule,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      };
-      const finalSession = {
-        ...updatedSession,
-        messages: [...updatedMessages, errAiMsg],
-      };
-      setSessions((prev) =>
-        prev.map((s) => (s.id === activeSession.id ? finalSession : s))
-      );
+
+      setSessions((current) => current.map((session) => {
+        if (session.id !== activeSession.id) return session;
+        const byId = new Map(session.messages.map((message) => [message.id, message]));
+        byId.set(data.user_message.id, data.user_message);
+        byId.set(data.assistant_message!.id, {
+          ...data.assistant_message!,
+          queryForAi: query,
+        });
+        return { ...session, messages: Array.from(byId.values()) };
+      }));
+
+      onUpdateUser({
+        xp: data.xp,
+        level: data.level,
+        streak: data.streak,
+        requests_count: data.requests_count,
+        material_count: data.material_count,
+        patent_count: data.patent_count,
+        modules_used: data.modules_used,
+      });
+
+      if (onCompleteQuest) {
+        await onCompleteQuest('first_contact');
+        if (selectedModule === 'material') await onCompleteQuest('material_scout');
+        if (data.modules_used.length >= 4) await onCompleteQuest('module_explorer');
+        if (data.xp >= 100) await onCompleteQuest('xp_hunter');
+        if (data.streak >= 3) await onCompleteQuest('streak_master');
+      }
+    } catch {
+      setPersistenceError(lang === 'kk'
+        ? 'Хабарлама сақталмады немесе ЖИ жауабы аяқталмады.'
+        : lang === 'en'
+          ? 'The message could not be persisted or the AI response did not complete.'
+          : 'Сообщение не сохранено или ответ ИИ не был завершён.');
+
+      // Reload canonical rows. A user message may have committed before an AI
+      // provider failure; no client-only error message is treated as canonical.
+      try {
+        const result = await apiFetch<{ messages: ChatMessage[] }>(
+          `/api/chats/${encodeURIComponent(activeSession.id)}/messages`,
+        );
+        setSessions((current) => current.map((session) => session.id === activeSession.id
+          ? { ...session, messages: result.messages }
+          : session));
+      } catch {
+        // The visible persistence error remains the single source of truth.
+      }
     } finally {
       setLoading(false);
     }
@@ -604,6 +532,12 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
           : ''
       }`}
     >
+      {persistenceError && (
+        <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold p-3 rounded-xl">
+          {persistenceError}
+        </div>
+      )}
+
       {/* Top Banner & Sub-View Switcher Bar */}
       <div className={`relative overflow-hidden shrink-0 transition-all ${
         isFullscreen

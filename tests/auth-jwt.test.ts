@@ -110,6 +110,7 @@ test("GET /api/me loads only the verified user's canonical data", async () => {
       patent_count: 0,
       modules_used: ["tutor"],
     },
+    completed_quests: [],
   };
   let requestedUserId = "";
   let receivedToken = "";

@@ -65,6 +65,7 @@ export interface ChatMessage {
   timestamp: string;
   xpEarned?: number;
   queryForAi?: string;
+  requestId?: string;
 }
 
 export interface ChatSession {

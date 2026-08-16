@@ -7,7 +7,11 @@ import { loadServerEnv } from "./server/config/env";
 import { createSupabaseAccessTokenVerifier } from "./server/auth/supabaseJwt";
 import { createRequireAuth } from "./server/middleware/requireAuth";
 import { createAuthenticatedRateLimit } from "./server/middleware/authenticatedRateLimit";
-import { completeUserQuest, createIdempotencyKey, recordAiUsage } from "./server/services/progress";
+import { createChatRepository } from "./server/persistence/chats";
+import { createQuestRepository } from "./server/persistence/quests";
+import { createChatsRouter } from "./server/routes/chats";
+import { createQuestsRouter } from "./server/routes/quests";
+import { createAiRouter } from "./server/routes/ai";
 
 // Load environment variables from .env for local development. Hosted platforms
 // inject their environment variables directly.
@@ -18,6 +22,11 @@ const app = createApp(env);
 const PORT = env.PORT;
 const requireAuth = createRequireAuth(createSupabaseAccessTokenVerifier(env));
 const authenticatedRateLimit = createAuthenticatedRateLimit();
+const chatRepository = createChatRepository(env);
+const questRepository = createQuestRepository(env);
+
+app.use(createChatsRouter(requireAuth, authenticatedRateLimit, chatRepository));
+app.use(createQuestsRouter(requireAuth, authenticatedRateLimit, questRepository));
 
 // === GROQ CLIENT ===
 const getGroqKey = () => env.GROQ_API_KEY || env.GROQ_API_KEY_2;
@@ -102,52 +111,6 @@ const MODULE_PROMPTS: Record<string, string> = {
   patent: "PatentCraft: Анализ патентной чистоты, составление заявок на патент в Казпатент (NIIP KZ) и генерация формулы изобретения согласно законам РК и ГОСТам оформления.",
   engi_legal: "EngiLegal: Проверка инженерных договоров, ГОСТов, СНиП, ТР ТС и регламентов промышленной безопасности Казахстана.",
   engi_match: "EngiMatch: Поиск единомышленников, распределение ролей в инженерном стартапе/дипломном проекте (Mechanical, Electrical, Software, Civil).",
-};
-
-interface ChatMessageData {
-  id: string;
-  sender: 'user' | 'ai';
-  text: string;
-  module: string;
-  timestamp: string;
-  xpEarned?: number;
-  queryForAi?: string;
-}
-
-interface ChatSessionData {
-  id: string;
-  title: string;
-  module: string;
-  createdAt: string;
-  updatedAt: string;
-  messages: ChatMessageData[];
-}
-
-// Temporary compatibility cache. It is keyed only by verified JWT sub and will
-// be replaced by the already-defined PostgreSQL chat tables in the persistence block.
-const userChatsDb: Map<string, ChatSessionData[]> = new Map();
-
-const getOrCreateUserChats = (userId: string): ChatSessionData[] => {
-  if (!userChatsDb.has(userId)) {
-    const defaultSession: ChatSessionData = {
-      id: 'session_default_1',
-      title: 'Инженерный консилиум (Главный)',
-      module: 'tutor',
-      createdAt: new Date().toLocaleDateString('ru-RU'),
-      updatedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      messages: [
-        {
-          id: 'welcome-msg',
-          sender: 'ai',
-          module: 'tutor',
-          text: 'Здравствуйте! Я ваш инженерный ИИ-тьютор **Engineerus**. Выберите модуль выше или задайте вопрос по сопромату, ГОСТ РК, материалам или патентам.',
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        },
-      ],
-    };
-    userChatsDb.set(userId, [defaultSession]);
-  }
-  return userChatsDb.get(userId)!;
 };
 
 const LEADERBOARD_SEED = [
@@ -255,140 +218,13 @@ async function generateAIResponse(prompt: string, moduleName = "tutor", requeste
   return ` **Engineerus AI (Fallback)**\n\nЗапрос: "${cleanPrompt}..."\n\n• Анализ: Не удалось получить ответ от ИИ.\n• Рекомендация: Повторите попытку.`;
 }
 
-// API Routes
-app.post("/api/ai", requireAuth, authenticatedRateLimit, async (req, res) => {
-  const { text, lang = "ru" } = req.body;
-  if (typeof text !== "string" || !text.trim() || text.length > 20_000) {
-    return res.status(400).json({ error: { code: "invalid_prompt", message: "A valid prompt is required." } });
-  }
-
-  let idempotencyKey: string;
-  try {
-    idempotencyKey = createIdempotencyKey(req.header("idempotency-key"), "ai:tutor");
-  } catch {
-    return res.status(400).json({ error: { code: "invalid_idempotency_key", message: "Idempotency-Key is invalid." } });
-  }
-
-  try {
-    const detectedLang = detectLanguage(text, lang);
-    const responseText = await generateAIResponse(text, "tutor", detectedLang);
-    const progress = await recordAiUsage(
-      env,
-      res.locals.auth.userId,
-      "tutor",
-      10,
-      idempotencyKey,
-    );
-    return res.json({ status: "ok", response: responseText, ...progress, lang: detectedLang });
-  } catch {
-    return res.status(503).json({ error: { code: "ai_unavailable", message: "The AI service is temporarily unavailable." } });
-  }
-});
-
-app.post("/api/module", requireAuth, authenticatedRateLimit, async (req, res) => {
-  const { module: moduleName, text, lang = "ru" } = req.body;
-  const allowedModules = new Set(["tutor", "material", "patent", "engi_legal", "engi_match"]);
-  if (typeof text !== "string" || !text.trim() || text.length > 20_000 || !allowedModules.has(moduleName)) {
-    return res.status(400).json({ error: { code: "invalid_module_request", message: "A valid module request is required." } });
-  }
-
-  let idempotencyKey: string;
-  try {
-    idempotencyKey = createIdempotencyKey(req.header("idempotency-key"), `ai:${moduleName}`);
-  } catch {
-    return res.status(400).json({ error: { code: "invalid_idempotency_key", message: "Idempotency-Key is invalid." } });
-  }
-
-  try {
-    const detectedLang = detectLanguage(text, lang);
-    const responseText = await generateAIResponse(text, moduleName, detectedLang);
-    const progress = await recordAiUsage(
-      env,
-      res.locals.auth.userId,
-      moduleName,
-      15,
-      idempotencyKey,
-    );
-    return res.json({ status: "ok", response: responseText, ...progress, lang: detectedLang });
-  } catch {
-    return res.status(503).json({ error: { code: "ai_unavailable", message: "The AI service is temporarily unavailable." } });
-  }
-});
-
-app.get("/api/chats", requireAuth, authenticatedRateLimit, (_req, res) => {
-  res.json({ status: "ok", chats: getOrCreateUserChats(res.locals.auth.userId) });
-});
-
-app.post("/api/chats/save", requireAuth, authenticatedRateLimit, (req, res) => {
-  const { session } = req.body;
-  if (!session?.id) return res.status(400).json({ error: "Session required" });
-  const userId = res.locals.auth.userId;
-  const chats = getOrCreateUserChats(userId);
-  const idx = chats.findIndex(s => s.id === session.id);
-  if (idx >= 0) chats[idx] = session; else chats.unshift(session);
-  userChatsDb.set(userId, chats);
-  res.json({ status: "ok", chats });
-});
-
-app.post("/api/chats/new", requireAuth, authenticatedRateLimit, (req, res) => {
-  const { module = "tutor", title } = req.body;
-  const userId = res.locals.auth.userId;
-  const chats = getOrCreateUserChats(userId);
-  const newSession: ChatSessionData = {
-    id: 'session_' + Date.now(),
-    title: title || `Новый сеанс (${chats.length + 1})`,
-    module,
-    createdAt: new Date().toLocaleDateString('ru-RU'),
-    updatedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    messages: [{ id: 'welcome_' + Date.now(), sender: 'ai', module, text: 'Новый чат создан! Пожалуйста, напишите ваш инженерный вопрос.', timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }],
-  };
-  chats.unshift(newSession);
-  userChatsDb.set(userId, chats);
-  res.json({ status: "ok", newSession, chats });
-});
-
-app.delete("/api/chats/:sessionId", requireAuth, authenticatedRateLimit, (req, res) => {
-  const { sessionId } = req.params;
-  const userId = res.locals.auth.userId;
-  const chats = getOrCreateUserChats(userId).filter(s => s.id !== sessionId);
-  userChatsDb.set(userId, chats);
-  res.json({ status: "ok", chats });
-});
-
-app.patch("/api/chats/rename", requireAuth, authenticatedRateLimit, (req, res) => {
-  const { sessionId, newTitle } = req.body;
-  const chats = getOrCreateUserChats(res.locals.auth.userId);
-  const target = chats.find(s => s.id === sessionId);
-  if (target && newTitle) { target.title = newTitle; target.updatedAt = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
-  res.json({ status: "ok", chats });
-});
+app.use(createAiRouter(requireAuth, authenticatedRateLimit, {
+  repository: chatRepository,
+  detectLanguage,
+  generateResponse: generateAIResponse,
+}));
 
 app.get("/api/leaderboard", (req, res) => res.json({ leaderboard: LEADERBOARD_SEED, total: LEADERBOARD_SEED.length }));
-
-app.get("/api/quests", (req, res) => {
-  const QUESTS = {
-    first_contact: { id: "first_contact", name: "Первый контакт", name_kk: "Алғашқы байланыс", name_en: "First Contact", desc: "Задай вопрос ИИ-репетитору", desc_kk: "ЖИ-репетиторға алғашқы сұрауды жібер", desc_en: "Ask your first question to AI Tutor", xp: 20, reward: "Бейдж Новичок" },
-    material_scout: { id: "material_scout", name: "Поиск материала", name_kk: "Материал іздеу", name_en: "Material Scout", desc: "Используй модуль MaterialSwap", desc_kk: "MaterialSwap модулін қолдан", desc_en: "Use the MaterialSwap module", xp: 30, reward: "Бейдж Исследователь" },
-    streak_master: { id: "streak_master", name: "Серия побед", name_kk: "Жеңіс сериясы", name_en: "Streak Master", desc: "Удерживай стрик 3 дня подряд", desc_kk: "3 күн қатарынан кір", desc_en: "Maintain a 3-day streak", xp: 50, reward: "Бейдж Постоянец" },
-    xp_hunter: { id: "xp_hunter", name: "Охотник за XP", name_kk: "XP аңшысы", name_en: "XP Hunter", desc: "Набери 100 XP", desc_kk: "100 XP жина", desc_en: "Earn 100 XP", xp: 40, reward: "Бейдж Опытный" },
-    module_explorer: { id: "module_explorer", name: "Инженер-универсал", name_kk: "Модуль зерттеушісі", name_en: "Module Explorer", desc: "Используй все 5 инженерных модулей", desc_kk: "Барлық 5 модульді қолдан", desc_en: "Try all 5 engineering modules", xp: 100, reward: "Бейдж Мастер" },
-  };
-  res.json({ quests: QUESTS, total: 5 });
-});
-
-app.post("/api/quests/complete", requireAuth, authenticatedRateLimit, async (req, res) => {
-  const { quest_id: questId } = req.body;
-  if (typeof questId !== "string" || !/^[a-z0-9_-]{1,100}$/.test(questId)) {
-    return res.status(400).json({ error: { code: "invalid_quest", message: "A valid quest is required." } });
-  }
-
-  try {
-    const result = await completeUserQuest(env, res.locals.auth.userId, questId);
-    return res.json({ status: "ok", ...result });
-  } catch {
-    return res.status(503).json({ error: { code: "quest_unavailable", message: "Quest completion is temporarily unavailable." } });
-  }
-});
 
 async function startServer() {
   if (env.NODE_ENV !== "production") {

@@ -62,6 +62,7 @@ redirect URLs receive a separate production configuration review.
 npm run typecheck
 npm run build
 npm test
+npm run test:persistence
 ```
 
 The liveness endpoints are `GET /health` and `GET /api/health`. They do not

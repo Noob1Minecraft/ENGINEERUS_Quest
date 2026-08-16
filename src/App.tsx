@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { UserProfile, Language } from './types';
+import { UserProfile, Language, Quest } from './types';
 import { TRANSLATIONS, QUESTS } from './data';
 import { verifySystemIntegrity } from './utils/integrity';
 import { Header } from './components/Header';
@@ -51,7 +51,35 @@ type MeResponse = {
     patent_count: number;
     modules_used: string[];
   };
+  completed_quests: string[];
 };
+
+type QuestStateResponse = {
+  quests: Array<{
+    id: string;
+    name: Partial<Record<Language, string>>;
+    description: Partial<Record<Language, string>>;
+    reward_label: Partial<Record<Language, string>>;
+    xp_reward: number;
+  }>;
+  completed_quests: string[];
+};
+
+function mapQuestDefinitions(definitions: QuestStateResponse['quests']): Record<string, Quest> {
+  return Object.fromEntries(definitions.map((definition) => [definition.id, {
+    id: definition.id,
+    name: definition.name.ru || definition.id,
+    name_kk: definition.name.kk || definition.name.ru || definition.id,
+    name_en: definition.name.en || definition.name.ru || definition.id,
+    desc: definition.description.ru || '',
+    desc_kk: definition.description.kk || definition.description.ru || '',
+    desc_en: definition.description.en || definition.description.ru || '',
+    xp: definition.xp_reward,
+    reward: definition.reward_label.ru || '',
+    reward_kk: definition.reward_label.kk || definition.reward_label.ru || '',
+    reward_en: definition.reward_label.en || definition.reward_label.ru || '',
+  }]));
+}
 
 export default function App() {
   const auth = useAuth();
@@ -64,6 +92,7 @@ export default function App() {
   const [isOnboardingOpen, setIsOnboardingOpen] = useState<boolean>(false);
 
   const [user, setUser] = useState<UserProfile>(GUEST_USER);
+  const [quests, setQuests] = useState<Record<string, Quest>>(QUESTS);
 
   const t = TRANSLATIONS[lang];
 
@@ -89,13 +118,19 @@ export default function App() {
     if (auth.loading) return;
     if (!auth.user) {
       setUser(GUEST_USER);
+      setQuests(QUESTS);
       return;
     }
 
     let active = true;
-    apiFetch<MeResponse>('/api/me')
-      .then(({ profile, progress }) => {
+    setQuests({});
+    Promise.all([
+      apiFetch<MeResponse>('/api/me'),
+      apiFetch<QuestStateResponse>('/api/quests'),
+    ])
+      .then(([{ profile, progress, completed_quests }, questState]) => {
         if (!active) return;
+        setQuests(mapQuestDefinitions(questState.quests));
         setUser({
           id: profile.id,
           telegram_id: profile.telegram_user_id,
@@ -104,7 +139,9 @@ export default function App() {
           xp: progress.total_xp,
           level: progress.level,
           streak: progress.streak_days,
-          completed_quests: [],
+          completed_quests: completed_quests.length > 0
+            ? completed_quests
+            : questState.completed_quests,
           achievements: [],
           requests_count: progress.requests_count,
           material_count: progress.material_count,
@@ -141,7 +178,7 @@ export default function App() {
       });
       if (data.status === 'ok') {
         setUser((prev) => {
-          const quest = QUESTS[questId];
+          const quest = quests[questId];
           const newBadge = quest ? quest.reward : null;
           const serverAchievements = Array.isArray(data.achievements)
             ? data.achievements.filter((value): value is string => typeof value === 'string')
@@ -156,7 +193,9 @@ export default function App() {
             ...prev,
             xp: Number(data.total_xp ?? prev.xp),
             level: Number(data.level ?? prev.level),
-            completed_quests: Array.from(new Set([...prev.completed_quests, questId])),
+            completed_quests: Array.isArray(data.completed_quests)
+              ? data.completed_quests.filter((value): value is string => typeof value === 'string')
+              : Array.from(new Set([...prev.completed_quests, questId])),
             achievements: updatedAchievements,
           };
         });
@@ -295,6 +334,7 @@ export default function App() {
         {activeTab === 'quests' && (
           <QuestsTab
             user={user}
+            quests={quests}
             lang={lang}
             onCompleteQuest={handleCompleteQuest}
             onNavigateToQuest={handleNavigateToQuest}

@@ -17,6 +17,7 @@
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
+    "test:persistence": "tsx tests/run-local-persistence-tests.ts",
     "test:rls": "supabase test db"
   },
   "dependencies": {

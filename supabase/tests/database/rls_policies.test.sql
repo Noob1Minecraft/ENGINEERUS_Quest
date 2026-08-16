@@ -361,6 +361,18 @@ select is(
 );
 
 set local role service_role;
+do $$
+begin
+  perform public.record_user_progress(
+    '00000000-0000-4000-8000-000000000001',
+    1,
+    0,
+    0,
+    null
+  );
+end;
+$$;
+
 select is(
   (
     select (public.complete_quest(

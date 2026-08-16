@@ -20,6 +20,7 @@ export type CanonicalUser = {
     patent_count: number;
     modules_used: string[];
   };
+  completed_quests: string[];
 };
 
 export type LoadCanonicalUser = (
@@ -30,7 +31,7 @@ export type LoadCanonicalUser = (
 export function createCanonicalUserLoader(env: ServerEnv): LoadCanonicalUser {
   return async (userId, accessToken) => {
     const client = createSupabaseUserClient(env, accessToken);
-    const [profileResult, progressResult] = await Promise.all([
+    const [profileResult, progressResult, questsResult] = await Promise.all([
       client
         .from("profiles")
         .select("id,username,display_name,avatar_url,preferred_lang,telegram_user_id")
@@ -41,15 +42,21 @@ export function createCanonicalUserLoader(env: ServerEnv): LoadCanonicalUser {
         .select("total_xp,level,streak_days,requests_count,material_count,patent_count,modules_used")
         .eq("user_id", userId)
         .single(),
+      client
+        .from("user_quests")
+        .select("quest_id")
+        .eq("user_id", userId)
+        .eq("status", "completed"),
     ]);
 
-    if (profileResult.error || progressResult.error) {
+    if (profileResult.error || progressResult.error || questsResult.error) {
       throw new Error("Canonical user data is unavailable.");
     }
 
     return {
       profile: profileResult.data as CanonicalUser["profile"],
       progress: progressResult.data as CanonicalUser["progress"],
+      completed_quests: (questsResult.data as Array<{ quest_id: string }>).map((row) => row.quest_id),
     };
   };
 }

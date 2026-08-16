@@ -1,17 +1,19 @@
 import React, { useState } from 'react';
-import { UserProfile, Language } from '../types';
-import { QUESTS, TRANSLATIONS } from '../data';
+import { UserProfile, Language, Quest } from '../types';
+import { TRANSLATIONS } from '../data';
 import { CheckCircle2, Zap, Award, ArrowRight, MessageSquare, AlertCircle, Sparkles, Layers, Cpu } from 'lucide-react';
 
 interface QuestsTabProps {
   user: UserProfile;
+  quests: Record<string, Quest>;
   lang: Language;
-  onCompleteQuest: (questId: string) => void;
+  onCompleteQuest: (questId: string) => Promise<void>;
   onNavigateToQuest?: (tab: string, module?: string) => void;
 }
 
 export const QuestsTab: React.FC<QuestsTabProps> = ({
   user,
+  quests,
   lang,
   onCompleteQuest,
   onNavigateToQuest,
@@ -130,12 +132,12 @@ export const QuestsTab: React.FC<QuestsTabProps> = ({
           </p>
         </div>
         <div className="self-start sm:self-auto text-xs font-extrabold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-full border border-blue-100">
-          {t.completed || 'Выполнено'}: {user.completed_quests.length} {t.completedOf || 'из'} {Object.keys(QUESTS).length}
+          {t.completed || 'Выполнено'}: {user.completed_quests.length} {t.completedOf || 'из'} {Object.keys(quests).length}
         </div>
       </div>
 
       <div className="space-y-3 sm:space-y-4">
-        {Object.values(QUESTS).map((quest) => {
+        {Object.values(quests).map((quest) => {
           const isCompleted = user.completed_quests.includes(quest.id);
           const name = lang === 'kk' ? quest.name_kk : lang === 'en' ? quest.name_en : quest.name;
           const desc = lang === 'kk' ? quest.desc_kk : lang === 'en' ? quest.desc_en : quest.desc;
