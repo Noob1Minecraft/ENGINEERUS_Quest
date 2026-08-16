@@ -1,34 +1,21 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import cors from "cors";
 import dotenv from "dotenv";
+import { createApp } from "./server/app";
+import { loadServerEnv } from "./server/config/env";
 
 // Load environment variables from .env for local development. Hosted platforms
 // inject their environment variables directly.
 dotenv.config();
 
-const app = express();
-const PORT = Number(process.env.PORT) || 3000;
-
-app.use(express.json());
-
-// CORS middleware (ПЕРЕД всеми роутами)
-app.use(cors({
-  origin: [
-    'https://engineerus-quest.vercel.app',
-    'https://engineerus-quest-git-main-enginnerus.vercel.app',
-    'http://localhost:5173',
-    'http://localhost:3000'
-  ],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-}));
+const env = loadServerEnv(process.env);
+const app = createApp(env);
+const PORT = env.PORT;
 
 // === GROQ CLIENT ===
-const getGroqKey = () => process.env.GROQ_API_KEY || process.env.GROQ_API_KEY_2;
-const GROQ_MODEL = process.env.GROQ_MODEL || "qwen/qwen3.6-27b";
+const getGroqKey = () => env.GROQ_API_KEY || env.GROQ_API_KEY_2;
+const GROQ_MODEL = env.GROQ_MODEL;
 const GROQ_FALLBACK_MODELS = [
   "openai/gpt-oss-120b",
   "openai/gpt-oss-20b",
@@ -462,7 +449,7 @@ app.post("/api/quests/complete", (req, res) => {
 });
 
 async function startServer() {
-  if (process.env.NODE_ENV !== "production") {
+  if (env.NODE_ENV !== "production") {
     const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
     app.use(vite.middlewares);
   } else {
