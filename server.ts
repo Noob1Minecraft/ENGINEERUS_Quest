@@ -2,9 +2,14 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import cors from "cors";
+import dotenv from "dotenv";
+
+// Load environment variables from .env for local development. Hosted platforms
+// inject their environment variables directly.
+dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 app.use(express.json());
 
@@ -24,6 +29,11 @@ app.use(cors({
 // === GROQ CLIENT ===
 const getGroqKey = () => process.env.GROQ_API_KEY || process.env.GROQ_API_KEY_2;
 const GROQ_MODEL = process.env.GROQ_MODEL || "qwen/qwen3.6-27b";
+const GROQ_FALLBACK_MODELS = [
+  "openai/gpt-oss-120b",
+  "openai/gpt-oss-20b",
+];
+const GROQ_MODEL_FALLBACK_STATUSES = new Set([400, 404]);
 
 // === УЛУЧШЕННОЕ ОПРЕДЕЛЕНИЕ ЯЗЫКА ===
 function detectLanguage(text: string, requestedLang: string = "ru"): string {
@@ -210,45 +220,64 @@ async function generateAIResponse(prompt: string, moduleName = "tutor", requeste
     return ` **Engineerus AI (Demo Mode)**\n\nЗапрос: "${prompt.slice(0, 50)}..."\n\n• Анализ: Демо-ответ. Проверьте расчёты.\n• XP: +15`;
   }
 
-  try {
-    const baseSystemPrompt = SYSTEM_PROMPTS[lang] || SYSTEM_PROMPTS.ru;
-    const moduleInfo = MODULE_PROMPTS[moduleName] || MODULE_PROMPTS.tutor;
-    
-    // Жесткая инструкция с фиксацией языка
-    const languageInstruction = lang === 'kk' 
-      ? 'ЖАУАПТЫ ТЕК ҚАЗАҚ ТІЛІНДЕ ЖАЗ! АҒЫЛШЫН ТІЛІН ҚОЛДАНУҒА ТЫЙЫМ САЛЫНАДЫ!' 
-      : lang === 'en' 
-      ? 'WRITE THE ENTIRE RESPONSE ONLY IN ENGLISH! DO NOT USE ANY OTHER LANGUAGE!' 
+  const baseSystemPrompt = SYSTEM_PROMPTS[lang] || SYSTEM_PROMPTS.ru;
+  const moduleInfo = MODULE_PROMPTS[moduleName] || MODULE_PROMPTS.tutor;
+
+  // Жесткая инструкция с фиксацией языка
+  const languageInstruction = lang === 'kk'
+    ? 'ЖАУАПТЫ ТЕК ҚАЗАҚ ТІЛІНДЕ ЖАЗ! АҒЫЛШЫН ТІЛІН ҚОЛДАНУҒА ТЫЙЫМ САЛЫНАДЫ!'
+    : lang === 'en'
+      ? 'WRITE THE ENTIRE RESPONSE ONLY IN ENGLISH! DO NOT USE ANY OTHER LANGUAGE!'
       : 'НАПИШИ ВЕСЬ ОТВЕТ ИСКЛЮЧИТЕЛЬНО НА РУССКОМ ЯЗЫКЕ! ИСПОЛЬЗОВАНИЕ АНГЛИЙСКОГО ЯЗЫКА ЗАПРЕЩЕНО!';
 
-    const systemInstruction = `${baseSystemPrompt}\n\nСпециализация модуля: ${moduleInfo}\n\n[ЯЗЫКОВОЙ ПРИКАЗ]: ${languageInstruction}`;
-    
-    console.log(`📨 Sending request to Groq API (${GROQ_MODEL}) | Detected lang: [${lang}] | Cyrillic/Latin ratio in prompt`);
+  const systemInstruction = `${baseSystemPrompt}\n\nСпециализация модуля: ${moduleInfo}\n\n[ЯЗЫКОВОЙ ПРИКАЗ]: ${languageInstruction}`;
+  const modelCandidates = [...new Set([GROQ_MODEL, ...GROQ_FALLBACK_MODELS])];
 
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: GROQ_MODEL,
-        messages: [
-          { role: "system", content: systemInstruction },
-          { 
-            role: "user", 
-            content: `${prompt}\n\n[SYSTEM INSTRUCTION: You MUST reply in ${lang === 'ru' ? 'Russian' : lang === 'kk' ? 'Kazakh' : 'English'} language only. Do not use any other language.]`
-          }
-        ],
-        temperature: 0.2,
-        max_tokens: 600
-      })
-    });
+  for (let attempt = 0; attempt < modelCandidates.length; attempt++) {
+    const model = modelCandidates[attempt];
+    console.log(`📨 Sending request to Groq API (${model}) | Detected lang: [${lang}] | Attempt: ${attempt + 1}/${modelCandidates.length}`);
+
+    let response: Response;
+    try {
+      response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: "system", content: systemInstruction },
+            {
+              role: "user",
+              content: `${prompt}\n\n[SYSTEM INSTRUCTION: You MUST reply in ${lang === 'ru' ? 'Russian' : lang === 'kk' ? 'Kazakh' : 'English'} language only. Do not use any other language.]`
+            }
+          ],
+          temperature: 0.2,
+          max_tokens: 600
+        })
+      });
+    } catch (error: any) {
+      // Network failures are not retried across models because they are not
+      // model-specific and doing so would only multiply traffic and latency.
+      console.error(`Groq network error [model=${model}]:`, error.message);
+      break;
+    }
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      console.error(" Groq API Error:", response.status, errorData);
-      throw new Error(`Groq API failed: ${response.status}`);
+      const errorMessage = errorData?.error?.message || "Unknown Groq error";
+      console.error(`Groq API error [model=${model}, status=${response.status}]:`, errorMessage);
+
+      const hasAnotherModel = attempt < modelCandidates.length - 1;
+      if (hasAnotherModel && GROQ_MODEL_FALLBACK_STATUSES.has(response.status)) {
+        continue;
+      }
+
+      // Rate limits, server errors, permission errors, and all other statuses
+      // are non-retryable here. In particular, a 429 is never retried blindly.
+      break;
     }
 
     const data = await response.json();
@@ -256,15 +285,15 @@ async function generateAIResponse(prompt: string, moduleName = "tutor", requeste
 
     if (aiText) {
       return aiText;
-    } else {
-      throw new Error("Empty response");
     }
 
-  } catch (error: any) {
-    console.error(" Error during fetch:", error.message);
-    const cleanPrompt = prompt.trim().slice(0, 50);
-    return ` **Engineerus AI (Fallback)**\n\nЗапрос: "${cleanPrompt}..."\n\n• Анализ: Не удалось получить ответ от ИИ.\n• Рекомендация: Повторите попытку.`;
+    // An empty successful response is not assumed to be model-specific.
+    console.error(`Groq returned an empty response [model=${model}].`);
+    break;
   }
+
+  const cleanPrompt = prompt.trim().slice(0, 50);
+  return ` **Engineerus AI (Fallback)**\n\nЗапрос: "${cleanPrompt}..."\n\n• Анализ: Не удалось получить ответ от ИИ.\n• Рекомендация: Повторите попытку.`;
 }
 
 // Роут диагностики
