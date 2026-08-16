@@ -280,7 +280,16 @@ async function generateAIResponse(prompt: string, moduleName = "tutor", requeste
       break;
     }
 
-    const data = await response.json();
+    let data: any;
+    try {
+      data = await response.json();
+    } catch (error: any) {
+      // A malformed successful response is not model-specific, so do not retry
+      // another model. Fall through to the existing user-facing fallback.
+      console.error(`Groq returned malformed JSON [model=${model}]:`, error.message);
+      break;
+    }
+
     const aiText = data.choices?.[0]?.message?.content?.trim();
 
     if (aiText) {
