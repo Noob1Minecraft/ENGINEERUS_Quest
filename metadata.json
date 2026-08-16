@@ -1,6 +1,6 @@
 {
   "name": "Engineerus Quest",
-  "description": "Gamified AI learning platform for engineering students in Kazakhstan with TUTOR AI, MaterialSwap, PatentCraft, EngiLegal, and EngiMatch.",
+  "description": "Gamified AI learning platform for engineering students in Kazakhstan with TUTOR AI, MaterialSwap, PatentCraft, EngiLegal, and EngiMatch. Powered by the Groq API.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": []
 }
