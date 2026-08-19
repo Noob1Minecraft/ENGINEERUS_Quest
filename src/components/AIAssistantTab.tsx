@@ -383,13 +383,28 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
 
   const handleSendPrompt = async (textToSend?: string) => {
     const query = textToSend || promptText;
-    if (!query.trim() || loading || !activeSession) return;
+    if (!query.trim() || loading) return;
     const requestId = crypto.randomUUID();
+    let targetSessionId = activeSession?.id;
     setPromptText('');
     setLoading(true);
     setPersistenceError(null);
 
     try {
+      if (!targetSessionId) {
+        const created = await apiFetch<{ session: Omit<ChatSession, 'messages'> }>('/api/chats', {
+          method: 'POST',
+          body: JSON.stringify({
+            module: selectedModule,
+            title: `Квест ${MODULE_CONFIG[selectedModule]?.label || 'ИИ'} (#${sessions.length + 1})`,
+          }),
+        });
+        const newSession: ChatSession = { ...created.session, messages: [] };
+        targetSessionId = newSession.id;
+        setSessions((current) => [newSession, ...current]);
+        setActiveSessionId(newSession.id);
+      }
+
       const data = await apiFetch<{
         status: string;
         response: string;
@@ -406,7 +421,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
         method: 'POST',
         headers: { 'Idempotency-Key': requestId },
         body: JSON.stringify({
-          session_id: activeSession.id,
+          session_id: targetSessionId,
           module: selectedModule,
           text: query,
           lang,
@@ -417,7 +432,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
       }
 
       setSessions((current) => current.map((session) => {
-        if (session.id !== activeSession.id) return session;
+        if (session.id !== targetSessionId) return session;
         const byId = new Map(session.messages.map((message) => [message.id, message]));
         byId.set(data.user_message.id, data.user_message);
         byId.set(data.assistant_message!.id, {
@@ -454,10 +469,11 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
       // Reload canonical rows. A user message may have committed before an AI
       // provider failure; no client-only error message is treated as canonical.
       try {
+        if (!targetSessionId) return;
         const result = await apiFetch<{ messages: ChatMessage[] }>(
-          `/api/chats/${encodeURIComponent(activeSession.id)}/messages`,
+          `/api/chats/${encodeURIComponent(targetSessionId)}/messages`,
         );
-        setSessions((current) => current.map((session) => session.id === activeSession.id
+        setSessions((current) => current.map((session) => session.id === targetSessionId
           ? { ...session, messages: result.messages }
           : session));
       } catch {
