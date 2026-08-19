@@ -2,6 +2,14 @@ import { supabase } from "../lib/supabase";
 
 const API_URL = normalizeApiBase(import.meta.env?.VITE_API_URL || "");
 
+let currentAccessToken: string | null = null;
+
+if (supabase) {
+  supabase.auth.onAuthStateChange((_event, session) => {
+    currentAccessToken = session?.access_token ?? null;
+  });
+}
+
 type ApiErrorBody = {
   error?: {
     code?: string;
@@ -85,8 +93,11 @@ export const apiFetch = createApiFetch({
   fetchImpl: (input, init) => fetch(input, init),
   async getAccessToken() {
     if (!supabase) return null;
+    if (currentAccessToken) return currentAccessToken;
+
     const { data, error } = await supabase.auth.getSession();
     if (error) throw new ApiError(401, "session_unavailable", "Authentication session is unavailable.");
-    return data.session?.access_token ?? null;
+    currentAccessToken = data.session?.access_token ?? null;
+    return currentAccessToken;
   },
 });
