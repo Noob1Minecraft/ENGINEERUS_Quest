@@ -4,10 +4,8 @@ const API_URL = normalizeApiBase(import.meta.env?.VITE_API_URL || "");
 
 let currentAccessToken: string | null = null;
 
-if (supabase) {
-  supabase.auth.onAuthStateChange((_event, session) => {
-    currentAccessToken = session?.access_token ?? null;
-  });
+export function setApiAccessToken(accessToken: string | null): void {
+  currentAccessToken = accessToken;
 }
 
 type ApiErrorBody = {

@@ -13,6 +13,7 @@ import type {
   User,
 } from "@supabase/supabase-js";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
+import { setApiAccessToken } from "../utils/api";
 
 type AuthSnapshot = {
   session: Session | null;
@@ -34,20 +35,26 @@ export async function restoreAuthSession(
   onSnapshot: (snapshot: AuthSnapshot) => void,
 ): Promise<() => void> {
   let authEventReceived = false;
+  const publishSnapshot = (snapshot: AuthSnapshot) => {
+    setApiAccessToken(snapshot.session?.access_token ?? null);
+    onSnapshot(snapshot);
+  };
+
   const { data: listener } = client.auth.onAuthStateChange((_event, session) => {
     authEventReceived = true;
-    onSnapshot({ session, user: session?.user ?? null, loading: false });
+    publishSnapshot({ session, user: session?.user ?? null, loading: false });
   });
 
   const { data, error } = await client.auth.getSession();
   if (error) {
+    setApiAccessToken(null);
     listener.subscription.unsubscribe();
     throw error;
   }
 
   // Do not overwrite a newer auth event that arrived while getSession resolved.
   if (!authEventReceived) {
-    onSnapshot({
+    publishSnapshot({
       session: data.session,
       user: data.session?.user ?? null,
       loading: false,
