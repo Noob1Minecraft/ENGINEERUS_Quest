@@ -50,7 +50,10 @@ test("builds an explicit final language policy for every Groq-powered module", (
 });
 
 test("sends the resolved language and centralized system policy to Groq without a real API call", async () => {
-  const requests: Array<{ messages: Array<{ role: string; content: string }> }> = [];
+  const requests: Array<{
+    messages: Array<{ role: string; content: string }>;
+    reasoning_effort?: string;
+  }> = [];
   const fetchStub: typeof fetch = async (_input, init) => {
     requests.push(JSON.parse(String(init?.body)));
     return new Response(JSON.stringify({ choices: [{ message: { content: "stubbed" } }] }), {
@@ -73,9 +76,31 @@ test("sends the resolved language and centralized system policy to Groq without 
     const systemMessage = body.messages.find(({ role }) => role === "system")?.content ?? "";
     const userMessage = body.messages.find(({ role }) => role === "user")?.content ?? "";
     assert.equal(systemMessage, buildSystemPrompt(requestedLanguage, module));
+    assert.equal(body.reasoning_effort, "none");
     assert.ok(userMessage.includes(userInstruction));
     assert.match(userMessage, /Preserve technical notation and identifiers/);
   }
+});
+
+test("removes provider think blocks while preserving the Russian final answer", async () => {
+  const russianAnswer = "**Момент инерции** характеризует сопротивление тела изменению вращения.";
+  const fetchStub: typeof fetch = async () => new Response(JSON.stringify({
+    choices: [{
+      message: {
+        content: `<think>Here's a thinking process that must remain private.</think>\n\n${russianAnswer}`,
+        reasoning: "This field must never be exposed.",
+      },
+    }],
+  }), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+  const respond = createGroqResponder({ apiKey: "test-placeholder", model: "test-model", fetchImpl: fetchStub });
+
+  const response = await respond("Что такое момент инерции?", "tutor", "ru");
+
+  assert.equal(response, russianAnswer);
+  assert.doesNotMatch(response, /<\/?think\b|thinking process|reasoning field/iu);
 });
 
 

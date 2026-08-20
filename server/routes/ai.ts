@@ -2,6 +2,7 @@ import { Router, type RequestHandler } from "express";
 import type { ChatModule, ChatRepository } from "../persistence/chats";
 import { PersistenceError, sendPersistenceError } from "../persistence/errors";
 import { createIdempotencyKey } from "../services/progress";
+import { sanitizeAssistantContent } from "../ai/responseSafety";
 
 const SESSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MODULES: readonly ChatModule[] = ["tutor", "material", "patent", "engi_legal", "engi_match"];
@@ -75,7 +76,9 @@ export function createAiRouter(
         return;
       }
 
-      const responseText = await dependencies.generateResponse(canonicalPrompt, moduleName, detectedLanguage);
+      const generatedResponse = await dependencies.generateResponse(canonicalPrompt, moduleName, detectedLanguage);
+      const responseText = sanitizeAssistantContent(generatedResponse);
+      if (!responseText) throw new Error("AI response did not contain user-facing content.");
       const completed = await dependencies.repository.completeExchange(
         userId,
         accessToken,

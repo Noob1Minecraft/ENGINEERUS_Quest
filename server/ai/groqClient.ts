@@ -1,4 +1,5 @@
 import { buildSystemPrompt, languageName, resolveResponseLanguage, type AiModule } from "./languagePolicy";
+import { sanitizeAssistantContent } from "./responseSafety";
 
 const FALLBACK_MODELS = ["openai/gpt-oss-120b", "openai/gpt-oss-20b"];
 const MODEL_FALLBACK_STATUSES = new Set([400, 404]);
@@ -73,6 +74,7 @@ export function createGroqResponder(options: GroqResponderOptions) {
               ],
               temperature: 0.2,
               max_tokens: 600,
+              reasoning_effort: "none",
             }),
           });
         } catch (error) {
@@ -91,7 +93,7 @@ export function createGroqResponder(options: GroqResponderOptions) {
 
         try {
           const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
-          const content = data.choices?.[0]?.message?.content?.trim();
+          const content = sanitizeAssistantContent(data.choices?.[0]?.message?.content ?? "");
           if (content) return content;
           console.error(`Groq returned an empty response [model=${model}].`);
         } catch (error) {
