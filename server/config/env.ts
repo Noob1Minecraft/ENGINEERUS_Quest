@@ -10,6 +10,18 @@ const optionalUrl = z.preprocess(
   z.string().trim().url().optional(),
 );
 
+const disabledByDefaultBoolean = z.preprocess(
+  (value) => {
+    if (typeof value !== "string") return value;
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "") return undefined;
+    if (normalized === "true") return true;
+    if (normalized === "false") return false;
+    return value;
+  },
+  z.boolean().default(false),
+);
+
 const serverEnvSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().min(1).max(65_535).default(3000),
@@ -17,6 +29,7 @@ const serverEnvSchema = z.object({
   GROQ_API_KEY: optionalString,
   GROQ_API_KEY_2: optionalString,
   GROQ_MODEL: z.string().trim().min(1).default("qwen/qwen3.6-27b"),
+  KAZSTANDARD_LOOKUP_ENABLED: disabledByDefaultBoolean,
   SUPABASE_URL: optionalUrl,
   SUPABASE_PUBLISHABLE_KEY: optionalString,
   SUPABASE_SECRET_KEY: optionalString,

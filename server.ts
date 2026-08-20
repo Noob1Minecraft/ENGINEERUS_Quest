@@ -14,6 +14,8 @@ import { createQuestsRouter } from "./server/routes/quests";
 import { createAiRouter } from "./server/routes/ai";
 import { createGroqResponder } from "./server/ai/groqClient";
 import { resolveResponseLanguage } from "./server/ai/languagePolicy";
+import { createKazStandardClient } from "./server/standards/kazStandardClient";
+import { createStandardsService } from "./server/standards/standardsService";
 
 // Load environment variables from .env for local development. Hosted platforms
 // inject their environment variables directly.
@@ -36,6 +38,10 @@ const generateAIResponse = createGroqResponder({
   secondaryApiKey: env.GROQ_API_KEY_2,
   model: env.GROQ_MODEL,
 });
+const standardsService = createStandardsService({
+  enabled: env.KAZSTANDARD_LOOKUP_ENABLED,
+  client: createKazStandardClient(),
+});
 
 const LEADERBOARD_SEED = [
   { rank: 1, name: "Арман Сериков (Satbayev Univ)", xp: 1450, level: 15, streak: 18 },
@@ -49,6 +55,7 @@ app.use(createAiRouter(requireAuth, authenticatedRateLimit, {
   repository: chatRepository,
   detectLanguage,
   generateResponse: generateAIResponse,
+  lookupStandards: standardsService.searchVerifiedStandards,
 }));
 
 app.get("/api/leaderboard", (req, res) => res.json({ leaderboard: LEADERBOARD_SEED, total: LEADERBOARD_SEED.length }));
