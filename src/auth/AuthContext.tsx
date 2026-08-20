@@ -35,14 +35,22 @@ export async function restoreAuthSession(
   onSnapshot: (snapshot: AuthSnapshot) => void,
 ): Promise<() => void> {
   let authEventReceived = false;
-  const publishSnapshot = (snapshot: AuthSnapshot) => {
+  const publishSnapshot = (source: string, snapshot: AuthSnapshot) => {
+    console.info("[auth-token-trace]", {
+      stage: "auth_snapshot_published",
+      timestamp: new Date().toISOString(),
+      source,
+      hasSession: Boolean(snapshot.session),
+      hasAccessToken: Boolean(snapshot.session?.access_token),
+      hasUser: Boolean(snapshot.user),
+    });
     setApiAccessToken(snapshot.session?.access_token ?? null);
     onSnapshot(snapshot);
   };
 
-  const { data: listener } = client.auth.onAuthStateChange((_event, session) => {
+  const { data: listener } = client.auth.onAuthStateChange((event, session) => {
     authEventReceived = true;
-    publishSnapshot({ session, user: session?.user ?? null, loading: false });
+    publishSnapshot(event, { session, user: session?.user ?? null, loading: false });
   });
 
   const { data, error } = await client.auth.getSession();
@@ -54,7 +62,7 @@ export async function restoreAuthSession(
 
   // Do not overwrite a newer auth event that arrived while getSession resolved.
   if (!authEventReceived) {
-    publishSnapshot({
+    publishSnapshot("GET_SESSION_FALLBACK", {
       session: data.session,
       user: data.session?.user ?? null,
       loading: false,

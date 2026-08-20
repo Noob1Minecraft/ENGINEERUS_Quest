@@ -4,8 +4,19 @@ const API_URL = normalizeApiBase(import.meta.env?.VITE_API_URL || "");
 
 let currentAccessToken: string | null = null;
 
+function traceApiAuth(stage: string, details: Record<string, unknown>): void {
+  console.info("[auth-token-trace]", {
+    stage,
+    timestamp: new Date().toISOString(),
+    ...details,
+  });
+}
+
 export function setApiAccessToken(accessToken: string | null): void {
   currentAccessToken = accessToken;
+  traceApiAuth("token_store_updated", {
+    hasAccessToken: Boolean(accessToken),
+  });
 }
 
 type ApiErrorBody = {
@@ -53,6 +64,10 @@ export function createApiFetch(dependencies: ApiFetchDependencies) {
     options: RequestInit = {},
   ): Promise<T> {
     const accessToken = await dependencies.getAccessToken();
+    traceApiAuth("api_fetch_token_resolved", {
+      endpoint,
+      hasAccessToken: Boolean(accessToken),
+    });
     const headers = new Headers(options.headers);
 
     if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
@@ -90,10 +105,19 @@ export const apiFetch = createApiFetch({
   apiUrl: API_URL,
   fetchImpl: (input, init) => fetch(input, init),
   async getAccessToken() {
+    traceApiAuth("get_access_token_started", {
+      hasSupabaseClient: Boolean(supabase),
+      hasCachedAccessToken: Boolean(currentAccessToken),
+    });
     if (!supabase) return null;
     if (currentAccessToken) return currentAccessToken;
 
     const { data, error } = await supabase.auth.getSession();
+    traceApiAuth("get_session_completed", {
+      hasError: Boolean(error),
+      hasSession: Boolean(data.session),
+      hasAccessToken: Boolean(data.session?.access_token),
+    });
     if (error) throw new ApiError(401, "session_unavailable", "Authentication session is unavailable.");
     currentAccessToken = data.session?.access_token ?? null;
     return currentAccessToken;
