@@ -78,6 +78,35 @@ test("sends the resolved language and centralized system policy to Groq without 
   }
 });
 
+
+test("retries with the secondary credential when Groq rejects the primary credential", async () => {
+  const authorizationHeaders: string[] = [];
+  const fetchStub: typeof fetch = async (_input, init) => {
+    authorizationHeaders.push(new Headers(init?.headers).get("Authorization") ?? "");
+    if (authorizationHeaders.length === 1) {
+      return new Response(JSON.stringify({ error: { message: "Invalid API Key" } }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    return new Response(JSON.stringify({ choices: [{ message: { content: "stubbed secondary response" } }] }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+  const respond = createGroqResponder({
+    apiKey: "primary-placeholder",
+    secondaryApiKey: "secondary-placeholder",
+    model: "test-model",
+    fetchImpl: fetchStub,
+  });
+
+  assert.equal(await respond("Что такое момент инерции?", "tutor", "ru"), "stubbed secondary response");
+  assert.deepEqual(authorizationHeaders, [
+    "Bearer primary-placeholder",
+    "Bearer secondary-placeholder",
+  ]);
+});
 test("local fallback responses use the resolved language", async () => {
   const respond = createGroqResponder({ model: "test-model" });
   assert.match(await respond("Как рассчитать torque?", "tutor", "en"), /Демо-режим/);
