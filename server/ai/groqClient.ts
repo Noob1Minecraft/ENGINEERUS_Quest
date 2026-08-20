@@ -2,6 +2,7 @@ import { buildSystemPrompt, languageName, resolveResponseLanguage, type AiModule
 
 const FALLBACK_MODELS = ["openai/gpt-oss-120b", "openai/gpt-oss-20b"];
 const MODEL_FALLBACK_STATUSES = new Set([400, 404]);
+const CREDENTIAL_FALLBACK_STATUSES = new Set([401, 403]);
 
 type Fetch = typeof fetch;
 
@@ -31,7 +32,7 @@ function fallbackResponse(prompt: string, language: "ru" | "kk" | "en", demoMode
 
 export function createGroqResponder(options: GroqResponderOptions) {
   const fetchImpl = options.fetchImpl ?? fetch;
-  const apiKey = options.apiKey || options.secondaryApiKey;
+  const apiKeys = [...new Set([options.apiKey, options.secondaryApiKey].filter((key): key is string => Boolean(key)))];
   const modelCandidates = [...new Set([options.model, ...FALLBACK_MODELS])];
 
   return async function generateResponse(
@@ -40,56 +41,64 @@ export function createGroqResponder(options: GroqResponderOptions) {
     requestedLanguage = "ru",
   ): Promise<string> {
     const language = resolveResponseLanguage(prompt, requestedLanguage);
-    if (!apiKey) return fallbackResponse(prompt, language, true);
+    if (apiKeys.length === 0) return fallbackResponse(prompt, language, true);
 
     const systemPrompt = buildSystemPrompt(language, module);
 
-    for (let attempt = 0; attempt < modelCandidates.length; attempt += 1) {
-      const model = modelCandidates[attempt];
-      console.log(`Sending request to Groq API (${model}) | language=${language} | attempt=${attempt + 1}/${modelCandidates.length}`);
+    for (let keyAttempt = 0; keyAttempt < apiKeys.length; keyAttempt += 1) {
+      const apiKey = apiKeys[keyAttempt];
 
-      let response: Response;
-      try {
-        response = await fetchImpl("https://api.groq.com/openai/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${apiKey}`,
-          },
-          body: JSON.stringify({
-            model,
-            messages: [
-              { role: "system", content: systemPrompt },
-              {
-                role: "user",
-                content: `${prompt}\n\nRespond in ${languageName(language)}. Preserve technical notation and identifiers.`,
-              },
-            ],
-            temperature: 0.2,
-            max_tokens: 600,
-          }),
-        });
-      } catch (error) {
-        console.error(`Groq network error [model=${model}]:`, error instanceof Error ? error.message : "Unknown error");
-        break;
-      }
+      for (let modelAttempt = 0; modelAttempt < modelCandidates.length; modelAttempt += 1) {
+        const model = modelCandidates[modelAttempt];
+        console.log(
+          `Sending request to Groq API (${model}) | language=${language} | credential=${keyAttempt === 0 ? "primary" : "secondary"} | attempt=${modelAttempt + 1}/${modelCandidates.length}`,
+        );
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({})) as { error?: { message?: string } };
-        console.error(`Groq API error [model=${model}, status=${response.status}]:`, errorData.error?.message ?? "Unknown Groq error");
-        if (attempt < modelCandidates.length - 1 && MODEL_FALLBACK_STATUSES.has(response.status)) continue;
-        break;
-      }
+        let response: Response;
+        try {
+          response = await fetchImpl("https://api.groq.com/openai/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({
+              model,
+              messages: [
+                { role: "system", content: systemPrompt },
+                {
+                  role: "user",
+                  content: `${prompt}\n\nRespond in ${languageName(language)}. Preserve technical notation and identifiers.`,
+                },
+              ],
+              temperature: 0.2,
+              max_tokens: 600,
+            }),
+          });
+        } catch (error) {
+          console.error(`Groq network error [model=${model}]:`, error instanceof Error ? error.message : "Unknown error");
+          return fallbackResponse(prompt, language, false);
+        }
 
-      try {
-        const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
-        const content = data.choices?.[0]?.message?.content?.trim();
-        if (content) return content;
-        console.error(`Groq returned an empty response [model=${model}].`);
-      } catch (error) {
-        console.error(`Groq returned malformed JSON [model=${model}]:`, error instanceof Error ? error.message : "Unknown error");
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({})) as { error?: { message?: string } };
+          console.error(`Groq API error [model=${model}, status=${response.status}]:`, errorData.error?.message ?? "Unknown Groq error");
+
+          if (CREDENTIAL_FALLBACK_STATUSES.has(response.status)) break;
+          if (modelAttempt < modelCandidates.length - 1 && MODEL_FALLBACK_STATUSES.has(response.status)) continue;
+          return fallbackResponse(prompt, language, false);
+        }
+
+        try {
+          const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
+          const content = data.choices?.[0]?.message?.content?.trim();
+          if (content) return content;
+          console.error(`Groq returned an empty response [model=${model}].`);
+        } catch (error) {
+          console.error(`Groq returned malformed JSON [model=${model}]:`, error instanceof Error ? error.message : "Unknown error");
+        }
+        return fallbackResponse(prompt, language, false);
       }
-      break;
     }
 
     return fallbackResponse(prompt, language, false);
