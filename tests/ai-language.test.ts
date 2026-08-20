@@ -49,6 +49,57 @@ test("builds an explicit final language policy for every Groq-powered module", (
   }
 });
 
+test("keeps standards conditional and avoids artificial tutor requirements in every language", () => {
+  const expectations: Record<SupportedLanguage, {
+    conceptual: string;
+    applicable: string;
+    fabrication: string;
+    xp: string;
+    kazakhstan: string;
+  }> = {
+    ru: {
+      conceptual: "Для обычных концептуальных вопросов не добавляй стандарты без прямой пользы.",
+      applicable: "решение действительно зависит от нормы",
+      fabrication: "Никогда не выдумывай номер, название, редакцию или требование стандарта",
+      xp: "Не заявляй о начислении XP и не придумывай награду",
+      kazakhstan: "Используй примеры из Казахстана только когда они естественно помогают объяснению.",
+    },
+    kk: {
+      conceptual: "Қарапайым ұғымдық сұрақтарға тікелей пайдасы болмаса, стандарт қоспа.",
+      applicable: "инженерлік шешім нақты нормаға тәуелді болғанда",
+      fabrication: "Стандарттың нөмірін, атауын, редакциясын немесе талабын",
+      xp: "XP есептелді деп айтпа және жалған сыйақы ойлап таппа",
+      kazakhstan: "Қазақстанға тән мысалдарды түсіндіруді табиғи түрде жақсартқанда ғана қолдан.",
+    },
+    en: {
+      conceptual: "For ordinary conceptual questions, do not add standards unless they are directly useful.",
+      applicable: "engineering decision genuinely depends on a standard",
+      fabrication: "Never invent a standard identifier, title, revision, requirement",
+      xp: "Never claim or invent an XP reward",
+      kazakhstan: "Use Kazakhstan-specific examples only when they naturally improve the answer.",
+    },
+  };
+
+  for (const language of ["ru", "kk", "en"] as const) {
+    const prompt = buildSystemPrompt(language, "tutor");
+    const expected = expectations[language];
+    assert.ok(prompt.includes(expected.conceptual), `${language} forces standards into conceptual answers`);
+    assert.ok(prompt.includes(expected.applicable), `${language} omits genuinely applicable standards`);
+    assert.ok(prompt.includes(expected.fabrication), `${language} does not forbid fabricated standards`);
+    assert.ok(prompt.includes(expected.xp), `${language} does not forbid fake XP claims`);
+    assert.ok(prompt.includes(expected.kazakhstan), `${language} makes Kazakhstan context mandatory`);
+    assert.doesNotMatch(prompt, /120[–-]180/u);
+  }
+});
+
+test("encodes the requested module-specific quality boundaries", () => {
+  assert.match(buildSystemPrompt("en", "tutor"), /Explain the concept intuitively first/);
+  assert.match(buildSystemPrompt("en", "material"), /Never claim local availability without evidence/);
+  assert.match(buildSystemPrompt("en", "patent"), /do not present generated text as legal certainty/);
+  assert.match(buildSystemPrompt("en", "engi_legal"), /recommend verification against an official source/);
+  assert.match(buildSystemPrompt("en", "engi_match"), /Do not add standards unless they are directly relevant/);
+});
+
 test("sends the resolved language and centralized system policy to Groq without a real API call", async () => {
   const requests: Array<{
     messages: Array<{ role: string; content: string }>;
