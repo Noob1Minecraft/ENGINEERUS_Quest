@@ -18,12 +18,36 @@ import {
   preparePromptWithStandardsMetadata,
 } from "../server/standards/standardsPolicy";
 import { guardStandardsResponse } from "../server/standards/standardsResponseGuard";
+import { generateKazStandardQueries } from "../server/standards/standardsQuery";
 import { createStandardsService, type VerifiedStandard } from "../server/standards/standardsService";
 import { withServer } from "./helpers";
 
 const SEARCH_HTML = readFileSync(new URL("./fixtures/kazstandard-search.html", import.meta.url), "utf8");
 const DOCUMENT_HTML = readFileSync(new URL("./fixtures/kazstandard-document.html", import.meta.url), "utf8");
 const DOCUMENT_URL = "https://new-shop.ksm.kz/catalog/document/66007/";
+
+function searchFixture(candidates: Array<{
+  providerId: string;
+  designation: string;
+  title: string;
+  status?: string;
+}>): string {
+  if (candidates.length === 0) return "<html><body>Документы не найдены</body></html>";
+  return `<html><body>${candidates.map((candidate) => `
+    <div class="prod-card"><a href="/catalog/document/${candidate.providerId}/" class="prod-top">
+      ${candidate.status ? `<span class="prod-badge">${candidate.status}</span>` : ""}
+      <div class="prod-code">${candidate.designation}</div>
+      <div class="prod-title">${candidate.title}</div>
+    </a></div>
+  `).join("")}</body></html>`;
+}
+
+function documentFixture(providerId: string, designation: string, title: string, status = "Действующий") {
+  return {
+    html: `<h1 class="detail-code">${designation}</h1><span class="prod-badge">${status}</span><h2 class="detail-title">${title}</h2>`,
+    sourceUrl: `https://new-shop.ksm.kz/catalog/document/${providerId}/`,
+  };
+}
 
 function fixtureClient(overrides: Partial<KazStandardClient> = {}): KazStandardClient {
   return {
@@ -98,6 +122,25 @@ test("keeps lookup eligibility conservative", () => {
   assert.equal(isStandardsLookupWarranted("Какие бывают инженерные материалы?"), false);
   assert.equal(isStandardsLookupWarranted("Какие требования у СТ РК ISO 9001-2016?"), true);
   assert.equal(isStandardsLookupWarranted("Does this drawing comply with mandatory requirements?"), true);
+});
+
+test("expands a general design-documentation question into at most three deterministic queries", () => {
+  const queries = generateKazStandardQueries(
+    "Какой ГОСТ или СТ РК применяется к оформлению конструкторской документации?",
+  );
+  assert.deepEqual(queries, [
+    "конструкторская документация",
+    "ЕСКД",
+    "оформление чертежей",
+  ]);
+  assert.ok(queries.length <= 3);
+});
+
+test("keeps an exact standard designation unchanged and first", () => {
+  assert.deepEqual(
+    generateKazStandardQueries("Какие требования содержит ГОСТ 2.102-68?"),
+    ["ГОСТ 2.102-68"],
+  );
 });
 
 test("disabled flag and conceptual questions cause zero external requests", async () => {
@@ -179,7 +222,7 @@ test("returns verified candidates when search results are ambiguous", async () =
       };
     },
   });
-  const result = await createStandardsService({ enabled: true, client }).searchVerifiedStandards("система качества");
+  const result = await createStandardsService({ enabled: true, client }).searchVerifiedStandards("ISO 9001");
 
   assert.equal(result.kind, "ambiguous");
   if (result.kind === "ambiguous") {
@@ -187,6 +230,117 @@ test("returns verified candidates when search results are ambiguous", async () =
     assert.equal(result.candidates[0].currency, "current");
     assert.equal(result.candidates[1].currency, "non_current");
   }
+});
+
+test("deduplicates candidates across expanded searches and verifies a detail page only once", async () => {
+  const queries: string[] = [];
+  let detailRequests = 0;
+  const duplicateCard = searchFixture([{
+    providerId: "70001",
+    designation: "СТ РК 700-2026",
+    title: "Техническая документация",
+  }]);
+  const client = fixtureClient({
+    async searchKazStandard(query) {
+      queries.push(query);
+      return { html: duplicateCard, sourceUrl: "https://new-shop.ksm.kz/catalog/search/?q=test" };
+    },
+    async getKazStandardDocument() {
+      detailRequests += 1;
+      return documentFixture("70001", "СТ РК 700-2026", "Техническая документация");
+    },
+  });
+
+  const result = await createStandardsService({ enabled: true, client }).searchVerifiedStandards(
+    "Какой ГОСТ или СТ РК применяется к оформлению конструкторской документации?",
+  );
+
+  assert.equal(queries.length, 3);
+  assert.equal(detailRequests, 1);
+  assert.equal(result.kind, "verified");
+});
+
+test("caps detail-page validation at three ranked candidates", async () => {
+  let detailRequests = 0;
+  const candidates = ["71001", "71002", "71003", "71004"].map((providerId, index) => ({
+    providerId,
+    designation: `СТ РК ${710 + index}-2026`,
+    title: `Техническая документация ${index + 1}`,
+  }));
+  const client = fixtureClient({
+    async searchKazStandard() {
+      return { html: searchFixture(candidates), sourceUrl: "https://new-shop.ksm.kz/catalog/search/?q=test" };
+    },
+    async getKazStandardDocument(documentId) {
+      detailRequests += 1;
+      const candidate = candidates.find(({ providerId }) => providerId === documentId);
+      assert.ok(candidate);
+      return documentFixture(candidate.providerId, candidate.designation, candidate.title);
+    },
+  });
+
+  const result = await createStandardsService({ enabled: true, client }).searchVerifiedStandards(
+    "Какие стандарты относятся к технической документации?",
+  );
+
+  assert.equal(detailRequests, 3);
+  assert.equal(result.kind, "ambiguous");
+  if (result.kind === "ambiguous") assert.equal(result.candidates.length, 3);
+});
+
+test("requires a successfully parsed detail page before a search candidate is verified", async () => {
+  let searches = 0;
+  let details = 0;
+  const strongCard = searchFixture([{
+    providerId: "70002",
+    designation: "СТ РК 701-2026",
+    title: "Конструкторская документация",
+    status: "Действующий",
+  }]);
+  const client = fixtureClient({
+    async searchKazStandard() {
+      searches += 1;
+      return { html: strongCard, sourceUrl: "https://new-shop.ksm.kz/catalog/search/?q=test" };
+    },
+    async getKazStandardDocument() {
+      details += 1;
+      return {
+        html: "<html><body>unexpected detail markup</body></html>",
+        sourceUrl: "https://new-shop.ksm.kz/catalog/document/70002/",
+      };
+    },
+  });
+
+  const result = await createStandardsService({ enabled: true, client }).searchVerifiedStandards(
+    "Какой стандарт применяется к конструкторской документации?",
+  );
+
+  assert.equal(searches, 3);
+  assert.equal(details, 1);
+  assert.equal(result.kind, "unavailable");
+});
+
+test("returns no_result only after all generated queries return no candidates", async () => {
+  const queries: string[] = [];
+  let details = 0;
+  const client = fixtureClient({
+    async searchKazStandard(query) {
+      queries.push(query);
+      return { html: searchFixture([]), sourceUrl: "https://new-shop.ksm.kz/catalog/search/?q=test" };
+    },
+    async getKazStandardDocument() {
+      details += 1;
+      throw new Error("must not validate absent candidates");
+    },
+  });
+
+  const result = await createStandardsService({ enabled: true, client }).searchVerifiedStandards(
+    "Какой ГОСТ или СТ РК применяется к оформлению конструкторской документации?",
+  );
+
+  assert.deepEqual(queries, ["конструкторская документация", "ЕСКД", "оформление чертежей"]);
+  assert.equal(details, 0);
+  assert.equal(result.kind, "no_result");
 });
 
 test("builds a bounded verified metadata block for the AI without full document content", async () => {

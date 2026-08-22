@@ -1,10 +1,15 @@
 import type { KazStandardClient } from "./kazStandardClient";
 import {
-  KazStandardParserError,
   parseKazStandardDocument,
   parseKazStandardSearchResults,
   type KazStandardMetadata,
 } from "./kazStandardParser";
+import {
+  extractExactStandardDesignation,
+  generateKazStandardQueries,
+  rankKazStandardCandidates,
+  type RankedKazStandardCandidate,
+} from "./standardsQuery";
 
 export type StandardCurrency = "current" | "non_current" | "unknown";
 
@@ -39,27 +44,13 @@ function classifyCurrency(status: string | undefined): StandardCurrency {
 }
 
 function normalizeDesignation(value: string): string {
-  return value.toLocaleUpperCase("ru").replace(/[^\p{L}\p{N}]+/gu, "");
-}
-
-function extractDesignationQuery(query: string): string | undefined {
-  const patterns = [
-    /(?:СТ\s+РК|ҚР\s+СТ|ST\s+RK)\s+(?:(?:ISO|IEC|ГОСТ|GOST)\s+)?\d[\d.\/-]*/iu,
-    /(?:ГОСТ|GOST)(?:\s+РК|\s+RK)?\s+\d[\d.\/-]*/iu,
-    /(?:ISO|IEC)\s+\d[\d.\/-]*/iu,
-    /(?:ЕСКД|ESKD|СП\s+РК|SP\s+RK|ТР\s+(?:ТС|ЕАЭС)|TR\s+EAEU)\s+\d[\d.\/-]*/iu,
-  ];
-  for (const pattern of patterns) {
-    const match = query.match(pattern)?.[0];
-    if (match) return match.replace(/\s+/gu, " ").trim();
-  }
-  return undefined;
+  return value.toLocaleUpperCase("und").replace(/[^\p{L}\p{N}]+/gu, "");
 }
 
 export function createStandardsService(options: StandardsServiceOptions) {
   const ttlMs = options.ttlMs ?? 15 * 60_000;
   const now = options.now ?? Date.now;
-  const maxCandidates = options.maxCandidates ?? 3;
+  const maxCandidates = Math.max(1, Math.min(options.maxCandidates ?? 3, 3));
   // Temporary POC cache: process-local, metadata-only, and intentionally not durable.
   const cache = new Map<string, { expiresAt: number; result: StandardsLookupResult }>();
 
@@ -67,56 +58,80 @@ export function createStandardsService(options: StandardsServiceOptions) {
     async searchVerifiedStandards(query: string): Promise<StandardsLookupResult> {
       if (!options.enabled) return { kind: "disabled" };
 
-      const searchQuery = (extractDesignationQuery(query) ?? query.trim()).slice(0, 300);
-      if (!searchQuery) return { kind: "no_result" };
-      const cacheKey = searchQuery.toLocaleLowerCase("und");
+      const originalQuery = query.trim().slice(0, 300);
+      const searchQueries = generateKazStandardQueries(originalQuery);
+      if (searchQueries.length === 0) return { kind: "no_result" };
+      const cacheKey = originalQuery.toLocaleLowerCase("und");
       const cached = cache.get(cacheKey);
       if (cached && cached.expiresAt > now()) return cached.result;
 
-      try {
-        const searchPage = await options.client.searchKazStandard(searchQuery);
-        const searchCandidates = parseKazStandardSearchResults(searchPage.html).slice(0, maxCandidates);
-        if (searchCandidates.length === 0) {
-          const result: StandardsLookupResult = { kind: "no_result" };
-          cache.set(cacheKey, { expiresAt: now() + ttlMs, result });
-          return result;
-        }
+      const candidateById = new Map<string, ReturnType<typeof parseKazStandardSearchResults>[number]>();
+      const attemptedDocumentIds = new Set<string>();
+      const verified: VerifiedStandard[] = [];
+      let lookupFailed = false;
 
-        const verified: VerifiedStandard[] = [];
-        for (const candidate of searchCandidates) {
+      const verifyCandidates = async (ranked: readonly RankedKazStandardCandidate[]): Promise<void> => {
+        for (const { candidate, score } of ranked) {
+          if (verified.length >= maxCandidates || attemptedDocumentIds.size >= maxCandidates) break;
+          if (score < 2 || attemptedDocumentIds.has(candidate.providerId)) continue;
+          attemptedDocumentIds.add(candidate.providerId);
           try {
             const detailPage = await options.client.getKazStandardDocument(candidate.providerId);
             const metadata = parseKazStandardDocument(detailPage.html, detailPage.sourceUrl);
+            const detailRank = rankKazStandardCandidates([metadata], originalQuery, searchQueries)[0];
+            if (!detailRank || detailRank.score < 2) continue;
             verified.push({
               ...metadata,
               currency: classifyCurrency(metadata.status),
               verifiedAt: new Date(now()).toISOString(),
             });
-          } catch (error) {
-            if (!(error instanceof KazStandardParserError)) throw error;
+          } catch {
+            lookupFailed = true;
           }
         }
+      };
 
-        let result: StandardsLookupResult;
-        if (verified.length === 0) {
-          result = { kind: "unavailable" };
-        } else if (verified.length === 1) {
-          result = { kind: "verified", standard: verified[0] };
-        } else {
-          const requestedDesignation = extractDesignationQuery(query);
-          const exactMatches = requestedDesignation
-            ? verified.filter((candidate) => normalizeDesignation(candidate.designation) === normalizeDesignation(requestedDesignation))
-            : [];
-          result = exactMatches.length === 1
-            ? { kind: "verified", standard: exactMatches[0] }
-            : { kind: "ambiguous", candidates: verified };
+      for (const searchQuery of searchQueries) {
+        try {
+          const searchPage = await options.client.searchKazStandard(searchQuery);
+          for (const candidate of parseKazStandardSearchResults(searchPage.html)) {
+            if (!candidateById.has(candidate.providerId)) candidateById.set(candidate.providerId, candidate);
+          }
+          const ranked = rankKazStandardCandidates([...candidateById.values()], originalQuery, searchQueries);
+          const strongCandidates = ranked.filter(({ score, exactDesignationMatch }) => exactDesignationMatch || score >= 8);
+          if (strongCandidates.length > 0) {
+            await verifyCandidates(strongCandidates);
+            if (verified.length > 0) break;
+          }
+        } catch {
+          lookupFailed = true;
         }
-
-        cache.set(cacheKey, { expiresAt: now() + ttlMs, result });
-        return result;
-      } catch {
-        return { kind: "unavailable" };
       }
+
+      if (verified.length === 0 && attemptedDocumentIds.size < maxCandidates) {
+        const ranked = rankKazStandardCandidates([...candidateById.values()], originalQuery, searchQueries);
+        await verifyCandidates(ranked);
+      }
+
+      let result: StandardsLookupResult;
+      if (verified.length === 0) {
+        result = lookupFailed ? { kind: "unavailable" } : { kind: "no_result" };
+      } else if (verified.length === 1) {
+        result = { kind: "verified", standard: verified[0] };
+      } else {
+        const requestedDesignation = extractExactStandardDesignation(originalQuery);
+        const exactMatches = requestedDesignation
+          ? verified.filter((candidate) => normalizeDesignation(candidate.designation) === normalizeDesignation(requestedDesignation))
+          : [];
+        result = exactMatches.length === 1
+          ? { kind: "verified", standard: exactMatches[0] }
+          : { kind: "ambiguous", candidates: verified };
+      }
+
+      if (result.kind !== "unavailable") {
+        cache.set(cacheKey, { expiresAt: now() + ttlMs, result });
+      }
+      return result;
     },
   };
 }
