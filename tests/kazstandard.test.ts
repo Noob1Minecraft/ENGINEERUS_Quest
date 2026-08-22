@@ -223,7 +223,7 @@ test("fails safely when the metadata lookup is unavailable", async () => {
 test("rejects invented identifiers when lookup found no matching standard", () => {
   const result = guardStandardsResponse({
     content: "Для этого применяется СТ РК ISO 9999-2099.",
-    userPrompt: "Какой стандарт применяется к этому проекту?",
+    userPrompt: "Какой ГОСТ или СТ РК применяется к оформлению конструкторской документации?",
     lookupResult: { kind: "no_result" },
     language: "ru",
   });
@@ -231,6 +231,57 @@ test("rejects invented identifiers when lookup found no matching standard", () =
   assert.equal(result.rejected, true);
   assert.doesNotMatch(result.content, /9999-2099/u);
   assert.match(result.content, /не удалось подтвердить/u);
+  assert.match(result.content, /ЕСКД/u);
+  assert.match(result.content, /чертежам|форматам|обозначениям/u);
+});
+
+test("keeps useful generic guidance for no_result and adds the verification limitation", () => {
+  const result = guardStandardsResponse({
+    content: "В общем случае используйте принципы ЕСКД: проверьте оформление чертежей, форматы, обозначения и состав документации.",
+    userPrompt: "Как оформлять конструкторскую документацию?",
+    lookupResult: { kind: "no_result" },
+    language: "ru",
+  });
+
+  assert.equal(result.rejected, false);
+  assert.match(result.content, /^По открытому каталогу КазСтандарта не удалось подтвердить/u);
+  assert.match(result.content, /принципы ЕСКД/u);
+  assert.doesNotMatch(result.content, /(?:ГОСТ|СТ\s+РК|ЕСКД)\s+\d/u);
+});
+
+test("keeps no_result guidance and verification limitations in the resolved language", () => {
+  const cases = [
+    {
+      language: "ru" as const,
+      userPrompt: "Какие требования относятся к технической документации?",
+      content: "Можно рассмотреть общие требования к составу и оформлению документации.",
+      limitation: /не удалось подтвердить/u,
+    },
+    {
+      language: "kk" as const,
+      userPrompt: "Техникалық құжаттамаға қандай талаптар қолданылады?",
+      content: "Құжаттардың құрамы мен рәсімделуіне қойылатын жалпы талаптарды қарастыруға болады.",
+      limitation: /растау мүмкін болмады/u,
+    },
+    {
+      language: "en" as const,
+      userPrompt: "Which requirements apply to technical documentation?",
+      content: "General requirements for document composition and presentation can still be explained.",
+      limitation: /did not verify/u,
+    },
+  ];
+
+  for (const testCase of cases) {
+    const result = guardStandardsResponse({
+      content: testCase.content,
+      userPrompt: testCase.userPrompt,
+      lookupResult: { kind: "no_result" },
+      language: testCase.language,
+    });
+    assert.equal(result.rejected, false);
+    assert.match(result.content, testCase.limitation);
+    assert.ok(result.content.endsWith(testCase.content));
+  }
 });
 
 test("allows an exact verified designation but rejects an additional invented standard", () => {
