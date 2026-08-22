@@ -12,8 +12,6 @@ const EXACT_DESIGNATION_PATTERNS = [
 
 const DESIGN_DOCUMENTATION = /(?:конструкторск\p{L}*\s+документац\p{L}*|оформлен\p{L}*\s+черт[её]ж\p{L}*|design\s+documentation|engineering\s+drawing|конструкторлық\s+құжат|сызба\p{L}*\s+рәсім)/iu;
 const DRAWING = /(?:черт[её]ж\p{L}*|drawing\p{L}*|сызба\p{L}*)/iu;
-const MATERIAL_STANDARD = /(?:(?:стандарт|ГОСТ|СТ\s+РК|standard|сәйкестік)[^.!?]{0,80}(?:материал|сталь|сплав|steel|alloy|болат|қорытпа)|(?:материал|сталь|сплав|steel|alloy|болат|қорытпа)[^.!?]{0,80}(?:стандарт|ГОСТ|СТ\s+РК|standard|сәйкестік))/iu;
-const MACHINE_SAFETY = /(?:безопасност\p{L}*\s+машин|machine\s+safety|machinery\s+safety|машиналар\p{L}*\s+қауіпсіз)/iu;
 const BROAD_TITLE = /(?:общие\s+(?:положения|требования|правила)|основные\s+положения|базовые\s+правила|general\s+(?:provisions|requirements|rules)|жалпы\s+(?:ережелер|талаптар|қағидалар)|негізгі\s+ережелер|базалық\s+қағидалар)/iu;
 const NARROW_APPLICATIONS = [
   /(?:упаков|packag|қаптам)/iu,
@@ -37,6 +35,43 @@ const STOP_WORDS = new Set([
   "стандарт", "стандарты", "гост", "ст", "рк",
   "және", "немесе", "үшін", "қандай", "қай", "қолданылады", "қажет", "талап",
 ]);
+
+type EngineeringTerminologyRule = {
+  pattern: RegExp;
+  queries: readonly string[] | ((input: string) => readonly string[]);
+};
+
+const ENGINEERING_TERMINOLOGY: readonly EngineeringTerminologyRule[] = [
+  {
+    pattern: /(?:размер\p{L}*|допуск\p{L}*|посадк\p{L}*|предельн\p{L}*\s+отклонен\p{L}*)/iu,
+    queries: ["допуски и посадки", "размеры предельные отклонения"],
+  },
+  { pattern: /(?:(?<![\p{L}\p{N}])вал(?:ы|а|ов|у|ом|ах)?(?![\p{L}\p{N}])|детал\p{L}*\s+типа\s+вал)/iu, queries: ["валы"] },
+  { pattern: /(?:подшипник\p{L}*)/iu, queries: ["подшипники", "подшипники качения"] },
+  { pattern: /(?:зубчат\p{L}*\s+(?:передач|колес)|шестерн\p{L}*)/iu, queries: ["зубчатые передачи", "зубчатые колеса"] },
+  { pattern: /(?:креп[её]ж\p{L}*|болт\p{L}*|гайк\p{L}*|винт\p{L}*)/iu, queries: ["крепежные изделия"] },
+  { pattern: /(?:резьб\p{L}*)/iu, queries: ["резьба", "резьбовые соединения"] },
+  {
+    pattern: /(?:материал\p{L}*|стал\p{L}*|сплав\p{L}*|material\p{L}*|steel|alloy\p{L}*|болат|қорытпа\p{L}*)/iu,
+    queries: (input) => [
+      ...(/(?:стал\p{L}*|steel|болат)/iu.test(input) ? ["сталь"] : []),
+      ...(/(?:сплав\p{L}*|alloy\p{L}*|қорытпа\p{L}*)/iu.test(input) ? ["сплавы"] : []),
+      "требования к материалам",
+    ],
+  },
+  { pattern: /(?:сварк\p{L}*|сварн\p{L}*\s+соединен\p{L}*)/iu, queries: ["сварка", "сварные соединения"] },
+  { pattern: /(?:корроз\p{L}*|антикорроз\p{L}*)/iu, queries: ["защита от коррозии", "антикоррозионные покрытия"] },
+  { pattern: /(?:железобетон\p{L}*)/iu, queries: ["железобетон", "железобетонные конструкции"] },
+  { pattern: /(?:(?<![\p{L}\p{N}])бетон\p{L}*(?![\p{L}\p{N}]))/iu, queries: ["бетон", "бетонные конструкции"] },
+  { pattern: /(?:безопасност\p{L}*\s+машин|безопасн\p{L}*\s+оборудован\p{L}*|machine\s+safety|machinery\s+safety|машиналар\p{L}*\s+қауіпсіз)/iu, queries: ["безопасность машин", "требования безопасности машин"] },
+  { pattern: /(?:электробезопасност\p{L}*|электрическ\p{L}*\s+безопасност\p{L}*)/iu, queries: ["электробезопасность", "безопасность электрооборудования"] },
+  { pattern: /(?:электроустанов\p{L}*|электрическ\p{L}*\s+установ\p{L}*)/iu, queries: ["электроустановки", "электрические установки"] },
+  { pattern: /(?:оборудован\p{L}*\s+под\s+давлени\p{L}*|сосуд\p{L}*\s+под\s+давлени\p{L}*)/iu, queries: ["оборудование под давлением", "сосуды под давлением"] },
+  { pattern: /(?:трубопровод\p{L}*)/iu, queries: ["трубопроводы"] },
+  { pattern: /(?:метролог\p{L}*|измерен\p{L}*|средств\p{L}*\s+измерен\p{L}*)/iu, queries: ["метрология", "средства измерений", "единство измерений"] },
+  { pattern: /(?:техническ\p{L}*\s+услови\p{L}*|техуслови\p{L}*|(?<![\p{L}\p{N}])ТУ(?![\p{L}\p{N}]))/iu, queries: ["технические условия", "разработка технических условий"] },
+  { pattern: /(?:эксплуатационн\p{L}*\s+документац\p{L}*|руководств\p{L}*\s+по\s+эксплуатац\p{L}*)/iu, queries: ["эксплуатационная документация", "руководство по эксплуатации"] },
+] as const;
 
 function normalizeSpace(value: string): string {
   return value.replace(/\s+/gu, " ").trim();
@@ -91,16 +126,14 @@ export function generateKazStandardQueries(input: string): string[] {
     addQuery(queries, "ЕСКД");
     return queries;
   }
-  if (MACHINE_SAFETY.test(input)) {
-    addQuery(queries, "безопасность машин");
-    addQuery(queries, "требования безопасности машин");
-  } else if (MATERIAL_STANDARD.test(input)) {
-    if (/(?:сталь|steel|болат)/iu.test(input)) addQuery(queries, "сталь");
-    if (/(?:сплав|alloy|қорытпа)/iu.test(input)) addQuery(queries, "сплавы");
-    addQuery(queries, "требования к материалам");
+
+  for (const rule of ENGINEERING_TERMINOLOGY) {
+    if (!rule.pattern.test(input)) continue;
+    const mappedQueries = typeof rule.queries === "function" ? rule.queries(input) : rule.queries;
+    for (const query of mappedQueries) addQuery(queries, query);
   }
 
-  addQuery(queries, generalQuery(input));
+  if (queries.length === 0) addQuery(queries, generalQuery(input));
   return queries.slice(0, MAX_SEARCH_QUERIES);
 }
 

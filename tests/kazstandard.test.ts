@@ -238,6 +238,67 @@ test("keeps an exact standard designation unchanged and first", () => {
   );
 });
 
+test("expands common engineering standards terminology deterministically", () => {
+  const cases: Array<{ prompt: string; expected: string[] }> = [
+    {
+      prompt: "Какие ГОСТ устанавливают допуски и посадки для валов?",
+      expected: ["допуски и посадки", "размеры предельные отклонения", "валы"],
+    },
+    {
+      prompt: "Какой стандарт применяется к маркам стали и инженерным материалам?",
+      expected: ["сталь", "требования к материалам"],
+    },
+    {
+      prompt: "Какие стандарты регулируют сварку и сварные соединения?",
+      expected: ["сварка", "сварные соединения"],
+    },
+    {
+      prompt: "Какой ГОСТ применяется к бетонным конструкциям?",
+      expected: ["бетон", "бетонные конструкции"],
+    },
+    {
+      prompt: "Какие обязательные стандарты относятся к электробезопасности?",
+      expected: ["электробезопасность", "безопасность электрооборудования"],
+    },
+    {
+      prompt: "Какие требования стандартов относятся к безопасности машин?",
+      expected: ["безопасность машин", "требования безопасности машин"],
+    },
+    {
+      prompt: "Какой ГОСТ применяется к оформлению конструкторской документации ЕСКД?",
+      expected: ["конструкторская документация", "ЕСКД", "оформление чертежей"],
+    },
+  ];
+
+  for (const { prompt, expected } of cases) {
+    const queries = generateKazStandardQueries(prompt);
+    assert.deepEqual(queries, expected, prompt);
+    assert.ok(queries.length <= 3, prompt);
+  }
+});
+
+test("covers additional engineering domains without exceeding three queries", () => {
+  const prompts = [
+    "Какие стандарты применяются к подшипникам качения?",
+    "Какой ГОСТ регулирует зубчатые передачи?",
+    "Какие стандарты относятся к крепежу и резьбовым соединениям?",
+    "Какие требования стандартов применяются для защиты от коррозии?",
+    "Какие стандарты относятся к железобетонным конструкциям?",
+    "Какие стандарты применяются к электроустановкам?",
+    "Какие требования действуют для оборудования под давлением?",
+    "Какой стандарт применяется к трубопроводам?",
+    "Какие стандарты регулируют метрологию и средства измерений?",
+    "Какие стандарты применяются к техническим условиям?",
+    "Какие требования относятся к эксплуатационной документации?",
+  ];
+
+  for (const prompt of prompts) {
+    const queries = generateKazStandardQueries(prompt);
+    assert.ok(queries.length >= 1, prompt);
+    assert.ok(queries.length <= 3, prompt);
+  }
+});
+
 test("ranks a general ESKD record above narrow applications for a broad documentation question", () => {
   const question = "Какой ГОСТ или СТ РК применяется к оформлению конструкторской документации?";
   const queries = generateKazStandardQueries(question);
@@ -383,6 +444,30 @@ test("deduplicates candidates across expanded searches and verifies a detail pag
 
   assert.equal(queries.length, 3);
   assert.equal(detailRequests, 1);
+  assert.equal(result.kind, "verified");
+});
+
+test("tries the second mapped query when the first has no useful candidates", async () => {
+  const attemptedQueries: string[] = [];
+  const client = fixtureClient({
+    async searchKazStandard(query) {
+      attemptedQueries.push(query);
+      const candidates = query === "сварные соединения"
+        ? [{ providerId: "72001", designation: "СТ РК 720-2026", title: "Сварные соединения. Общие требования", status: "Действующий" }]
+        : [];
+      return { html: searchFixture(candidates), sourceUrl: "https://new-shop.ksm.kz/catalog/search/?q=test" };
+    },
+    async getKazStandardDocument(documentId) {
+      assert.equal(documentId, "72001");
+      return documentFixture("72001", "СТ РК 720-2026", "Сварные соединения. Общие требования");
+    },
+  });
+
+  const result = await createStandardsService({ enabled: true, client }).searchVerifiedStandards(
+    "Какие стандарты регулируют сварку и сварные соединения?",
+  );
+
+  assert.deepEqual(attemptedQueries, ["сварка", "сварные соединения"]);
   assert.equal(result.kind, "verified");
 });
 
