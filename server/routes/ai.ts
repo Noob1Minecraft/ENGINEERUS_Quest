@@ -3,12 +3,24 @@ import type { ChatModule, ChatRepository } from "../persistence/chats";
 import { PersistenceError, sendPersistenceError } from "../persistence/errors";
 import { createIdempotencyKey } from "../services/progress";
 import { sanitizeAssistantContent } from "../ai/responseSafety";
-import { preparePromptWithStandardsMetadata, type StandardsLookup } from "../standards/standardsPolicy";
-import { guardStandardsResponse } from "../standards/standardsResponseGuard";
+import {
+  buildStrictStandardsAllowlistPolicy,
+  preparePromptWithStandardsMetadata,
+  type StandardsLookup,
+} from "../standards/standardsPolicy";
+import {
+  extractStandardIdentifiers,
+  guardStandardsResponse,
+  verifiedStandardDesignations,
+} from "../standards/standardsResponseGuard";
 import type { SupportedLanguage } from "../ai/languagePolicy";
 
 const SESSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MODULES: readonly ChatModule[] = ["tutor", "material", "patent", "engi_legal", "engi_match"];
+
+function uniqueDesignations(designations: readonly string[]): string[] {
+  return [...new Set(designations.map((designation) => designation.trim()).filter(Boolean))];
+}
 
 type AiDependencies = {
   repository: ChatRepository;
@@ -93,12 +105,50 @@ export function createAiRouter(
         prepared.systemInstructions,
       );
       const sanitizedResponse = sanitizeAssistantContent(generatedResponse);
-      const responseText = guardStandardsResponse({
+      const firstGuardResult = guardStandardsResponse({
         content: sanitizedResponse,
         userPrompt: canonicalPrompt,
         lookupResult: prepared.lookupResult,
         language: detectedLanguage,
-      }).content;
+      });
+      let finalGuardResult = firstGuardResult;
+      let regenerationAttempted = false;
+      let regenerationAccepted = false;
+      const rejectedDesignations = [...(firstGuardResult.rejectedDesignations ?? [])];
+
+      if (firstGuardResult.rejected && (firstGuardResult.unverifiedDesignations?.length ?? 0) > 0) {
+        regenerationAttempted = true;
+        const verifiedDesignations = verifiedStandardDesignations(prepared.lookupResult);
+        const userProvidedDesignations = extractStandardIdentifiers(canonicalPrompt).map(({ raw }) => raw);
+        const allowedDesignations = uniqueDesignations([...verifiedDesignations, ...userProvidedDesignations]);
+        const strictPolicy = buildStrictStandardsAllowlistPolicy(allowedDesignations);
+        const retrySystemPolicy = [prepared.systemInstructions, strictPolicy].filter(Boolean).join("\n\n");
+        const regeneratedResponse = await dependencies.generateResponse(
+          prepared.prompt,
+          moduleName,
+          detectedLanguage,
+          retrySystemPolicy,
+        );
+        finalGuardResult = guardStandardsResponse({
+          content: sanitizeAssistantContent(regeneratedResponse),
+          userPrompt: canonicalPrompt,
+          lookupResult: prepared.lookupResult,
+          language: detectedLanguage,
+        });
+        regenerationAccepted = !finalGuardResult.rejected;
+        rejectedDesignations.push(...(finalGuardResult.rejectedDesignations ?? []));
+      }
+
+      if (firstGuardResult.rejected) {
+        console.warn("KazStandard response guard rejection", JSON.stringify({
+          verifiedDesignations: verifiedStandardDesignations(prepared.lookupResult),
+          rejectedDesignations: uniqueDesignations(rejectedDesignations),
+          regenerationAttempted,
+          regenerationAccepted,
+        }));
+      }
+
+      const responseText = finalGuardResult.content;
       if (!responseText) throw new Error("AI response did not contain user-facing content.");
       const completed = await dependencies.repository.completeExchange(
         userId,

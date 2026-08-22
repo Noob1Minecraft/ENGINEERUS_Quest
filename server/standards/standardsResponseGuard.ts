@@ -16,6 +16,8 @@ type IdentifierMatch = {
 export type StandardsGuardResult = {
   content: string;
   rejected: boolean;
+  rejectedDesignations?: string[];
+  unverifiedDesignations?: string[];
 };
 
 function normalizeIdentifier(value: string): string {
@@ -40,6 +42,14 @@ function verifiedStandards(result: StandardsLookupResult): VerifiedStandard[] {
   if (result.kind === "verified") return [result.standard];
   if (result.kind === "ambiguous") return result.candidates;
   return [];
+}
+
+export function verifiedStandardDesignations(result: StandardsLookupResult | undefined): string[] {
+  return result ? verifiedStandards(result).map(({ designation }) => designation) : [];
+}
+
+function uniqueMatches(matches: readonly IdentifierMatch[]): string[] {
+  return [...new Map(matches.map(({ normalized, raw }) => [normalized, raw])).values()];
 }
 
 function makesUnsupportedCurrentClaim(
@@ -125,10 +135,12 @@ export function guardStandardsResponse(options: {
   );
   const allowed = new Set([...userProvided, ...verifiedByDesignation.keys()]);
   const assistantIdentifiers = extractStandardIdentifiers(content);
-  const introducedUnverified = assistantIdentifiers.some(({ normalized }) => !allowed.has(normalized));
-  const unsupportedCurrentClaim = assistantIdentifiers.some((match) => (
+  const unverifiedMatches = assistantIdentifiers.filter(({ normalized }) => !allowed.has(normalized));
+  const unsupportedCurrentMatches = assistantIdentifiers.filter((match) => (
     makesUnsupportedCurrentClaim(content, match, userProvided, verifiedByDesignation)
   ));
+  const introducedUnverified = unverifiedMatches.length > 0;
+  const unsupportedCurrentClaim = unsupportedCurrentMatches.length > 0;
 
   if (!introducedUnverified && !unsupportedCurrentClaim) {
     return {
@@ -145,5 +157,7 @@ export function guardStandardsResponse(options: {
       ? noResultGuidanceFallback(language, userPrompt)
       : standardsGuardFallback(language, partialVerification),
     rejected: true,
+    rejectedDesignations: uniqueMatches([...unverifiedMatches, ...unsupportedCurrentMatches]),
+    unverifiedDesignations: uniqueMatches(unverifiedMatches),
   };
 }

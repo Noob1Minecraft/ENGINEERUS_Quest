@@ -69,6 +69,19 @@ export function buildStandardsSystemInstructions(result: StandardsLookupResult):
 [/KAZSTANDARD VERIFICATION POLICY]`;
 }
 
+export function buildStrictStandardsAllowlistPolicy(identifiers: readonly string[]): string {
+  const entries = identifiers.length > 0
+    ? identifiers.map((identifier) => `- ${identifier}`).join("\n")
+    : "- (none)";
+  return `[ALLOWED STANDARD IDENTIFIERS]
+${entries}
+[/ALLOWED STANDARD IDENTIFIERS]
+- You may mention only the numbered standard identifiers listed above.
+- You may answer generically without any numbered standard identifier.
+- Do not introduce any other standard designation.
+- If none is appropriate, provide a useful general engineering explanation.`;
+}
+
 export async function preparePromptWithStandardsMetadata(
   prompt: string,
   lookup: StandardsLookup | undefined,

@@ -18,8 +18,12 @@ import {
   preparePromptWithStandardsMetadata,
 } from "../server/standards/standardsPolicy";
 import { guardStandardsResponse } from "../server/standards/standardsResponseGuard";
-import { generateKazStandardQueries } from "../server/standards/standardsQuery";
-import { createStandardsService, type VerifiedStandard } from "../server/standards/standardsService";
+import { generateKazStandardQueries, rankKazStandardCandidates } from "../server/standards/standardsQuery";
+import {
+  createStandardsService,
+  type StandardsLookupResult,
+  type VerifiedStandard,
+} from "../server/standards/standardsService";
 import { withServer } from "./helpers";
 
 const SEARCH_HTML = readFileSync(new URL("./fixtures/kazstandard-search.html", import.meta.url), "utf8");
@@ -59,6 +63,95 @@ function fixtureClient(overrides: Partial<KazStandardClient> = {}): KazStandardC
     },
     ...overrides,
   };
+}
+
+async function exerciseGuardedGeneration(options: {
+  userPrompt: string;
+  lookupResult: StandardsLookupResult;
+  generatedResponses: string[];
+}) {
+  const persistedResponses: string[] = [];
+  const systemPolicies: string[] = [];
+  const diagnostics: Array<Record<string, unknown>> = [];
+  let persistedUserPrompt = "";
+  let generateCalls = 0;
+  const repository = {
+    async beginExchange(
+      _userId: string,
+      _accessToken: string,
+      _sessionId: string,
+      _requestId: string,
+      text: string,
+    ) {
+      persistedUserPrompt = text;
+      return {
+        userMessage: { id: "user-message", sender: "user" as const, text, module: "tutor" as const, timestamp: "2026-08-20T00:00:00.000Z" },
+        assistantMessage: null,
+        progress: { xp: 0, level: 1, streak: 0, requests_count: 0, material_count: 0, patent_count: 0, modules_used: [] },
+      };
+    },
+    async completeExchange(
+      _userId: string,
+      _accessToken: string,
+      _sessionId: string,
+      requestId: string,
+      responseText: string,
+    ) {
+      persistedResponses.push(responseText);
+      return {
+        userMessage: { id: "user-message", sender: "user" as const, text: options.userPrompt, module: "tutor" as const, timestamp: "2026-08-20T00:00:00.000Z" },
+        assistantMessage: { id: "assistant-message", sender: "ai" as const, text: responseText, module: "tutor" as const, timestamp: "2026-08-20T00:00:01.000Z", requestId, xpEarned: 10 },
+        progress: { xp: 10, level: 1, streak: 1, requests_count: 1, material_count: 0, patent_count: 0, modules_used: ["tutor"] },
+        awarded: true,
+      };
+    },
+  } as unknown as ChatRepository;
+  const authenticate: RequestHandler = (_request, response, next) => {
+    response.locals.auth = { userId: "123e4567-e89b-42d3-a456-426614174001", accessToken: "test-token", claims: {} };
+    next();
+  };
+  const app = express();
+  app.use(express.json());
+  app.use(createAiRouter(authenticate, (_request, _response, next) => next(), {
+    repository,
+    detectLanguage: () => "ru",
+    lookupStandards: async () => options.lookupResult,
+    generateResponse: async (_prompt, _module, language, systemPolicy) => {
+      assert.equal(language, "ru");
+      systemPolicies.push(systemPolicy ?? "");
+      const response = options.generatedResponses[Math.min(generateCalls, options.generatedResponses.length - 1)];
+      generateCalls += 1;
+      return response;
+    },
+  }));
+
+  const originalWarn = console.warn;
+  console.warn = (message?: unknown, details?: unknown) => {
+    if (message === "KazStandard response guard rejection" && typeof details === "string") {
+      diagnostics.push(JSON.parse(details));
+    }
+  };
+  let responseText = "";
+  try {
+    await withServer(app, async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/api/ai`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Idempotency-Key": "123e4567-e89b-42d3-a456-426614174002" },
+        body: JSON.stringify({
+          session_id: "123e4567-e89b-42d3-a456-426614174000",
+          text: options.userPrompt,
+          lang: "ru",
+        }),
+      });
+      assert.equal(response.status, 200);
+      const body = await response.json() as { response: string };
+      responseText = body.response;
+    });
+  } finally {
+    console.warn = originalWarn;
+  }
+
+  return { diagnostics, generateCalls, persistedResponses, persistedUserPrompt, responseText, systemPolicies };
 }
 
 test("keeps the backend feature flag disabled unless explicitly set to true", () => {
@@ -141,6 +234,37 @@ test("keeps an exact standard designation unchanged and first", () => {
     generateKazStandardQueries("Какие требования содержит ГОСТ 2.102-68?"),
     ["ГОСТ 2.102-68"],
   );
+});
+
+test("ranks a general ESKD record above narrow applications for a broad documentation question", () => {
+  const question = "Какой ГОСТ или СТ РК применяется к оформлению конструкторской документации?";
+  const queries = generateKazStandardQueries(question);
+  const candidates = parseKazStandardSearchResults(searchFixture([
+    { providerId: "57001", designation: "ГОСТ 2.001-2013", title: "Единая система конструкторской документации. Общие положения", status: "Действующий" },
+    { providerId: "38201", designation: "ГОСТ 2.125-2008", title: "ЕСКД. Правила выполнения эскизных конструкторских документов. Общие положения", status: "Действующий" },
+    { providerId: "38204", designation: "ГОСТ 2.418-2008", title: "ЕСКД. Правила выполнения конструкторской документации упаковки", status: "Действующий" },
+    { providerId: "38205", designation: "ГОСТ 2.431-2008", title: "ЕСКД. Правила выполнения чертежей изделий из стекла", status: "Действующий" },
+  ]));
+  const ranked = rankKazStandardCandidates(candidates, question, queries);
+
+  assert.equal(ranked[0].candidate.designation, "ГОСТ 2.001-2013");
+  assert.equal(ranked[0].earlyStopEligible, true);
+  assert.ok(ranked[0].score > ranked.find(({ candidate }) => candidate.designation === "ГОСТ 2.418-2008")!.score);
+  assert.ok(ranked[0].score > ranked.find(({ candidate }) => candidate.designation === "ГОСТ 2.431-2008")!.score);
+  assert.ok(ranked[0].score > ranked.find(({ candidate }) => candidate.designation === "ГОСТ 2.125-2008")!.score);
+});
+
+test("allows a packaging-specific question to rank the packaging standard highly", () => {
+  const question = "Какой стандарт ЕСКД применяется к конструкторской документации упаковки?";
+  const queries = generateKazStandardQueries(question);
+  const candidates = parseKazStandardSearchResults(searchFixture([
+    { providerId: "57001", designation: "ГОСТ 2.001-2013", title: "Единая система конструкторской документации. Общие положения", status: "Действующий" },
+    { providerId: "38204", designation: "ГОСТ 2.418-2008", title: "ЕСКД. Правила выполнения конструкторской документации упаковки", status: "Действующий" },
+  ]));
+  const ranked = rankKazStandardCandidates(candidates, question, queries);
+
+  assert.equal(ranked[0].candidate.designation, "ГОСТ 2.418-2008");
+  assert.equal(ranked[0].earlyStopEligible, true);
 });
 
 test("disabled flag and conceptual questions cause zero external requests", async () => {
@@ -258,6 +382,36 @@ test("deduplicates candidates across expanded searches and verifies a detail pag
   assert.equal(queries.length, 3);
   assert.equal(detailRequests, 1);
   assert.equal(result.kind, "verified");
+});
+
+test("runs the third query when earlier candidates are too narrow for the broad question", async () => {
+  const attemptedQueries: string[] = [];
+  let detailRequests = 0;
+  const client = fixtureClient({
+    async searchKazStandard(query) {
+      attemptedQueries.push(query);
+      const candidates = query === "конструкторская документация"
+        ? [{ providerId: "38201", designation: "ГОСТ 2.125-2008", title: "ЕСКД. Эскизные конструкторские документы. Общие положения", status: "Действующий" }]
+        : query === "ЕСКД"
+          ? [{ providerId: "38204", designation: "ГОСТ 2.418-2008", title: "ЕСКД. Конструкторская документация упаковки", status: "Действующий" }]
+          : [{ providerId: "57001", designation: "ГОСТ 2.001-2013", title: "Единая система конструкторской документации. Общие положения", status: "Действующий" }];
+      return { html: searchFixture(candidates), sourceUrl: "https://new-shop.ksm.kz/catalog/search/?q=test" };
+    },
+    async getKazStandardDocument(documentId) {
+      detailRequests += 1;
+      assert.equal(documentId, "57001");
+      return documentFixture("57001", "ГОСТ 2.001-2013", "Единая система конструкторской документации. Общие положения");
+    },
+  });
+
+  const result = await createStandardsService({ enabled: true, client }).searchVerifiedStandards(
+    "Какой ГОСТ или СТ РК применяется к оформлению конструкторской документации?",
+  );
+
+  assert.deepEqual(attemptedQueries, ["конструкторская документация", "ЕСКД", "оформление чертежей"]);
+  assert.equal(detailRequests, 1);
+  assert.equal(result.kind, "verified");
+  if (result.kind === "verified") assert.equal(result.standard.designation, "ГОСТ 2.001-2013");
 });
 
 test("caps detail-page validation at three ranked candidates", async () => {
@@ -545,7 +699,7 @@ test("passes verified metadata to the AI without changing the persisted user pro
       aiPrompt = prompt;
       aiSystemPolicy = systemPolicy ?? "";
       assert.equal(language, "ru");
-      return "Сведения сверены с ГОСТ 2.102-68.";
+      return "Сведения сверены с СТ РК ISO 9001-2016.";
     },
   }));
 
@@ -568,6 +722,72 @@ test("passes verified metadata to the AI without changing the persisted user pro
   assert.doesNotMatch(aiPrompt, /Публичная аннотация|\.pdf/iu);
   assert.equal(aiSystemPolicy, buildStandardsSystemInstructions({ kind: "verified", standard }));
   assert.doesNotMatch(persistedUserPrompt, /VERIFIED KAZSTANDARD METADATA/u);
-  assert.doesNotMatch(persistedAssistantResponse, /ГОСТ 2\.102-68/u);
-  assert.match(persistedAssistantResponse, /не удалось подтвердить все конкретные стандарты/u);
+  assert.match(persistedAssistantResponse, /СТ РК ISO 9001-2016/u);
+});
+
+test("regenerates exactly once with a strict allowlist and persists only the accepted response", async () => {
+  const standard: VerifiedStandard = {
+    providerId: "57001",
+    designation: "ГОСТ 2.001-2013",
+    title: "Единая система конструкторской документации. Общие положения",
+    status: "Действующий",
+    sourceUrl: "https://new-shop.ksm.kz/catalog/document/57001/",
+    currency: "current",
+    verifiedAt: "2026-08-22T00:00:00.000Z",
+  };
+  const result = await exerciseGuardedGeneration({
+    userPrompt: "Какой ГОСТ применяется к оформлению конструкторской документации?",
+    lookupResult: { kind: "verified", standard },
+    generatedResponses: [
+      "Применимы ГОСТ 2.001-2013 и ГОСТ 9.999-2099.",
+      "По открытому каталогу подтверждён ГОСТ 2.001-2013; остальные требования следует проверять отдельно.",
+    ],
+  });
+
+  assert.equal(result.generateCalls, 2);
+  assert.equal(result.persistedResponses.length, 1);
+  assert.equal(result.persistedResponses[0], result.responseText);
+  assert.match(result.persistedResponses[0], /ГОСТ 2\.001-2013/u);
+  assert.doesNotMatch(result.persistedResponses[0], /9\.999-2099/u);
+  assert.doesNotMatch(result.persistedUserPrompt, /VERIFIED KAZSTANDARD METADATA/u);
+  assert.match(result.systemPolicies[1], /\[ALLOWED STANDARD IDENTIFIERS\][\s\S]*ГОСТ 2\.001-2013/u);
+  assert.doesNotMatch(result.systemPolicies[1], /9\.999-2099/u);
+  assert.deepEqual(result.diagnostics, [{
+    verifiedDesignations: ["ГОСТ 2.001-2013"],
+    rejectedDesignations: ["ГОСТ 9.999-2099"],
+    regenerationAttempted: true,
+    regenerationAccepted: true,
+  }]);
+});
+
+test("fails closed after one regeneration when the retry invents another identifier", async () => {
+  const standard: VerifiedStandard = {
+    providerId: "57001",
+    designation: "ГОСТ 2.001-2013",
+    title: "Единая система конструкторской документации. Общие положения",
+    status: "Действующий",
+    sourceUrl: "https://new-shop.ksm.kz/catalog/document/57001/",
+    currency: "current",
+    verifiedAt: "2026-08-22T00:00:00.000Z",
+  };
+  const result = await exerciseGuardedGeneration({
+    userPrompt: "Какой ГОСТ применяется к оформлению конструкторской документации?",
+    lookupResult: { kind: "verified", standard },
+    generatedResponses: [
+      "Применимы ГОСТ 2.001-2013 и ГОСТ 9.999-2099.",
+      "Также применяется ГОСТ 8.888-2099.",
+    ],
+  });
+
+  assert.equal(result.generateCalls, 2);
+  assert.equal(result.persistedResponses.length, 1);
+  assert.equal(result.persistedResponses[0], result.responseText);
+  assert.doesNotMatch(result.persistedResponses[0], /9\.999-2099|8\.888-2099/u);
+  assert.match(result.persistedResponses[0], /не удалось подтвердить все конкретные стандарты/u);
+  assert.deepEqual(result.diagnostics, [{
+    verifiedDesignations: ["ГОСТ 2.001-2013"],
+    rejectedDesignations: ["ГОСТ 9.999-2099", "ГОСТ 8.888-2099"],
+    regenerationAttempted: true,
+    regenerationAccepted: false,
+  }]);
 });

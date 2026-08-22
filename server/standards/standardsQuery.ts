@@ -14,6 +14,21 @@ const DESIGN_DOCUMENTATION = /(?:конструкторск\p{L}*\s+докуме
 const DRAWING = /(?:черт[её]ж\p{L}*|drawing\p{L}*|сызба\p{L}*)/iu;
 const MATERIAL_STANDARD = /(?:(?:стандарт|ГОСТ|СТ\s+РК|standard|сәйкестік)[^.!?]{0,80}(?:материал|сталь|сплав|steel|alloy|болат|қорытпа)|(?:материал|сталь|сплав|steel|alloy|болат|қорытпа)[^.!?]{0,80}(?:стандарт|ГОСТ|СТ\s+РК|standard|сәйкестік))/iu;
 const MACHINE_SAFETY = /(?:безопасност\p{L}*\s+машин|machine\s+safety|machinery\s+safety|машиналар\p{L}*\s+қауіпсіз)/iu;
+const BROAD_TITLE = /(?:общие\s+(?:положения|требования|правила)|основные\s+положения|базовые\s+правила|general\s+(?:provisions|requirements|rules)|жалпы\s+(?:ережелер|талаптар|қағидалар)|негізгі\s+ережелер|базалық\s+қағидалар)/iu;
+const NARROW_APPLICATIONS = [
+  /(?:упаков|packag|қаптам)/iu,
+  /(?:стекл|glass|шыны)/iu,
+  /(?:эскиз|sketch|нобай)/iu,
+  /(?:вакуум|vacuum)/iu,
+  /(?:электронн|electronic|электрондық)/iu,
+  /(?:космич|space|ғарыш)/iu,
+  /(?:реабилитац|rehabilitation|оңалту)/iu,
+  /(?:железнодорож|railway|теміржол)/iu,
+  /(?:покрыт|coating|жабын)/iu,
+  /(?:термическ|thermal|термиялық)/iu,
+  /(?:эксплуатац|operating\s+document|пайдалану\s+құжат)/iu,
+  /(?:текстов|textual\s+document|мәтіндік\s+құжат)/iu,
+] as const;
 
 const STOP_WORDS = new Set([
   "а", "the", "a", "an", "and", "or", "about", "for", "to", "of", "is", "are", "which", "what",
@@ -107,7 +122,12 @@ export type RankedKazStandardCandidate = {
   candidate: KazStandardSearchCandidate;
   score: number;
   exactDesignationMatch: boolean;
+  earlyStopEligible: boolean;
 };
+
+function matchingNarrowApplications(value: string): number[] {
+  return NARROW_APPLICATIONS.flatMap((pattern, index) => pattern.test(value) ? [index] : []);
+}
 
 export function rankKazStandardCandidates(
   candidates: readonly KazStandardSearchCandidate[],
@@ -118,6 +138,8 @@ export function rankKazStandardCandidates(
   const normalizedRequestedDesignation = requestedDesignation ? normalizeDesignation(requestedDesignation) : undefined;
   const normalizedQueries = searchQueries.map(normalizeText).filter(Boolean);
   const terms = relevanceTerms(originalQuery, searchQueries);
+  const originalNarrowApplications = new Set(matchingNarrowApplications(originalQuery));
+  const broadQuestion = normalizedRequestedDesignation === undefined && originalNarrowApplications.size === 0;
 
   return candidates.map((candidate) => {
     const normalizedTitle = normalizeText(candidate.title);
@@ -126,6 +148,9 @@ export function rankKazStandardCandidates(
     const searchableTermKeys = new Set(searchable.split(" ").filter(Boolean).map(relevanceKey));
     const exactDesignationMatch = normalizedRequestedDesignation !== undefined
       && normalizedCandidateDesignation === normalizedRequestedDesignation;
+    const broadTitleMatch = BROAD_TITLE.test(candidate.title);
+    const candidateNarrowApplications = matchingNarrowApplications(candidate.title);
+    const unmatchedNarrowApplications = candidateNarrowApplications.filter((index) => !originalNarrowApplications.has(index));
     let score = exactDesignationMatch ? 100 : 0;
 
     for (const query of normalizedQueries) {
@@ -134,11 +159,19 @@ export function rankKazStandardCandidates(
     for (const term of terms) {
       if (searchableTermKeys.has(term)) score += 2;
     }
+    if (broadQuestion && broadTitleMatch) score += 12;
+    score += candidateNarrowApplications.filter((index) => originalNarrowApplications.has(index)).length * 6;
+    score -= unmatchedNarrowApplications.length * 8;
 
     const status = normalizeText(candidate.status ?? "");
     if (/(?:действующ|active|current)/u.test(status)) score += 1;
     if (/(?:замен|отмен|не действ|withdrawn|replaced|cancelled)/u.test(status)) score -= 2;
-    return { candidate, score, exactDesignationMatch };
+    const earlyStopEligible = exactDesignationMatch || (
+      score >= 8
+      && unmatchedNarrowApplications.length === 0
+      && (broadTitleMatch || candidateNarrowApplications.length > 0)
+    );
+    return { candidate, score, exactDesignationMatch, earlyStopEligible };
   }).sort((left, right) => (
     right.score - left.score
     || Number(right.exactDesignationMatch) - Number(left.exactDesignationMatch)

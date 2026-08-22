@@ -68,6 +68,7 @@ export function createStandardsService(options: StandardsServiceOptions) {
       const candidateById = new Map<string, ReturnType<typeof parseKazStandardSearchResults>[number]>();
       const attemptedDocumentIds = new Set<string>();
       const verified: VerifiedStandard[] = [];
+      let earlyStopVerified = false;
       let lookupFailed = false;
 
       const verifyCandidates = async (ranked: readonly RankedKazStandardCandidate[]): Promise<void> => {
@@ -80,6 +81,7 @@ export function createStandardsService(options: StandardsServiceOptions) {
             const metadata = parseKazStandardDocument(detailPage.html, detailPage.sourceUrl);
             const detailRank = rankKazStandardCandidates([metadata], originalQuery, searchQueries)[0];
             if (!detailRank || detailRank.score < 2) continue;
+            if (detailRank.earlyStopEligible) earlyStopVerified = true;
             verified.push({
               ...metadata,
               currency: classifyCurrency(metadata.status),
@@ -98,10 +100,10 @@ export function createStandardsService(options: StandardsServiceOptions) {
             if (!candidateById.has(candidate.providerId)) candidateById.set(candidate.providerId, candidate);
           }
           const ranked = rankKazStandardCandidates([...candidateById.values()], originalQuery, searchQueries);
-          const strongCandidates = ranked.filter(({ score, exactDesignationMatch }) => exactDesignationMatch || score >= 8);
-          if (strongCandidates.length > 0) {
-            await verifyCandidates(strongCandidates);
-            if (verified.length > 0) break;
+          const earlyStopCandidates = ranked.filter(({ earlyStopEligible }) => earlyStopEligible);
+          if (earlyStopCandidates.length > 0) {
+            await verifyCandidates(earlyStopCandidates);
+            if (earlyStopVerified) break;
           }
         } catch {
           lookupFailed = true;
