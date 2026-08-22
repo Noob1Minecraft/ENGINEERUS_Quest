@@ -13,6 +13,7 @@ import {
   guardStandardsResponse,
   verifiedStandardDesignations,
 } from "../standards/standardsResponseGuard";
+import { buildVerifiedStandardsResponse } from "../standards/verifiedStandardsResponse";
 import type { SupportedLanguage } from "../ai/languagePolicy";
 
 const SESSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -114,6 +115,8 @@ export function createAiRouter(
       let finalGuardResult = firstGuardResult;
       let regenerationAttempted = false;
       let regenerationAccepted = false;
+      let deterministicFallbackUsed = false;
+      let deterministicFallbackCandidateCount = 0;
       const rejectedDesignations = [...(firstGuardResult.rejectedDesignations ?? [])];
 
       if (firstGuardResult.rejected && (firstGuardResult.unverifiedDesignations?.length ?? 0) > 0) {
@@ -139,16 +142,30 @@ export function createAiRouter(
         rejectedDesignations.push(...(finalGuardResult.rejectedDesignations ?? []));
       }
 
+      let responseText = finalGuardResult.content;
+      if (finalGuardResult.rejected) {
+        const deterministicResponse = buildVerifiedStandardsResponse(prepared.lookupResult, detectedLanguage);
+        if (deterministicResponse) {
+          responseText = deterministicResponse;
+          deterministicFallbackUsed = true;
+          deterministicFallbackCandidateCount = Math.min(
+            verifiedStandardDesignations(prepared.lookupResult).length,
+            3,
+          );
+        }
+      }
+
       if (firstGuardResult.rejected) {
         console.warn("KazStandard response guard rejection", JSON.stringify({
           verifiedDesignations: verifiedStandardDesignations(prepared.lookupResult),
           rejectedDesignations: uniqueDesignations(rejectedDesignations),
           regenerationAttempted,
           regenerationAccepted,
+          deterministicFallbackUsed,
+          deterministicFallbackCandidateCount,
         }));
       }
 
-      const responseText = finalGuardResult.content;
       if (!responseText) throw new Error("AI response did not contain user-facing content.");
       const completed = await dependencies.repository.completeExchange(
         userId,

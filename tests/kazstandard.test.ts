@@ -19,6 +19,7 @@ import {
 } from "../server/standards/standardsPolicy";
 import { guardStandardsResponse } from "../server/standards/standardsResponseGuard";
 import { generateKazStandardQueries, rankKazStandardCandidates } from "../server/standards/standardsQuery";
+import { buildVerifiedStandardsResponse } from "../server/standards/verifiedStandardsResponse";
 import {
   createStandardsService,
   type StandardsLookupResult,
@@ -69,6 +70,7 @@ async function exerciseGuardedGeneration(options: {
   userPrompt: string;
   lookupResult: StandardsLookupResult;
   generatedResponses: string[];
+  language?: "ru" | "kk" | "en";
 }) {
   const persistedResponses: string[] = [];
   const systemPolicies: string[] = [];
@@ -114,10 +116,10 @@ async function exerciseGuardedGeneration(options: {
   app.use(express.json());
   app.use(createAiRouter(authenticate, (_request, _response, next) => next(), {
     repository,
-    detectLanguage: () => "ru",
+    detectLanguage: () => options.language ?? "ru",
     lookupStandards: async () => options.lookupResult,
     generateResponse: async (_prompt, _module, language, systemPolicy) => {
-      assert.equal(language, "ru");
+      assert.equal(language, options.language ?? "ru");
       systemPolicies.push(systemPolicy ?? "");
       const response = options.generatedResponses[Math.min(generateCalls, options.generatedResponses.length - 1)];
       generateCalls += 1;
@@ -140,7 +142,7 @@ async function exerciseGuardedGeneration(options: {
         body: JSON.stringify({
           session_id: "123e4567-e89b-42d3-a456-426614174000",
           text: options.userPrompt,
-          lang: "ru",
+          lang: options.language ?? "ru",
         }),
       });
       assert.equal(response.status, 200);
@@ -725,6 +727,29 @@ test("passes verified metadata to the AI without changing the persisted user pro
   assert.match(persistedAssistantResponse, /СТ РК ISO 9001-2016/u);
 });
 
+test("returns an accepted first response without regeneration or deterministic fallback", async () => {
+  const standard: VerifiedStandard = {
+    providerId: "57001",
+    designation: "ГОСТ 2.001-2013",
+    title: "Единая система конструкторской документации. Общие положения",
+    status: "Действующий",
+    sourceUrl: "https://new-shop.ksm.kz/catalog/document/57001/",
+    currency: "current",
+    verifiedAt: "2026-08-22T00:00:00.000Z",
+  };
+  const generatedResponse = "По открытому каталогу найден ГОСТ 2.001-2013.";
+  const result = await exerciseGuardedGeneration({
+    userPrompt: "Какой ГОСТ применяется к оформлению конструкторской документации?",
+    lookupResult: { kind: "verified", standard },
+    generatedResponses: [generatedResponse],
+  });
+
+  assert.equal(result.generateCalls, 1);
+  assert.equal(result.responseText, generatedResponse);
+  assert.deepEqual(result.persistedResponses, [generatedResponse]);
+  assert.deepEqual(result.diagnostics, []);
+});
+
 test("regenerates exactly once with a strict allowlist and persists only the accepted response", async () => {
   const standard: VerifiedStandard = {
     providerId: "57001",
@@ -757,22 +782,44 @@ test("regenerates exactly once with a strict allowlist and persists only the acc
     rejectedDesignations: ["ГОСТ 9.999-2099"],
     regenerationAttempted: true,
     regenerationAccepted: true,
+    deterministicFallbackUsed: false,
+    deterministicFallbackCandidateCount: 0,
   }]);
 });
 
-test("fails closed after one regeneration when the retry invents another identifier", async () => {
-  const standard: VerifiedStandard = {
-    providerId: "57001",
-    designation: "ГОСТ 2.001-2013",
-    title: "Единая система конструкторской документации. Общие положения",
-    status: "Действующий",
-    sourceUrl: "https://new-shop.ksm.kz/catalog/document/57001/",
-    currency: "current",
-    verifiedAt: "2026-08-22T00:00:00.000Z",
-  };
+test("uses three verified metadata records after one regeneration still invents another identifier", async () => {
+  const candidates: VerifiedStandard[] = [
+    {
+      providerId: "57001",
+      designation: "ГОСТ 2.001-2013",
+      title: "Единая система конструкторской документации. Общие положения",
+      status: "Действующий",
+      sourceUrl: "https://new-shop.ksm.kz/catalog/document/57001/",
+      currency: "current",
+      verifiedAt: "2026-08-22T00:00:00.000Z",
+    },
+    {
+      providerId: "57002",
+      designation: "ГОСТ 2.002-2013",
+      title: "Проверенный документ 2",
+      status: "Действующий",
+      sourceUrl: "https://new-shop.ksm.kz/catalog/document/57002/",
+      currency: "current",
+      verifiedAt: "2026-08-22T00:00:00.000Z",
+    },
+    {
+      providerId: "57003",
+      designation: "ГОСТ 2.003-2013",
+      title: "Проверенный документ 3",
+      status: "Действующий",
+      sourceUrl: "https://new-shop.ksm.kz/catalog/document/57003/",
+      currency: "current",
+      verifiedAt: "2026-08-22T00:00:00.000Z",
+    },
+  ];
   const result = await exerciseGuardedGeneration({
     userPrompt: "Какой ГОСТ применяется к оформлению конструкторской документации?",
-    lookupResult: { kind: "verified", standard },
+    lookupResult: { kind: "ambiguous", candidates },
     generatedResponses: [
       "Применимы ГОСТ 2.001-2013 и ГОСТ 9.999-2099.",
       "Также применяется ГОСТ 8.888-2099.",
@@ -783,11 +830,81 @@ test("fails closed after one regeneration when the retry invents another identif
   assert.equal(result.persistedResponses.length, 1);
   assert.equal(result.persistedResponses[0], result.responseText);
   assert.doesNotMatch(result.persistedResponses[0], /9\.999-2099|8\.888-2099/u);
-  assert.match(result.persistedResponses[0], /не удалось подтвердить все конкретные стандарты/u);
+  assert.match(result.persistedResponses[0], /ГОСТ 2\.001-2013/u);
+  assert.match(result.persistedResponses[0], /ГОСТ 2\.002-2013/u);
+  assert.match(result.persistedResponses[0], /ГОСТ 2\.003-2013/u);
+  assert.match(result.persistedResponses[0], /https:\/\/new-shop\.ksm\.kz\/catalog\/document\/57001\//u);
+  assert.match(result.persistedResponses[0], /Полный текст стандартов не анализировался/u);
   assert.deepEqual(result.diagnostics, [{
-    verifiedDesignations: ["ГОСТ 2.001-2013"],
+    verifiedDesignations: ["ГОСТ 2.001-2013", "ГОСТ 2.002-2013", "ГОСТ 2.003-2013"],
     rejectedDesignations: ["ГОСТ 9.999-2099", "ГОСТ 8.888-2099"],
     regenerationAttempted: true,
     regenerationAccepted: false,
+    deterministicFallbackUsed: true,
+    deterministicFallbackCandidateCount: 3,
+  }]);
+});
+
+test("builds deterministic verified responses in Russian, Kazakh, and English", () => {
+  const candidates: VerifiedStandard[] = [
+    {
+      providerId: "57001",
+      designation: "ГОСТ 2.001-2013",
+      title: "Единая система конструкторской документации. Общие положения",
+      status: "Действующий",
+      effectiveDate: "2014-06-01",
+      sourceUrl: "https://new-shop.ksm.kz/catalog/document/57001/",
+      currency: "current",
+      verifiedAt: "2026-08-22T00:00:00.000Z",
+    },
+    ...[2, 3, 4].map((number): VerifiedStandard => ({
+      providerId: `5700${number}`,
+      designation: `ГОСТ 2.00${number}-2013`,
+      title: `Проверенный документ ${number}`,
+      status: "Действующий",
+      sourceUrl: `https://new-shop.ksm.kz/catalog/document/5700${number}/`,
+      currency: "current",
+      verifiedAt: "2026-08-22T00:00:00.000Z",
+    })),
+  ];
+  const result: StandardsLookupResult = { kind: "ambiguous", candidates };
+
+  const russian = buildVerifiedStandardsResponse(result, "ru") ?? "";
+  const kazakh = buildVerifiedStandardsResponse(result, "kk") ?? "";
+  const english = buildVerifiedStandardsResponse(result, "en") ?? "";
+
+  assert.match(russian, /^По открытому каталогу КазСтандарта/u);
+  assert.match(kazakh, /^ҚазСтандарттың ашық каталогынан/u);
+  assert.match(english, /^The following relevant documents/u);
+  for (const content of [russian, kazakh, english]) {
+    assert.match(content, /ГОСТ 2\.001-2013/u);
+    assert.match(content, /https:\/\/new-shop\.ksm\.kz\/catalog\/document\/57001\//u);
+    assert.doesNotMatch(content, /ГОСТ 2\.004-2013|\/57004\//u);
+    assert.equal((content.match(/^- /gmu) ?? []).length, 3);
+  }
+});
+
+test("keeps the existing no-result fallback when no verified candidates exist", async () => {
+  const result = await exerciseGuardedGeneration({
+    userPrompt: "Какой стандарт применяется к конструкторской документации?",
+    lookupResult: { kind: "no_result" },
+    generatedResponses: [
+      "Применяется ГОСТ 9.999-2099.",
+      "Также применяется ГОСТ 8.888-2099.",
+    ],
+  });
+
+  assert.equal(result.generateCalls, 2);
+  assert.equal(result.persistedResponses.length, 1);
+  assert.equal(result.persistedResponses[0], result.responseText);
+  assert.doesNotMatch(result.responseText, /9\.999-2099|8\.888-2099/u);
+  assert.match(result.responseText, /не удалось подтвердить конкретный действующий стандарт/u);
+  assert.deepEqual(result.diagnostics, [{
+    verifiedDesignations: [],
+    rejectedDesignations: ["ГОСТ 9.999-2099", "ГОСТ 8.888-2099"],
+    regenerationAttempted: true,
+    regenerationAccepted: false,
+    deterministicFallbackUsed: false,
+    deterministicFallbackCandidateCount: 0,
   }]);
 });
