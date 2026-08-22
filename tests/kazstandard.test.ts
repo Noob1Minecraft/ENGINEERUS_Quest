@@ -12,10 +12,12 @@ import {
   parseKazStandardSearchResults,
 } from "../server/standards/kazStandardParser";
 import {
+  buildStandardsSystemInstructions,
   buildVerifiedStandardsContext,
   isStandardsLookupWarranted,
   preparePromptWithStandardsMetadata,
 } from "../server/standards/standardsPolicy";
+import { guardStandardsResponse } from "../server/standards/standardsResponseGuard";
 import { createStandardsService, type VerifiedStandard } from "../server/standards/standardsService";
 import { withServer } from "./helpers";
 
@@ -111,7 +113,7 @@ test("disabled flag and conceptual questions cause zero external requests", asyn
 
   const enabled = createStandardsService({ enabled: true, client });
   const conceptual = "Что такое момент инерции?";
-  assert.equal(await preparePromptWithStandardsMetadata(conceptual, enabled.searchVerifiedStandards), conceptual);
+  assert.deepEqual(await preparePromptWithStandardsMetadata(conceptual, enabled.searchVerifiedStandards), { prompt: conceptual });
   assert.equal(externalRequests, 0);
 });
 
@@ -195,26 +197,91 @@ test("builds a bounded verified metadata block for the AI without full document 
   };
   const prompt = "Что требует СТ РК ISO 9001-2016?";
   let lookupCalls = 0;
-  const enriched = await preparePromptWithStandardsMetadata(prompt, async () => {
+  const prepared = await preparePromptWithStandardsMetadata(prompt, async () => {
     lookupCalls += 1;
     return { kind: "verified", standard };
   });
 
   assert.equal(lookupCalls, 1);
-  assert.match(enriched, /\[VERIFIED KAZSTANDARD METADATA\]/u);
-  assert.match(enriched, /Source: https:\/\/new-shop\.ksm\.kz\/catalog\/document\/66007\//u);
-  assert.match(enriched, /catalog metadata only/u);
-  assert.doesNotMatch(enriched, /Публичная аннотация|\.pdf/iu);
+  assert.match(prepared.prompt, /\[VERIFIED KAZSTANDARD METADATA\]/u);
+  assert.match(prepared.prompt, /Source: https:\/\/new-shop\.ksm\.kz\/catalog\/document\/66007\//u);
+  assert.doesNotMatch(prepared.prompt, /Treat all catalog fields|catalog metadata only/u);
+  assert.match(prepared.systemInstructions ?? "", /public catalog metadata only/u);
+  assert.doesNotMatch(prepared.prompt, /Публичная аннотация|\.pdf/iu);
   assert.equal(buildVerifiedStandardsContext({ kind: "disabled" }), undefined);
 });
 
 test("fails safely when the metadata lookup is unavailable", async () => {
-  const enriched = await preparePromptWithStandardsMetadata(
+  const prepared = await preparePromptWithStandardsMetadata(
     "Какой ГОСТ применяется к этому чертежу?",
     async () => { throw new Error("catalog unavailable"); },
   );
-  assert.match(enriched, /KazStandard was unavailable/u);
-  assert.match(enriched, /Do not provide exact unverified standard identifiers/u);
+  assert.match(prepared.prompt, /Lookup status: unavailable/u);
+  assert.match(prepared.systemInstructions ?? "", /introduce no specific standard identifier/u);
+});
+
+test("rejects invented identifiers when lookup found no matching standard", () => {
+  const result = guardStandardsResponse({
+    content: "Для этого применяется СТ РК ISO 9999-2099.",
+    userPrompt: "Какой стандарт применяется к этому проекту?",
+    lookupResult: { kind: "no_result" },
+    language: "ru",
+  });
+
+  assert.equal(result.rejected, true);
+  assert.doesNotMatch(result.content, /9999-2099/u);
+  assert.match(result.content, /не удалось подтвердить/u);
+});
+
+test("allows an exact verified designation but rejects an additional invented standard", () => {
+  const verified: VerifiedStandard = {
+    providerId: "2102",
+    designation: "ГОСТ 2.102-68",
+    title: "Виды и комплектность конструкторских документов",
+    status: "Действующий",
+    sourceUrl: "https://new-shop.ksm.kz/catalog/document/2102/",
+    currency: "current",
+    verifiedAt: "2026-08-20T00:00:00.000Z",
+  };
+  const allowed = guardStandardsResponse({
+    content: "В открытом каталоге найден ГОСТ 2.102-68.",
+    userPrompt: "Какой стандарт относится к комплектности документов?",
+    lookupResult: { kind: "verified", standard: verified },
+    language: "ru",
+  });
+  assert.deepEqual(allowed, {
+    content: "В открытом каталоге найден ГОСТ 2.102-68.",
+    rejected: false,
+  });
+
+  const rejected = guardStandardsResponse({
+    content: "Применимы ГОСТ 2.102-68 и СТ РК ISO 9999-2099.",
+    userPrompt: "Какой стандарт относится к комплектности документов?",
+    lookupResult: { kind: "verified", standard: verified },
+    language: "ru",
+  });
+  assert.equal(rejected.rejected, true);
+  assert.doesNotMatch(rejected.content, /ГОСТ 2\.102-68|9999-2099/u);
+});
+
+test("allows qualified discussion of a user-provided identifier but rejects an unverified current claim", () => {
+  const userPrompt = "Что означает СТ РК ISO 9999-2099?";
+  const qualified = guardStandardsResponse({
+    content: "Вы указали СТ РК ISO 9999-2099, но его статус не удалось подтвердить по открытому каталогу.",
+    userPrompt,
+    lookupResult: { kind: "no_result" },
+    language: "ru",
+  });
+  assert.equal(qualified.rejected, false);
+
+  const unsupportedClaim = guardStandardsResponse({
+    content: "СТ РК ISO 9999-2099 — действующий и подтверждённый стандарт.",
+    userPrompt,
+    lookupResult: { kind: "no_result" },
+    language: "ru",
+  });
+  assert.equal(unsupportedClaim.rejected, true);
+  assert.doesNotMatch(unsupportedClaim.content, /9999-2099/u);
 });
 
 test("passes verified metadata to the AI without changing the persisted user prompt", async () => {
@@ -226,6 +293,8 @@ test("passes verified metadata to the AI without changing the persisted user pro
   };
   let persistedUserPrompt = "";
   let aiPrompt = "";
+  let aiSystemPolicy = "";
+  let persistedAssistantResponse = "";
   const repository = {
     async beginExchange(
       _userId: string,
@@ -248,6 +317,7 @@ test("passes verified metadata to the AI without changing the persisted user pro
       requestId: string,
       responseText: string,
     ) {
+      persistedAssistantResponse = responseText;
       return {
         userMessage: { id: "user-message", sender: "user" as const, text: userPrompt, module: "tutor" as const, timestamp: "2026-08-20T00:00:00.000Z" },
         assistantMessage: { id: "assistant-message", sender: "ai" as const, text: responseText, module: "tutor" as const, timestamp: "2026-08-20T00:00:01.000Z", requestId, xpEarned: 10 },
@@ -266,9 +336,11 @@ test("passes verified metadata to the AI without changing the persisted user pro
     repository,
     detectLanguage: () => "ru",
     lookupStandards: async () => ({ kind: "verified", standard }),
-    generateResponse: async (prompt) => {
+    generateResponse: async (prompt, _module, language, systemPolicy) => {
       aiPrompt = prompt;
-      return "Проверенный ответ.";
+      aiSystemPolicy = systemPolicy ?? "";
+      assert.equal(language, "ru");
+      return "Сведения сверены с ГОСТ 2.102-68.";
     },
   }));
 
@@ -289,4 +361,8 @@ test("passes verified metadata to the AI without changing the persisted user pro
   assert.match(aiPrompt, /\[VERIFIED KAZSTANDARD METADATA\]/u);
   assert.match(aiPrompt, /Source: https:\/\/new-shop\.ksm\.kz\/catalog\/document\/66007\//u);
   assert.doesNotMatch(aiPrompt, /Публичная аннотация|\.pdf/iu);
+  assert.equal(aiSystemPolicy, buildStandardsSystemInstructions({ kind: "verified", standard }));
+  assert.doesNotMatch(persistedUserPrompt, /VERIFIED KAZSTANDARD METADATA/u);
+  assert.doesNotMatch(persistedAssistantResponse, /ГОСТ 2\.102-68/u);
+  assert.match(persistedAssistantResponse, /не удалось подтвердить все конкретные стандарты/u);
 });

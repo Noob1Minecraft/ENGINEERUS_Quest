@@ -4,14 +4,21 @@ import { PersistenceError, sendPersistenceError } from "../persistence/errors";
 import { createIdempotencyKey } from "../services/progress";
 import { sanitizeAssistantContent } from "../ai/responseSafety";
 import { preparePromptWithStandardsMetadata, type StandardsLookup } from "../standards/standardsPolicy";
+import { guardStandardsResponse } from "../standards/standardsResponseGuard";
+import type { SupportedLanguage } from "../ai/languagePolicy";
 
 const SESSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MODULES: readonly ChatModule[] = ["tutor", "material", "patent", "engi_legal", "engi_match"];
 
 type AiDependencies = {
   repository: ChatRepository;
-  detectLanguage: (text: string, requestedLanguage: string) => string;
-  generateResponse: (text: string, module: ChatModule, language: string) => Promise<string>;
+  detectLanguage: (text: string, requestedLanguage: string) => SupportedLanguage;
+  generateResponse: (
+    text: string,
+    module: ChatModule,
+    language: SupportedLanguage,
+    additionalSystemPolicy?: string,
+  ) => Promise<string>;
   lookupStandards?: StandardsLookup;
 };
 
@@ -78,9 +85,20 @@ export function createAiRouter(
         return;
       }
 
-      const aiPrompt = await preparePromptWithStandardsMetadata(canonicalPrompt, dependencies.lookupStandards);
-      const generatedResponse = await dependencies.generateResponse(aiPrompt, moduleName, detectedLanguage);
-      const responseText = sanitizeAssistantContent(generatedResponse);
+      const prepared = await preparePromptWithStandardsMetadata(canonicalPrompt, dependencies.lookupStandards);
+      const generatedResponse = await dependencies.generateResponse(
+        prepared.prompt,
+        moduleName,
+        detectedLanguage,
+        prepared.systemInstructions,
+      );
+      const sanitizedResponse = sanitizeAssistantContent(generatedResponse);
+      const responseText = guardStandardsResponse({
+        content: sanitizedResponse,
+        userPrompt: canonicalPrompt,
+        lookupResult: prepared.lookupResult,
+        language: detectedLanguage,
+      }).content;
       if (!responseText) throw new Error("AI response did not contain user-facing content.");
       const completed = await dependencies.repository.completeExchange(
         userId,

@@ -1,4 +1,4 @@
-import { buildSystemPrompt, languageName, resolveResponseLanguage, type AiModule } from "./languagePolicy";
+import { buildSystemPrompt, languageName, type AiModule, type SupportedLanguage } from "./languagePolicy";
 import { sanitizeAssistantContent } from "./responseSafety";
 
 const FALLBACK_MODELS = ["openai/gpt-oss-120b", "openai/gpt-oss-20b"];
@@ -39,12 +39,12 @@ export function createGroqResponder(options: GroqResponderOptions) {
   return async function generateResponse(
     prompt: string,
     module: AiModule = "tutor",
-    requestedLanguage = "ru",
+    language: SupportedLanguage = "ru",
+    additionalSystemPolicy?: string,
   ): Promise<string> {
-    const language = resolveResponseLanguage(prompt, requestedLanguage);
     if (apiKeys.length === 0) return fallbackResponse(prompt, language, true);
 
-    const systemPrompt = buildSystemPrompt(language, module);
+    const systemPrompt = buildSystemPrompt(language, module, additionalSystemPolicy);
 
     for (let keyAttempt = 0; keyAttempt < apiKeys.length; keyAttempt += 1) {
       const apiKey = apiKeys[keyAttempt];

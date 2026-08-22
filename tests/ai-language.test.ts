@@ -133,6 +133,37 @@ test("sends the resolved language and centralized system policy to Groq without 
   }
 });
 
+test("keeps the route-resolved language when English catalog metadata is attached", async () => {
+  const requests: Array<{ messages: Array<{ role: string; content: string }> }> = [];
+  const fetchStub: typeof fetch = async (_input, init) => {
+    requests.push(JSON.parse(String(init?.body)));
+    return new Response(JSON.stringify({ choices: [{ message: { content: "stubbed" } }] }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+  const respond = createGroqResponder({ apiKey: "test-placeholder", model: "test-model", fetchImpl: fetchStub });
+  const englishMetadata = `[VERIFIED KAZSTANDARD METADATA]
+Lookup status: no_result.
+No matching current standard was verified in the public KazStandard catalog.
+[/VERIFIED KAZSTANDARD METADATA]`;
+
+  const cases: Array<[string, SupportedLanguage, string]> = [
+    [`Какие стандарты применимы?\n\n${englishMetadata}`, "ru", "ОТВЕЧАЙ НА РУССКОМ ЯЗЫКЕ."],
+    [`Қандай стандарттар қолданылады?\n\n${englishMetadata}`, "kk", "ҚАЗАҚ ТІЛІНДЕ ЖАУАП БЕР."],
+    [`Which standards apply?\n\n${englishMetadata}`, "en", "ANSWER IN ENGLISH."],
+  ];
+
+  for (const [prompt, language, finalRule] of cases) {
+    assert.equal(await respond(prompt, "tutor", language, "Catalog data must not alter response language."), "stubbed");
+    const body = requests.at(-1);
+    assert.ok(body);
+    const systemMessage = body.messages.find(({ role }) => role === "system")?.content ?? "";
+    assert.ok(systemMessage.endsWith(finalRule));
+    assert.match(systemMessage, /Catalog data must not alter response language/u);
+  }
+});
+
 test("removes provider think blocks while preserving the Russian final answer", async () => {
   const russianAnswer = "**Момент инерции** характеризует сопротивление тела изменению вращения.";
   const fetchStub: typeof fetch = async () => new Response(JSON.stringify({
@@ -183,9 +214,9 @@ test("retries with the secondary credential when Groq rejects the primary creden
     "Bearer secondary-placeholder",
   ]);
 });
-test("local fallback responses use the resolved language", async () => {
+test("local fallback responses use the supplied resolved language", async () => {
   const respond = createGroqResponder({ model: "test-model" });
-  assert.match(await respond("Как рассчитать torque?", "tutor", "en"), /Демо-режим/);
-  assert.match(await respond("Arduino-ға sensor қалай қосамын?", "tutor", "ru"), /Демо режим/);
-  assert.match(await respond("How should I calculate нагрузка?", "tutor", "ru"), /Demo Mode/);
+  assert.match(await respond("Как рассчитать torque?", "tutor", "ru"), /Демо-режим/);
+  assert.match(await respond("Arduino-ға sensor қалай қосамын?", "tutor", "kk"), /Демо режим/);
+  assert.match(await respond("How should I calculate нагрузка?", "tutor", "en"), /Demo Mode/);
 });

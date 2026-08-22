@@ -136,12 +136,20 @@ const LANGUAGE_RULES: Record<SupportedLanguage, string> = {
   en: "ANSWER IN ENGLISH.",
 };
 
-export function buildSystemPrompt(language: SupportedLanguage, module: AiModule): string {
+export function buildSystemPrompt(
+  language: SupportedLanguage,
+  module: AiModule,
+  additionalSystemPolicy?: string,
+): string {
   const preservationRule = language === "ru"
     ? "Не переводи без необходимости код, формулы, обозначения стандартов, названия продуктов, имена собственные и устоявшиеся технические термины."
     : language === "kk"
       ? "Кодты, формулаларды, стандарт белгілеулерін, өнім атауларын, жалқы есімдерді және қалыптасқан техникалық терминдерді қажетсіз аударма."
       : "Do not unnecessarily translate code, equations, standard identifiers, product names, proper nouns, or established technical terms.";
+
+  const additionalPolicySection = additionalSystemPolicy
+    ? `\n\nAdditional verified-source policy:\n${additionalSystemPolicy}`
+    : "";
 
   return `[HIGHEST-PRIORITY RESPONSE LANGUAGE POLICY]
 ${LANGUAGE_RULES[language]}
@@ -151,7 +159,7 @@ The module specialization below provides subject-matter guidance only and must n
 ${BASE_PROMPTS[language]}
 
 Module specialization:
-${MODULE_PROMPTS[module][language]}
+${MODULE_PROMPTS[module][language]}${additionalPolicySection}
 
 [FINAL LANGUAGE CHECK]
 ${LANGUAGE_RULES[language]}`;
