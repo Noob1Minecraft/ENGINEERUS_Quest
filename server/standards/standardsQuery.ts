@@ -26,12 +26,16 @@ const NARROW_APPLICATIONS = [
   /(?:термическ|thermal|термиялық)/iu,
   /(?:эксплуатац|operating\s+document|пайдалану\s+құжат)/iu,
   /(?:текстов|textual\s+document|мәтіндік\s+құжат)/iu,
+  /(?:трубопровод|pipeline|құбыр)/iu,
+  /(?:нефтегаз|нефтян|газов|oil\s*(?:and|&)\s*gas|oil|gas|мұнай|газ)/iu,
+  /(?:сварн\p{L}*\s+соединен|welded\s+joint|дәнекерленген\s+қосыл)/iu,
+  /(?:неразрушающ\p{L}*\s+контрол|неразрушающ\p{L}*\s+испытан|nondestructive\s+(?:testing|examination)|бұзбайтын\s+бақыла)/iu,
 ] as const;
 
 const STOP_WORDS = new Set([
   "а", "the", "a", "an", "and", "or", "about", "for", "to", "of", "is", "are", "which", "what",
   "и", "или", "к", "ко", "по", "о", "об", "на", "для", "при", "этот", "эта", "это", "какой", "какие",
-  "какая", "какого", "применяется", "применяются", "применим", "нужен", "нужна", "нужны", "требуется", "требуются",
+  "какая", "какого", "применяется", "применяются", "применим", "используется", "используются", "нужен", "нужна", "нужны", "требуется", "требуются",
   "стандарт", "стандарты", "гост", "ст", "рк",
   "және", "немесе", "үшін", "қандай", "қай", "қолданылады", "қажет", "талап",
 ]);
@@ -54,6 +58,8 @@ const ENGINEERING_TERMINOLOGY: readonly EngineeringTerminologyRule[] = [
   {
     pattern: /(?:материал\p{L}*|стал\p{L}*|сплав\p{L}*|material\p{L}*|steel|alloy\p{L}*|болат|қорытпа\p{L}*)/iu,
     queries: (input) => [
+      ...(/(?:конструкционн\p{L}*\s+стал\p{L}*|structural\s+steel|конструкциялық\s+болат)/iu.test(input) ? ["конструкционные стали"] : []),
+      ...(/(?:нержавеющ\p{L}*\s+стал\p{L}*|stainless\s+steel|тот баспайтын\s+болат)/iu.test(input) ? ["нержавеющая сталь"] : []),
       ...(/(?:стал\p{L}*|steel|болат)/iu.test(input) ? ["сталь"] : []),
       ...(/(?:сплав\p{L}*|alloy\p{L}*|қорытпа\p{L}*)/iu.test(input) ? ["сплавы"] : []),
       "требования к материалам",
@@ -61,7 +67,7 @@ const ENGINEERING_TERMINOLOGY: readonly EngineeringTerminologyRule[] = [
   },
   { pattern: /(?:сварк\p{L}*|сварн\p{L}*\s+соединен\p{L}*)/iu, queries: ["сварка", "сварные соединения"] },
   { pattern: /(?:корроз\p{L}*|антикорроз\p{L}*)/iu, queries: ["защита от коррозии", "антикоррозионные покрытия"] },
-  { pattern: /(?:железобетон\p{L}*)/iu, queries: ["железобетон", "железобетонные конструкции"] },
+  { pattern: /(?:железобетон\p{L}*)/iu, queries: ["железобетонные конструкции", "железобетон"] },
   { pattern: /(?:(?<![\p{L}\p{N}])бетон\p{L}*(?![\p{L}\p{N}]))/iu, queries: ["бетон", "бетонные конструкции"] },
   { pattern: /(?:безопасност\p{L}*\s+машин|безопасн\p{L}*\s+оборудован\p{L}*|machine\s+safety|machinery\s+safety|машиналар\p{L}*\s+қауіпсіз)/iu, queries: ["безопасность машин", "требования безопасности машин"] },
   { pattern: /(?:электробезопасност\p{L}*|электрическ\p{L}*\s+безопасност\p{L}*)/iu, queries: ["электробезопасность", "безопасность электрооборудования"] },
@@ -148,7 +154,21 @@ function relevanceTerms(originalQuery: string, searchQueries: readonly string[])
 }
 
 function relevanceKey(token: string): string {
+  if (/^стал/iu.test(token)) return "стал";
   return token.length >= 7 ? token.slice(0, 7) : token;
+}
+
+function requiredTopicPattern(originalQuery: string): RegExp | undefined {
+  if (/(?:конструкционн\p{L}*\s+стал\p{L}*|structural\s+steel|конструкциялық\s+болат)/iu.test(originalQuery)) {
+    return /(?=.*(?:конструкционн|structural|конструкциялық))(?=.*(?:стал|steel|болат))/iu;
+  }
+  if (/(?:нержавеющ\p{L}*\s+стал\p{L}*|stainless\s+steel|тот баспайтын\s+болат)/iu.test(originalQuery)) {
+    return /(?=.*(?:нержавеющ|stainless|тот баспайтын))(?=.*(?:стал|steel|болат))/iu;
+  }
+  if (/(?:железобетон\p{L}*|reinforced\s+concrete|темірбетон\p{L}*)/iu.test(originalQuery)) {
+    return /(?:железобетон|reinforced\s+concrete|темірбетон)/iu;
+  }
+  return undefined;
 }
 
 export type RankedKazStandardCandidate = {
@@ -156,6 +176,7 @@ export type RankedKazStandardCandidate = {
   score: number;
   exactDesignationMatch: boolean;
   earlyStopEligible: boolean;
+  topicRelevant: boolean;
 };
 
 function matchingNarrowApplications(value: string): number[] {
@@ -171,6 +192,8 @@ export function rankKazStandardCandidates(
   const normalizedRequestedDesignation = requestedDesignation ? normalizeDesignation(requestedDesignation) : undefined;
   const normalizedQueries = searchQueries.map(normalizeText).filter(Boolean);
   const terms = relevanceTerms(originalQuery, searchQueries);
+  const originalTerms = relevanceTerms(originalQuery, []);
+  const requiredTopic = requiredTopicPattern(originalQuery);
   const originalNarrowApplications = new Set(matchingNarrowApplications(originalQuery));
   const broadQuestion = normalizedRequestedDesignation === undefined && originalNarrowApplications.size === 0;
 
@@ -182,6 +205,10 @@ export function rankKazStandardCandidates(
     const exactDesignationMatch = normalizedRequestedDesignation !== undefined
       && normalizedCandidateDesignation === normalizedRequestedDesignation;
     const broadTitleMatch = BROAD_TITLE.test(candidate.title);
+    const originalTopicMatches = originalTerms.filter((term) => searchableTermKeys.has(term)).length;
+    const topicRelevant = exactDesignationMatch || (requiredTopic
+      ? requiredTopic.test(candidate.title)
+      : originalTopicMatches > 0);
     const candidateNarrowApplications = matchingNarrowApplications(candidate.title);
     const unmatchedNarrowApplications = candidateNarrowApplications.filter((index) => !originalNarrowApplications.has(index));
     let score = exactDesignationMatch ? 100 : 0;
@@ -192,7 +219,7 @@ export function rankKazStandardCandidates(
     for (const term of terms) {
       if (searchableTermKeys.has(term)) score += 2;
     }
-    if (broadQuestion && broadTitleMatch) score += 12;
+    if (broadQuestion && broadTitleMatch && topicRelevant) score += 12;
     score += candidateNarrowApplications.filter((index) => originalNarrowApplications.has(index)).length * 6;
     score -= unmatchedNarrowApplications.length * 8;
 
@@ -201,10 +228,11 @@ export function rankKazStandardCandidates(
     if (/(?:замен|отмен|не действ|withdrawn|replaced|cancelled)/u.test(status)) score -= 2;
     const earlyStopEligible = exactDesignationMatch || (
       score >= 8
+      && topicRelevant
       && unmatchedNarrowApplications.length === 0
       && (broadTitleMatch || candidateNarrowApplications.length > 0)
     );
-    return { candidate, score, exactDesignationMatch, earlyStopEligible };
+    return { candidate, score, exactDesignationMatch, earlyStopEligible, topicRelevant };
   }).sort((left, right) => (
     right.score - left.score
     || Number(right.exactDesignationMatch) - Number(left.exactDesignationMatch)

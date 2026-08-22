@@ -5,6 +5,19 @@ const FALLBACK_MODELS = ["openai/gpt-oss-120b", "openai/gpt-oss-20b"];
 const MODEL_FALLBACK_STATUSES = new Set([400, 404]);
 const CREDENTIAL_FALLBACK_STATUSES = new Set([401, 403]);
 
+export type AiProviderFailureCategory = "authentication" | "invalid_response" | "model" | "network" | "provider" | "rate_limit";
+
+export class AiProviderError extends Error {
+  constructor(
+    readonly category: AiProviderFailureCategory,
+    readonly fallbackContent: string,
+    readonly providerStatus?: number,
+  ) {
+    super(`AI provider failure: ${category}`);
+    this.name = "AiProviderError";
+  }
+}
+
 type Fetch = typeof fetch;
 
 type GroqResponderOptions = {
@@ -79,16 +92,23 @@ export function createGroqResponder(options: GroqResponderOptions) {
           });
         } catch (error) {
           console.error(`Groq network error [model=${model}]:`, error instanceof Error ? error.message : "Unknown error");
-          return fallbackResponse(prompt, language, false);
+          throw new AiProviderError("network", fallbackResponse(prompt, language, false));
         }
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({})) as { error?: { message?: string } };
-          console.error(`Groq API error [model=${model}, status=${response.status}]:`, errorData.error?.message ?? "Unknown Groq error");
+          const category: AiProviderFailureCategory = response.status === 429
+            ? "rate_limit"
+            : CREDENTIAL_FALLBACK_STATUSES.has(response.status)
+              ? "authentication"
+              : MODEL_FALLBACK_STATUSES.has(response.status)
+                ? "model"
+                : "provider";
+          console.error(`Groq API error [model=${model}, status=${response.status}, category=${category}].`);
 
-          if (CREDENTIAL_FALLBACK_STATUSES.has(response.status)) break;
+          if ((CREDENTIAL_FALLBACK_STATUSES.has(response.status) || response.status === 429)
+              && keyAttempt < apiKeys.length - 1) break;
           if (modelAttempt < modelCandidates.length - 1 && MODEL_FALLBACK_STATUSES.has(response.status)) continue;
-          return fallbackResponse(prompt, language, false);
+          throw new AiProviderError(category, fallbackResponse(prompt, language, false), response.status);
         }
 
         try {
@@ -97,12 +117,13 @@ export function createGroqResponder(options: GroqResponderOptions) {
           if (content) return content;
           console.error(`Groq returned an empty response [model=${model}].`);
         } catch (error) {
+          if (error instanceof AiProviderError) throw error;
           console.error(`Groq returned malformed JSON [model=${model}]:`, error instanceof Error ? error.message : "Unknown error");
         }
-        return fallbackResponse(prompt, language, false);
+        throw new AiProviderError("invalid_response", fallbackResponse(prompt, language, false));
       }
     }
 
-    return fallbackResponse(prompt, language, false);
+    throw new AiProviderError("provider", fallbackResponse(prompt, language, false));
   };
 }

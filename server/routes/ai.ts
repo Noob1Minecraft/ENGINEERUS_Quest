@@ -15,6 +15,7 @@ import {
 } from "../standards/standardsResponseGuard";
 import { buildVerifiedStandardsResponse } from "../standards/verifiedStandardsResponse";
 import type { SupportedLanguage } from "../ai/languagePolicy";
+import { AiProviderError } from "../ai/groqClient";
 
 const SESSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MODULES: readonly ChatModule[] = ["tutor", "material", "patent", "engi_legal", "engi_match"];
@@ -99,12 +100,22 @@ export function createAiRouter(
       }
 
       const prepared = await preparePromptWithStandardsMetadata(canonicalPrompt, dependencies.lookupStandards);
-      const generatedResponse = await dependencies.generateResponse(
-        prepared.prompt,
-        moduleName,
-        detectedLanguage,
-        prepared.systemInstructions,
-      );
+      let providerFailureCategory: string | undefined;
+      let providerStatus: number | undefined;
+      let generatedResponse: string;
+      try {
+        generatedResponse = await dependencies.generateResponse(
+          prepared.prompt,
+          moduleName,
+          detectedLanguage,
+          prepared.systemInstructions,
+        );
+      } catch (error) {
+        if (!(error instanceof AiProviderError)) throw error;
+        providerFailureCategory = error.category;
+        providerStatus = error.providerStatus;
+        generatedResponse = error.fallbackContent;
+      }
       const sanitizedResponse = sanitizeAssistantContent(generatedResponse);
       const firstGuardResult = guardStandardsResponse({
         content: sanitizedResponse,
@@ -126,24 +137,30 @@ export function createAiRouter(
         const allowedDesignations = uniqueDesignations([...verifiedDesignations, ...userProvidedDesignations]);
         const strictPolicy = buildStrictStandardsAllowlistPolicy(allowedDesignations);
         const retrySystemPolicy = [prepared.systemInstructions, strictPolicy].filter(Boolean).join("\n\n");
-        const regeneratedResponse = await dependencies.generateResponse(
-          prepared.prompt,
-          moduleName,
-          detectedLanguage,
-          retrySystemPolicy,
-        );
-        finalGuardResult = guardStandardsResponse({
-          content: sanitizeAssistantContent(regeneratedResponse),
-          userPrompt: canonicalPrompt,
-          lookupResult: prepared.lookupResult,
-          language: detectedLanguage,
-        });
-        regenerationAccepted = !finalGuardResult.rejected;
-        rejectedDesignations.push(...(finalGuardResult.rejectedDesignations ?? []));
+        try {
+          const regeneratedResponse = await dependencies.generateResponse(
+            prepared.prompt,
+            moduleName,
+            detectedLanguage,
+            retrySystemPolicy,
+          );
+          finalGuardResult = guardStandardsResponse({
+            content: sanitizeAssistantContent(regeneratedResponse),
+            userPrompt: canonicalPrompt,
+            lookupResult: prepared.lookupResult,
+            language: detectedLanguage,
+          });
+          regenerationAccepted = !finalGuardResult.rejected;
+          rejectedDesignations.push(...(finalGuardResult.rejectedDesignations ?? []));
+        } catch (error) {
+          if (!(error instanceof AiProviderError)) throw error;
+          providerFailureCategory = error.category;
+          providerStatus = error.providerStatus;
+        }
       }
 
       let responseText = finalGuardResult.content;
-      if (finalGuardResult.rejected) {
+      if (finalGuardResult.rejected || providerFailureCategory !== undefined) {
         const deterministicResponse = buildVerifiedStandardsResponse(prepared.lookupResult, detectedLanguage);
         if (deterministicResponse) {
           responseText = deterministicResponse;
@@ -163,6 +180,8 @@ export function createAiRouter(
           regenerationAccepted,
           deterministicFallbackUsed,
           deterministicFallbackCandidateCount,
+          ...(providerFailureCategory ? { providerFailureCategory } : {}),
+          ...(providerStatus !== undefined ? { providerStatus } : {}),
         }));
       }
 

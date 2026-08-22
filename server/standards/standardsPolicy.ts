@@ -9,7 +9,7 @@ export type PreparedStandardsPrompt = {
 };
 
 const EXPLICIT_STANDARD = /(?:\bGOST\b|\bST\s+RK\b|\bESKD\b|\bSP\s+RK\b|\bTR\s+EAEU\b|\b(?:ISO|IEC)\s*\d{2,}|ГОСТ|СТ\s+РК|ҚР\s+СТ|ЕСКД|СП\s+РК|ТР\s+(?:ТС|ЕАЭС))/iu;
-const REGULATORY_INTENT = /(?:соответств|сертификац|регламент|норматив|обязательн(?:ое|ые|ым)? требован|стандарт(?:у|ом|ы)?|compliance|certification|regulat(?:ion|ory)|mandatory requirement|сәйкестік|сертификат|регламент|міндетті талап)/iu;
+const REGULATORY_INTENT = /(?:соответств|сертификац|регламент|норм(?:а|ы|ам|ами|ах|атив|ативы|ативн\p{L}*)|обязательн(?:ое|ые|ым)? требован|стандарт(?:у|ом|ы)?|compliance|certification|regulat(?:ion|ory)|norms?|mandatory requirement|сәйкестік|сертификат|регламент|норма(?:лар|ларға|ларда)?|норматив\p{L}*|міндетті талап)/iu;
 const STANDARD_CENTRAL_DESIGN = /(?:(?:чертеж|документац|допуск|посадк|марка стали|выбор материал|drawing|documentation|tolerance|material specification|материал таңдау).*(?:требован|норм|стандарт|specification|compliance|сәйкестік|талап)|(?:требован|норм|стандарт|specification|compliance|сәйкестік|талап).*(?:чертеж|документац|допуск|посадк|материал|drawing|documentation|tolerance))/iu;
 
 export function isStandardsLookupWarranted(prompt: string): boolean {

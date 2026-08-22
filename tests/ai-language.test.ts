@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createGroqResponder } from "../server/ai/groqClient";
+import { AiProviderError, createGroqResponder } from "../server/ai/groqClient";
 import {
   buildSystemPrompt,
   resolveResponseLanguage,
@@ -213,6 +213,51 @@ test("retries with the secondary credential when Groq rejects the primary creden
     "Bearer primary-placeholder",
     "Bearer secondary-placeholder",
   ]);
+});
+
+test("surfaces a typed rate-limit failure instead of returning provider fallback as assistant content", async () => {
+  let requests = 0;
+  const respond = createGroqResponder({
+    apiKey: "test-placeholder",
+    model: "test-model",
+    fetchImpl: async () => {
+      requests += 1;
+      return new Response(JSON.stringify({ error: { message: "rate limited" } }), {
+        status: 429,
+        headers: { "Content-Type": "application/json" },
+      });
+    },
+  });
+
+  await assert.rejects(
+    respond("Какие стандарты относятся к безопасности машин?", "tutor", "ru"),
+    (error: unknown) => (
+      error instanceof AiProviderError
+      && error.category === "rate_limit"
+      && error.providerStatus === 429
+    ),
+  );
+  assert.equal(requests, 1);
+});
+
+test("retries a rate-limited primary credential once with the distinct secondary credential", async () => {
+  const authorizationHeaders: string[] = [];
+  const respond = createGroqResponder({
+    apiKey: "primary-placeholder",
+    secondaryApiKey: "secondary-placeholder",
+    model: "test-model",
+    fetchImpl: async (_input, init) => {
+      authorizationHeaders.push(new Headers(init?.headers).get("Authorization") ?? "");
+      if (authorizationHeaders.length === 1) return new Response("{}", { status: 429 });
+      return new Response(JSON.stringify({ choices: [{ message: { content: "secondary success" } }] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    },
+  });
+
+  assert.equal(await respond("Какие стандарты относятся к безопасности машин?", "tutor", "ru"), "secondary success");
+  assert.deepEqual(authorizationHeaders, ["Bearer primary-placeholder", "Bearer secondary-placeholder"]);
 });
 test("local fallback responses use the supplied resolved language", async () => {
   const respond = createGroqResponder({ model: "test-model" });

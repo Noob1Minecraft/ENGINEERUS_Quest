@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import express, { type RequestHandler } from "express";
 import type { ChatRepository } from "../server/persistence/chats";
+import { AiProviderError } from "../server/ai/groqClient";
 import { createAiRouter } from "../server/routes/ai";
 import { loadServerEnv } from "../server/config/env";
 import { createKazStandardClient, type KazStandardClient } from "../server/standards/kazStandardClient";
@@ -17,7 +18,7 @@ import {
   isStandardsLookupWarranted,
   preparePromptWithStandardsMetadata,
 } from "../server/standards/standardsPolicy";
-import { guardStandardsResponse } from "../server/standards/standardsResponseGuard";
+import { extractStandardIdentifiers, guardStandardsResponse } from "../server/standards/standardsResponseGuard";
 import { generateKazStandardQueries, rankKazStandardCandidates } from "../server/standards/standardsQuery";
 import { buildVerifiedStandardsResponse } from "../server/standards/verifiedStandardsResponse";
 import {
@@ -69,7 +70,7 @@ function fixtureClient(overrides: Partial<KazStandardClient> = {}): KazStandardC
 async function exerciseGuardedGeneration(options: {
   userPrompt: string;
   lookupResult: StandardsLookupResult;
-  generatedResponses: string[];
+  generatedResponses: Array<string | Error>;
   language?: "ru" | "kk" | "en";
 }) {
   const persistedResponses: string[] = [];
@@ -123,6 +124,7 @@ async function exerciseGuardedGeneration(options: {
       systemPolicies.push(systemPolicy ?? "");
       const response = options.generatedResponses[Math.min(generateCalls, options.generatedResponses.length - 1)];
       generateCalls += 1;
+      if (response instanceof Error) throw response;
       return response;
     },
   }));
@@ -217,6 +219,18 @@ test("keeps lookup eligibility conservative", () => {
   assert.equal(isStandardsLookupWarranted("Какие бывают инженерные материалы?"), false);
   assert.equal(isStandardsLookupWarranted("Какие требования у СТ РК ISO 9001-2016?"), true);
   assert.equal(isStandardsLookupWarranted("Does this drawing comply with mandatory requirements?"), true);
+  assert.equal(isStandardsLookupWarranted("Какие нормы применяются к железобетонным конструкциям?"), true);
+});
+
+test("preserves structural-steel intent in the first deterministic query", () => {
+  assert.deepEqual(
+    generateKazStandardQueries("Какой стандарт используется для конструкционных сталей?"),
+    ["конструкционные стали", "сталь", "требования к материалам"],
+  );
+  assert.deepEqual(
+    generateKazStandardQueries("Какие нормы применяются к железобетонным конструкциям?"),
+    ["железобетонные конструкции", "железобетон"],
+  );
 });
 
 test("expands a general design-documentation question into at most three deterministic queries", () => {
@@ -328,6 +342,48 @@ test("allows a packaging-specific question to rank the packaging standard highly
 
   assert.equal(ranked[0].candidate.designation, "ГОСТ 2.418-2008");
   assert.equal(ranked[0].earlyStopEligible, true);
+});
+
+test("rejects verified-but-irrelevant pipeline and welded-joint cards for structural steel", () => {
+  const question = "Какой стандарт используется для конструкционных сталей?";
+  const queries = generateKazStandardQueries(question);
+  const candidates = parseKazStandardSearchResults(searchFixture([
+    { providerId: "4008", designation: "СТ РК 4008-2025", title: "Нефтегазовые трубопроводы. Механическое соединение стальных труб. Общие требования", status: "Действующий" },
+    { providerId: "17635", designation: "ГОСТ ISO 17635-2018", title: "Неразрушающий контроль сварных соединений. Общие требования", status: "Действующий" },
+    { providerId: "5640", designation: "ГОСТ 5640-2020", title: "Сталь. Конструкционные стали. Общие требования", status: "Действующий" },
+  ]));
+  const ranked = rankKazStandardCandidates(candidates, question, queries);
+
+  assert.equal(ranked[0].candidate.designation, "ГОСТ 5640-2020");
+  assert.equal(ranked[0].topicRelevant, true);
+  assert.equal(ranked.find(({ candidate }) => candidate.providerId === "4008")?.topicRelevant, false);
+  assert.equal(ranked.find(({ candidate }) => candidate.providerId === "17635")?.topicRelevant, false);
+});
+
+test("does not detail-verify or return structurally irrelevant steel candidates", async () => {
+  let detailRequests = 0;
+  const client = fixtureClient({
+    async searchKazStandard() {
+      return {
+        html: searchFixture([
+          { providerId: "4008", designation: "СТ РК 4008-2025", title: "Нефтегазовые трубопроводы. Механическое соединение стальных труб. Общие требования", status: "Действующий" },
+          { providerId: "17635", designation: "ГОСТ ISO 17635-2018", title: "Неразрушающий контроль сварных соединений. Общие требования", status: "Действующий" },
+        ]),
+        sourceUrl: "https://new-shop.ksm.kz/catalog/search/?q=test",
+      };
+    },
+    async getKazStandardDocument() {
+      detailRequests += 1;
+      throw new Error("irrelevant candidates must not be detail-verified");
+    },
+  });
+
+  const result = await createStandardsService({ enabled: true, client }).searchVerifiedStandards(
+    "Какой стандарт используется для конструкционных сталей?",
+  );
+
+  assert.equal(detailRequests, 0);
+  assert.equal(result.kind, "no_result");
 });
 
 test("disabled flag and conceptual questions cause zero external requests", async () => {
@@ -628,6 +684,38 @@ test("rejects invented identifiers when lookup found no matching standard", () =
   assert.match(result.content, /не удалось подтвердить/u);
   assert.match(result.content, /ЕСКД/u);
   assert.match(result.content, /чертежам|форматам|обозначениям/u);
+});
+
+test("fails closed when no lookup result exists and the model introduces an identifier", () => {
+  const result = guardStandardsResponse({
+    content: "Применяется СП РК 2.03-01-2006.",
+    userPrompt: "Какие нормы применяются к железобетонным конструкциям?",
+    language: "ru",
+  });
+
+  assert.equal(result.rejected, true);
+  assert.deepEqual(result.rejectedDesignations, ["СП РК 2.03-01-2006"]);
+  assert.doesNotMatch(result.content, /2\.03-01-2006/u);
+});
+
+test("extracts complete Kazakh, regional, slash, multipart, and colon standard identifiers", () => {
+  const identifiers = extractStandardIdentifiers([
+    "ГОСТ EN 1234-5:2020",
+    "СП РК 2.03-01-2006",
+    "СТ РК ISO/IEC 17025-2019",
+    "ҚР СТ 1234-2020",
+    "ТР ЕАЭС 014/2011",
+    "ТР ТС 032/2013",
+  ].join("; ")).map(({ normalized }) => normalized);
+
+  assert.deepEqual(identifiers, [
+    "ГОСТ EN 1234-5:2020",
+    "СП РК 2.03-01-2006",
+    "СТ РК ISO/IEC 17025-2019",
+    "ҚР СТ 1234-2020",
+    "ТР ЕАЭС 014/2011",
+    "ТР ТС 032/2013",
+  ]);
 });
 
 test("keeps useful generic guidance for no_result and adds the verification limitation", () => {
@@ -992,4 +1080,56 @@ test("keeps the existing no-result fallback when no verified candidates exist", 
     deterministicFallbackUsed: false,
     deterministicFallbackCandidateCount: 0,
   }]);
+});
+
+test("uses deterministic verified metadata when guarded regeneration is rate-limited", async () => {
+  const standard: VerifiedStandard = {
+    providerId: "57001",
+    designation: "ГОСТ 2.001-2013",
+    title: "Единая система конструкторской документации. Общие положения",
+    status: "Действующий",
+    sourceUrl: "https://new-shop.ksm.kz/catalog/document/57001/",
+    currency: "current",
+    verifiedAt: "2026-08-22T00:00:00.000Z",
+  };
+  const result = await exerciseGuardedGeneration({
+    userPrompt: "Какой ГОСТ применяется к оформлению конструкторской документации?",
+    lookupResult: { kind: "verified", standard },
+    generatedResponses: [
+      "Применимы ГОСТ 2.001-2013 и ГОСТ 9.999-2099.",
+      new AiProviderError("rate_limit", "Не удалось получить ответ от ИИ. Повторите попытку.", 429),
+    ],
+  });
+
+  assert.equal(result.generateCalls, 2);
+  assert.equal(result.persistedResponses.length, 1);
+  assert.match(result.responseText, /ГОСТ 2\.001-2013/u);
+  assert.doesNotMatch(result.responseText, /9\.999-2099|Не удалось получить ответ от ИИ/u);
+  assert.deepEqual(result.diagnostics, [{
+    verifiedDesignations: ["ГОСТ 2.001-2013"],
+    rejectedDesignations: ["ГОСТ 9.999-2099"],
+    regenerationAttempted: true,
+    regenerationAccepted: false,
+    deterministicFallbackUsed: true,
+    deterministicFallbackCandidateCount: 1,
+    providerFailureCategory: "rate_limit",
+    providerStatus: 429,
+  }]);
+});
+
+test("keeps the localized safe fallback when regeneration is rate-limited without verified candidates", async () => {
+  const result = await exerciseGuardedGeneration({
+    userPrompt: "Какой стандарт применяется к безопасности машин?",
+    lookupResult: { kind: "no_result" },
+    generatedResponses: [
+      "Применяется ГОСТ 9.999-2099.",
+      new AiProviderError("rate_limit", "Не удалось получить ответ от ИИ. Повторите попытку.", 429),
+    ],
+  });
+
+  assert.equal(result.generateCalls, 2);
+  assert.match(result.responseText, /не удалось подтвердить/u);
+  assert.doesNotMatch(result.responseText, /9\.999-2099|Не удалось получить ответ от ИИ/u);
+  assert.equal(result.diagnostics[0]?.regenerationAccepted, false);
+  assert.equal(result.diagnostics[0]?.providerFailureCategory, "rate_limit");
 });

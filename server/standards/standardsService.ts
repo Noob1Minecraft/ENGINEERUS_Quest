@@ -72,15 +72,15 @@ export function createStandardsService(options: StandardsServiceOptions) {
       let lookupFailed = false;
 
       const verifyCandidates = async (ranked: readonly RankedKazStandardCandidate[]): Promise<void> => {
-        for (const { candidate, score } of ranked) {
+        for (const { candidate, score, topicRelevant } of ranked) {
           if (verified.length >= maxCandidates || attemptedDocumentIds.size >= maxCandidates) break;
-          if (score < 2 || attemptedDocumentIds.has(candidate.providerId)) continue;
+          if (score < 2 || !topicRelevant || attemptedDocumentIds.has(candidate.providerId)) continue;
           attemptedDocumentIds.add(candidate.providerId);
           try {
             const detailPage = await options.client.getKazStandardDocument(candidate.providerId);
             const metadata = parseKazStandardDocument(detailPage.html, detailPage.sourceUrl);
             const detailRank = rankKazStandardCandidates([metadata], originalQuery, searchQueries)[0];
-            if (!detailRank || detailRank.score < 2) continue;
+            if (!detailRank || detailRank.score < 2 || !detailRank.topicRelevant) continue;
             if (detailRank.earlyStopEligible) earlyStopVerified = true;
             verified.push({
               ...metadata,

@@ -1,7 +1,7 @@
 import type { SupportedLanguage } from "../ai/languagePolicy";
 import type { StandardsLookupResult, VerifiedStandard } from "./standardsService";
 
-const STANDARD_IDENTIFIER = /(?:ГОСТ(?:\s+РК)?|СТ\s+РК|ҚР\s+СТ|ЕСКД|СП\s+РК|ТР\s+(?:ЕАЭС|ТС)|GOST(?:\s+RK)?|ST\s+RK|ESKD|SP\s+RK|TR\s+EAEU|ISO|IEC)\s+(?:(?:ISO|IEC|ГОСТ|GOST)\s+)?\d[\d./]*(?:\s*[-–—]\s*\d{2,4})?/giu;
+const STANDARD_IDENTIFIER = /(?:ГОСТ(?:\s+(?:РК|ISO(?:\/IEC)?|IEC|EN))?|СТ\s+РК(?:\s+(?:ISO(?:\/IEC)?|IEC|EN))?|ҚР\s+СТ|ЕСКД|СП\s+РК|ТР\s+(?:ЕАЭС|ТС)|GOST(?:\s+(?:RK|ISO(?:\/IEC)?|IEC|EN))?|ST\s+RK(?:\s+(?:ISO(?:\/IEC)?|IEC|EN))?|ESKD|SP\s+RK|TR\s+EAEU|ISO(?:\/IEC)?|IEC)\s+\d+(?:\s*[./:–—-]\s*\d+)*/giu;
 const CURRENT_CLAIM = /(?:действующ\p{L}*|действует|актуальн\p{L}*|подтвержд[её]н\p{L}*|current|valid|verified|in force|қолданыста|өзекті|расталған)/iu;
 const NEGATED_CURRENT_CLAIM = /(?:не\s+(?:является\s+)?(?:действующ|актуальн|подтвержд)|не\s+удалось\s+подтверд|not\s+(?:current|valid|verified)|cannot\s+be\s+(?:verified|confirmed)|could\s+not\s+(?:verify|confirm)|расталма|емес)/iu;
 const NO_RESULT_DISCLOSURE = /(?:не\s+удалось\s+(?:подтвердить|найти)|не\s+(?:подтвержд[её]н|найден)[^.!?]{0,100}(?:каталог|КазСтандарт)|could\s+not\s+(?:verify|confirm|find)|no\s+(?:specific\s+)?(?:current\s+)?standard\s+was\s+(?:verified|found)|(?:растау|табу)\s+мүмкін\s+болмады|расталмады|табылмады)/iu;
@@ -26,7 +26,7 @@ function normalizeIdentifier(value: string): string {
     .toLocaleUpperCase("und")
     .replace(/[–—]/gu, "-")
     .replace(/\s+/gu, " ")
-    .replace(/\s*([./-])\s*/gu, "$1")
+    .replace(/\s*([./:-])\s*/gu, "$1")
     .trim();
 }
 
@@ -114,6 +114,16 @@ function noResultGuidanceFallback(language: SupportedLanguage, userPrompt: strin
   return `${noResultLimitation(language)} ${guidance}`;
 }
 
+function unverifiedWithoutLookupFallback(language: SupportedLanguage): string {
+  if (language === "kk") {
+    return "Бұл жауаптағы нақты стандарт нөмірлерін ресми дереккөзден тексеру мүмкін болмады. Мен оларды расталған деп көрсетпеймін және нөмірсіз жалпы инженерлік түсіндірме бере аламын.";
+  }
+  if (language === "en") {
+    return "The specific standard identifiers in this answer could not be checked against an official source. I will not present them as verified, but I can provide general engineering guidance without numbered standards.";
+  }
+  return "Конкретные номера стандартов в этом ответе не удалось проверить по официальному источнику. Я не буду представлять их как подтверждённые, но могу дать общее инженерное объяснение без номеров стандартов.";
+}
+
 function ensureNoResultLimitation(content: string, language: SupportedLanguage): string {
   if (NO_RESULT_DISCLOSURE.test(content)) return content;
   return `${noResultLimitation(language)}\n\n${content}`;
@@ -126,9 +136,19 @@ export function guardStandardsResponse(options: {
   language: SupportedLanguage;
 }): StandardsGuardResult {
   const { content, userPrompt, lookupResult, language } = options;
-  if (!lookupResult || lookupResult.kind === "disabled") return { content, rejected: false };
-
   const userProvided = new Set(extractStandardIdentifiers(userPrompt).map(({ normalized }) => normalized));
+  if (!lookupResult) {
+    const introducedMatches = extractStandardIdentifiers(content).filter(({ normalized }) => !userProvided.has(normalized));
+    if (introducedMatches.length === 0) return { content, rejected: false };
+    return {
+      content: unverifiedWithoutLookupFallback(language),
+      rejected: true,
+      rejectedDesignations: uniqueMatches(introducedMatches),
+      unverifiedDesignations: uniqueMatches(introducedMatches),
+    };
+  }
+  if (lookupResult.kind === "disabled") return { content, rejected: false };
+
   const verified = verifiedStandards(lookupResult);
   const verifiedByDesignation = new Map(
     verified.map((standard) => [normalizeIdentifier(standard.designation), standard]),
