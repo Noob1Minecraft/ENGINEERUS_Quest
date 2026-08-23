@@ -137,7 +137,7 @@ export const QuestsTab: React.FC<QuestsTabProps> = ({
       </div>
 
       <div className="space-y-3 sm:space-y-4">
-        {Object.values(quests).map((quest) => {
+        {(Object.values(quests) as Quest[]).map((quest) => {
           const isCompleted = user.completed_quests.includes(quest.id);
           const name = lang === 'kk' ? quest.name_kk : lang === 'en' ? quest.name_en : quest.name;
           const desc = lang === 'kk' ? quest.desc_kk : lang === 'en' ? quest.desc_en : quest.desc;

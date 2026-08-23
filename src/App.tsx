@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { UserProfile, Language, Quest } from './types';
+import { UserProfile, Language, Quest, MyProfile, ProfilePrivateSettings, UserProgress } from './types';
 import { TRANSLATIONS, QUESTS } from './data';
 import { verifySystemIntegrity } from './utils/integrity';
 import { Header } from './components/Header';
@@ -19,9 +19,7 @@ import { apiFetch } from './utils/api';
 
 const GUEST_USER: UserProfile = {
   id: 'guest',
-  telegram_id: null,
   username: 'Студент_Инженер',
-  email: 'student@engineerus.kz',
   xp: 0,
   level: 1,
   streak: 0,
@@ -35,22 +33,9 @@ const GUEST_USER: UserProfile = {
 };
 
 type MeResponse = {
-  profile: {
-    id: string;
-    username: string | null;
-    display_name: string | null;
-    preferred_lang: Language;
-    telegram_user_id: number | null;
-  };
-  progress: {
-    total_xp: number;
-    level: number;
-    streak_days: number;
-    requests_count: number;
-    material_count: number;
-    patent_count: number;
-    modules_used: string[];
-  };
+  profile: MyProfile;
+  private_settings: ProfilePrivateSettings;
+  progress: UserProgress;
   completed_quests: string[];
 };
 
@@ -135,14 +120,12 @@ export default function App() {
       apiFetch<MeResponse>('/api/me'),
       apiFetch<QuestStateResponse>('/api/quests'),
     ])
-      .then(([{ profile, progress, completed_quests }, questState]) => {
+      .then(([{ profile, private_settings, progress, completed_quests }, questState]) => {
         if (!active) return;
         setQuests(mapQuestDefinitions(questState.quests));
         setUser({
           id: profile.id,
-          telegram_id: profile.telegram_user_id,
           username: profile.username || profile.display_name || 'Engineer',
-          email: auth.user?.email || '',
           xp: progress.total_xp,
           level: progress.level,
           streak: progress.streak_days,
@@ -154,11 +137,11 @@ export default function App() {
           material_count: progress.material_count,
           patent_count: progress.patent_count,
           modules_used: progress.modules_used,
-          preferred_lang: profile.preferred_lang,
+          preferred_lang: private_settings.preferred_lang,
         });
       })
       .catch(() => {
-        if (active) setUser((current) => ({ ...current, email: auth.user?.email || '' }));
+        if (active) setUser((current) => current);
       });
 
     return () => { active = false; };

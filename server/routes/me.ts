@@ -1,27 +1,8 @@
 import { Router, type RequestHandler } from "express";
 import type { ServerEnv } from "../config/env";
-import { createSupabaseUserClient } from "../lib/supabaseUser";
+import { createProfileRepository, type CanonicalUser } from "../persistence/profiles";
 
-export type CanonicalUser = {
-  profile: {
-    id: string;
-    username: string | null;
-    display_name: string | null;
-    avatar_url: string | null;
-    preferred_lang: "ru" | "kk" | "en";
-    telegram_user_id: number | null;
-  };
-  progress: {
-    total_xp: number;
-    level: number;
-    streak_days: number;
-    requests_count: number;
-    material_count: number;
-    patent_count: number;
-    modules_used: string[];
-  };
-  completed_quests: string[];
-};
+export type { CanonicalUser } from "../persistence/profiles";
 
 export type LoadCanonicalUser = (
   userId: string,
@@ -29,36 +10,7 @@ export type LoadCanonicalUser = (
 ) => Promise<CanonicalUser>;
 
 export function createCanonicalUserLoader(env: ServerEnv): LoadCanonicalUser {
-  return async (userId, accessToken) => {
-    const client = createSupabaseUserClient(env, accessToken);
-    const [profileResult, progressResult, questsResult] = await Promise.all([
-      client
-        .from("profiles")
-        .select("id,username,display_name,avatar_url,preferred_lang,telegram_user_id")
-        .eq("id", userId)
-        .single(),
-      client
-        .from("user_progress")
-        .select("total_xp,level,streak_days,requests_count,material_count,patent_count,modules_used")
-        .eq("user_id", userId)
-        .single(),
-      client
-        .from("user_quests")
-        .select("quest_id")
-        .eq("user_id", userId)
-        .eq("status", "completed"),
-    ]);
-
-    if (profileResult.error || progressResult.error || questsResult.error) {
-      throw new Error("Canonical user data is unavailable.");
-    }
-
-    return {
-      profile: profileResult.data as CanonicalUser["profile"],
-      progress: progressResult.data as CanonicalUser["progress"],
-      completed_quests: (questsResult.data as Array<{ quest_id: string }>).map((row) => row.quest_id),
-    };
-  };
+  return createProfileRepository(env).loadCanonicalUser;
 }
 
 export function createMeRouter(

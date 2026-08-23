@@ -6,7 +6,9 @@ import { createHealthRouter } from "./routes/health";
 import { createSupabaseAccessTokenVerifier } from "./auth/supabaseJwt";
 import { createRequireAuth } from "./middleware/requireAuth";
 import { createAuthenticatedRateLimit } from "./middleware/authenticatedRateLimit";
-import { createCanonicalUserLoader, createMeRouter } from "./routes/me";
+import { createMeRouter } from "./routes/me";
+import { createProfilesRouter } from "./routes/profiles";
+import { createProfileRepository } from "./persistence/profiles";
 
 const DEFAULT_ALLOWED_ORIGINS = [
   "https://engineerus-quest.vercel.app",
@@ -38,11 +40,11 @@ export function createApp(env: ServerEnv): Express {
     allowedHeaders: ["Content-Type", "Authorization", "Idempotency-Key"],
   }));
   app.use(createHealthRouter());
-  app.use(createMeRouter(
-    createRequireAuth(createSupabaseAccessTokenVerifier(env)),
-    createAuthenticatedRateLimit(),
-    createCanonicalUserLoader(env),
-  ));
+  const authenticate = createRequireAuth(createSupabaseAccessTokenVerifier(env));
+  const rateLimiter = createAuthenticatedRateLimit();
+  const profiles = createProfileRepository(env);
+  app.use(createMeRouter(authenticate, rateLimiter, profiles.loadCanonicalUser));
+  app.use(createProfilesRouter(authenticate, rateLimiter, profiles));
 
   return app;
 }
