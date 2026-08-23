@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import path from "node:path";
 import test from "node:test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
@@ -28,6 +30,37 @@ function almatyDate(daysAgo: number): string {
   const date = new Date(`${values.year}-${values.month}-${values.day}T00:00:00Z`);
   date.setUTCDate(date.getUTCDate() - daysAgo);
   return date.toISOString().slice(0, 10);
+}
+
+function setProgressFixture(
+  userId: string,
+  values: {
+    streakDays: number;
+    longestStreak: number;
+    lastActivityDate: string;
+    totalXp?: number;
+    level?: number;
+    requestsCount?: number;
+  },
+): void {
+  assert.match(userId, /^[0-9a-f-]{36}$/i);
+  assert.match(values.lastActivityDate, /^\d{4}-\d{2}-\d{2}$/);
+  const assignments = [
+    `streak_days = ${values.streakDays}`,
+    `longest_streak = ${values.longestStreak}`,
+    `last_activity_date = '${values.lastActivityDate}'::date`,
+  ];
+  if (values.totalXp !== undefined) assignments.push(`total_xp = ${values.totalXp}`);
+  if (values.level !== undefined) assignments.push(`level = ${values.level}`);
+  if (values.requestsCount !== undefined) assignments.push(`requests_count = ${values.requestsCount}`);
+
+  execFileSync(process.execPath, [
+    path.resolve("node_modules/supabase/dist/supabase.js"),
+    "db",
+    "query",
+    "--local",
+    `update public.user_progress set ${assignments.join(", ")} where user_id = '${userId}'::uuid;`,
+  ], { stdio: ["ignore", "ignore", "pipe"] });
 }
 
 async function createIdentity(admin: SupabaseClient, label: string): Promise<TestIdentity> {
@@ -62,49 +95,45 @@ test("daily streak transitions are authoritative, isolated, and concurrency-safe
     activity = await record(userA.client);
     assert.equal(activity.current_streak, 1, "same-day activity must be idempotent");
 
-    let update = await admin.from("user_progress").update({
-      streak_days: 1,
-      longest_streak: 1,
-      last_activity_date: almatyDate(1),
-      total_xp: 275,
+    setProgressFixture(userA.id, {
+      streakDays: 1,
+      longestStreak: 1,
+      lastActivityDate: almatyDate(1),
+      totalXp: 275,
       level: 3,
-      requests_count: 4,
-    }).eq("user_id", userA.id);
-    if (update.error) throw update.error;
+      requestsCount: 4,
+    });
     activity = await record(userA.client);
     assert.equal(activity.current_streak, 2);
     assert.equal((await record(userA.client)).current_streak, 2);
 
-    update = await admin.from("user_progress").update({
-      streak_days: 2,
-      longest_streak: 2,
-      last_activity_date: almatyDate(1),
-    }).eq("user_id", userA.id);
-    if (update.error) throw update.error;
+    setProgressFixture(userA.id, {
+      streakDays: 2,
+      longestStreak: 2,
+      lastActivityDate: almatyDate(1),
+    });
     assert.equal((await record(userA.client)).current_streak, 3);
 
-    update = await admin.from("user_progress").update({
-      streak_days: 3,
-      longest_streak: 3,
-      last_activity_date: almatyDate(2),
-    }).eq("user_id", userA.id);
-    if (update.error) throw update.error;
+    setProgressFixture(userA.id, {
+      streakDays: 3,
+      longestStreak: 3,
+      lastActivityDate: almatyDate(2),
+    });
     activity = await record(userA.client);
     assert.equal(activity.current_streak, 1);
     assert.equal(activity.longest_streak, 3);
 
-    update = await admin.from("user_progress").update({
-      streak_days: 3,
-      longest_streak: 3,
-      last_activity_date: almatyDate(1),
-    }).eq("user_id", userA.id);
-    if (update.error) throw update.error;
+    setProgressFixture(userA.id, {
+      streakDays: 3,
+      longestStreak: 3,
+      lastActivityDate: almatyDate(1),
+    });
     const concurrent = await Promise.all(Array.from({ length: 12 }, () => record(userA.client)));
     assert.ok(concurrent.every(({ current_streak }) => current_streak === 4));
     assert.ok(concurrent.every(({ longest_streak }) => longest_streak === 4));
 
     assert.equal((await record(userB.client)).current_streak, 1);
-    const progressA = await admin.from("user_progress")
+    const progressA = await userA.client.from("user_progress")
       .select("streak_days,longest_streak,total_xp,level,requests_count")
       .eq("user_id", userA.id)
       .single();
