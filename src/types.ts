@@ -65,6 +65,25 @@ export interface UserProgress {
   modules_used: string[];
 }
 
+export interface CanonicalUser {
+  profile: MyProfile;
+  private_settings: ProfilePrivateSettings;
+  progress: UserProgress;
+  completed_quests: string[];
+}
+
+export interface ProfileTaxonomies {
+  disciplines: TaxonomyItem[];
+  skills: TaxonomyItem[];
+  tools: TaxonomyItem[];
+  interests: TaxonomyItem[];
+}
+
+export interface ProfileSearchResponse {
+  profiles: PublicProfile[];
+  next_cursor: string | null;
+}
+
 // Existing UI state; authentication identity and Profile v2 DTOs stay separate.
 export interface UserProfile {
   id: string;

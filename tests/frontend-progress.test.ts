@@ -41,7 +41,7 @@ test("desktop, mobile, and onboarding UI no longer expose Telegram sync", () => 
     onSetLang: () => undefined,
     activeTab: "home",
     onSelectTab: () => undefined,
-    onOpenAuth: () => undefined,
+    onOpenProfile: () => undefined,
   }));
   const bottomNav = renderToStaticMarkup(React.createElement(BottomNav, {
     activeTab: "home",

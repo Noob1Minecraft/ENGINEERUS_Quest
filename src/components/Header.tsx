@@ -10,7 +10,7 @@ interface HeaderProps {
   onSetLang: (lang: Language) => void;
   activeTab: string;
   onSelectTab: (tab: string) => void;
-  onOpenAuth: () => void;
+  onOpenProfile: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -19,7 +19,7 @@ export const Header: React.FC<HeaderProps> = ({
   onSetLang,
   activeTab,
   onSelectTab,
-  onOpenAuth,
+  onOpenProfile,
 }) => {
   const t = TRANSLATIONS[lang];
   const [langOpen, setLangOpen] = useState(false);
@@ -159,7 +159,8 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* User Profile Pill */}
           <button
-            onClick={onOpenAuth}
+            onClick={onOpenProfile}
+            aria-label={lang === 'ru' ? 'Открыть профиль' : lang === 'kk' ? 'Профильді ашу' : 'Open profile'}
             className="flex items-center gap-2 bg-slate-100/90 hover:bg-slate-200/80 border border-slate-200/80 text-slate-800 px-3 py-1.5 rounded-2xl text-xs font-bold transition-all shadow-2xs"
           >
             <div className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">

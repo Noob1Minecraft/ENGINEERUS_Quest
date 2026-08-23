@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { UserProfile, Language, Quest, MyProfile, ProfilePrivateSettings, UserProgress } from './types';
+import { UserProfile, Language, Quest, CanonicalUser } from './types';
 import { TRANSLATIONS, QUESTS } from './data';
 import { verifySystemIntegrity } from './utils/integrity';
 import { Header } from './components/Header';
@@ -11,6 +11,7 @@ import { RoadmapBooksTab } from './components/RoadmapBooksTab';
 import { BottomNav } from './components/BottomNav';
 import { AuthModal } from './components/AuthModal';
 import { OnboardingModal } from './components/OnboardingModal';
+import { ProfileTab } from './components/ProfileTab';
 import { Sparkles, Zap, ArrowRight, ShieldCheck, Cpu } from 'lucide-react';
 import mascotImg from './assets/images/eq_robot_mascot_1784719916472.jpg';
 import { useAuth } from './auth/AuthContext';
@@ -29,13 +30,6 @@ const GUEST_USER: UserProfile = {
   patent_count: 0,
   modules_used: [],
   preferred_lang: 'ru',
-};
-
-type MeResponse = {
-  profile: MyProfile;
-  private_settings: ProfilePrivateSettings;
-  progress: UserProgress;
-  completed_quests: string[];
 };
 
 type QuestStateResponse = {
@@ -76,6 +70,8 @@ export default function App() {
   const [isOnboardingOpen, setIsOnboardingOpen] = useState<boolean>(false);
 
   const [user, setUser] = useState<UserProfile>(GUEST_USER);
+  const [account, setAccount] = useState<CanonicalUser | null>(null);
+  const [accountLoading, setAccountLoading] = useState(false);
   const [quests, setQuests] = useState<Record<string, Quest>>(QUESTS);
 
   const t = TRANSLATIONS[lang];
@@ -109,19 +105,25 @@ export default function App() {
     if (auth.loading) return;
     if (!auth.user) {
       setUser(GUEST_USER);
+      setAccount(null);
+      setAccountLoading(false);
       setQuests(QUESTS);
       return;
     }
 
     let active = true;
+    setAccountLoading(true);
     setQuests({});
     apiFetch('/api/me/daily-activity', { method: 'POST' })
       .then(() => Promise.all([
-        apiFetch<MeResponse>('/api/me'),
+        apiFetch<CanonicalUser>('/api/me'),
         apiFetch<QuestStateResponse>('/api/quests'),
       ]))
       .then(([{ profile, private_settings, progress, completed_quests }, questState]) => {
         if (!active) return;
+        const canonical = { profile, private_settings, progress, completed_quests };
+        setAccount(canonical);
+        setAccountLoading(false);
         setQuests(mapQuestDefinitions(questState.quests));
         setUser({
           id: profile.id,
@@ -141,7 +143,7 @@ export default function App() {
         });
       })
       .catch(() => {
-        if (active) setUser((current) => current);
+        if (active) setAccountLoading(false);
       });
 
     return () => { active = false; };
@@ -204,13 +206,15 @@ export default function App() {
         onSetLang={setLang}
         activeTab={activeTab}
         onSelectTab={setActiveTab}
-        onOpenAuth={() => setIsAuthOpen(true)}
+        onOpenProfile={() => auth.user ? setActiveTab('profile') : setIsAuthOpen(true)}
       />
 
       {/* Main Container - Optimized with 390px base width responsiveness (360px min, 430px max, desktop responsive) */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-3.5 sm:px-6 lg:px-8 py-5 md:py-8 space-y-5 md:space-y-8 pb-28 md:pb-8">
         {/* User Profile Stats Header Bar (Incorporating exact design from screenshot) */}
-        <ProfileStats user={user} lang={lang} onNavigateToQuest={handleNavigateToQuest} />
+        {activeTab !== 'profile' && (
+          <ProfileStats user={user} lang={lang} onNavigateToQuest={handleNavigateToQuest} />
+        )}
 
         {/* Tab Content Routing */}
         {activeTab === 'home' && (
@@ -344,6 +348,27 @@ export default function App() {
 
         {activeTab === 'roadmap' && (
           <RoadmapBooksTab lang={lang} />
+        )}
+
+        {activeTab === 'profile' && (
+          <ProfileTab
+            account={account}
+            authenticated={Boolean(auth.user)}
+            loading={accountLoading || auth.loading}
+            lang={lang}
+            onRequireAuth={() => setIsAuthOpen(true)}
+            onAccountChange={(updatedAccount) => {
+              setAccount(updatedAccount);
+              setUser((current) => ({
+                ...current,
+                username: updatedAccount.profile.username || updatedAccount.profile.display_name || 'Engineer',
+                xp: updatedAccount.progress.total_xp,
+                level: updatedAccount.progress.level,
+                streak: updatedAccount.progress.streak_days,
+                preferred_lang: updatedAccount.private_settings.preferred_lang,
+              }));
+            }}
+          />
         )}
 
       </main>

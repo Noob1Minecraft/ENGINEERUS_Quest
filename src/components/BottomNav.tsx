@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Flag, BarChart3, Sparkles } from 'lucide-react';
+import { Home, Flag, BarChart3, Sparkles, UserRound } from 'lucide-react';
 import { Language } from '../types';
 
 interface BottomNavProps {
@@ -26,6 +26,9 @@ export const BottomNav: React.FC<BottomNavProps> = ({
     if (tab === 'ai') {
       return lang === 'kk' ? 'ИИ-Тьютор' : lang === 'en' ? 'AI Tutor' : 'ИИ-Тьютор';
     }
+    if (tab === 'profile') {
+      return lang === 'kk' ? 'Профиль' : lang === 'en' ? 'Profile' : 'Профиль';
+    }
     return '';
   };
 
@@ -34,6 +37,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
     { id: 'quests', icon: Flag },
     { id: 'leaderboard', icon: BarChart3 },
     { id: 'ai', icon: Sparkles },
+    { id: 'profile', icon: UserRound },
   ];
 
   return (
