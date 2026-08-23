@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(28);
+select plan(29);
 
 create or replace function public._daily_streak_sql_throws(statement text)
 returns boolean
@@ -205,11 +205,21 @@ select is(
 );
 
 set local request.jwt.claim.sub = '60000000-0000-4000-8000-000000000002';
+update public.user_progress
+set streak_days = 0,
+    longest_streak = 0,
+    last_activity_date = (statement_timestamp() at time zone 'Asia/Almaty')::date
+where user_id = '60000000-0000-4000-8000-000000000002';
 set local role authenticated;
 select is(
   (select current_streak from public.record_daily_activity()),
   1,
-  'a different user starts an isolated streak'
+  'legacy same-day activity at zero normalizes to a one-day streak'
+);
+select is(
+  (select longest_streak from public.record_daily_activity()),
+  1,
+  'legacy same-day normalization establishes the longest streak'
 );
 
 reset role;

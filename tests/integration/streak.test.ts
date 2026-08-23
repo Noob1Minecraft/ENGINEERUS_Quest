@@ -132,7 +132,14 @@ test("daily streak transitions are authoritative, isolated, and concurrency-safe
     assert.ok(concurrent.every(({ current_streak }) => current_streak === 4));
     assert.ok(concurrent.every(({ longest_streak }) => longest_streak === 4));
 
-    assert.equal((await record(userB.client)).current_streak, 1);
+    setProgressFixture(userB.id, {
+      streakDays: 0,
+      longestStreak: 0,
+      lastActivityDate: almatyDate(0),
+    });
+    const legacySameDay = await record(userB.client);
+    assert.equal(legacySameDay.current_streak, 1);
+    assert.equal(legacySameDay.longest_streak, 1);
     const progressA = await userA.client.from("user_progress")
       .select("streak_days,longest_streak,total_xp,level,requests_count")
       .eq("user_id", userA.id)
