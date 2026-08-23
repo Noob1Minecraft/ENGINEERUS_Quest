@@ -43,7 +43,12 @@ export function createApp(env: ServerEnv): Express {
   const authenticate = createRequireAuth(createSupabaseAccessTokenVerifier(env));
   const rateLimiter = createAuthenticatedRateLimit();
   const profiles = createProfileRepository(env);
-  app.use(createMeRouter(authenticate, rateLimiter, profiles.loadCanonicalUser));
+  app.use(createMeRouter(
+    authenticate,
+    rateLimiter,
+    profiles.loadCanonicalUser,
+    profiles.recordDailyActivity,
+  ));
   app.use(createProfilesRouter(authenticate, rateLimiter, profiles));
 
   return app;

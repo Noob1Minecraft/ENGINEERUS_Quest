@@ -54,10 +54,17 @@ export type UserProgress = {
   total_xp: number;
   level: number;
   streak_days: number;
+  longest_streak: number;
   requests_count: number;
   material_count: number;
   patent_count: number;
   modules_used: string[];
+};
+
+export type DailyActivity = {
+  current_streak: number;
+  longest_streak: number;
+  last_active_date: string;
 };
 
 export type CanonicalUser = {
@@ -290,12 +297,22 @@ export function createProfileRepository(env: ServerEnv) {
   }
 
   return {
+    async recordDailyActivity(accessToken: string): Promise<DailyActivity> {
+      const client = createSupabaseUserClient(env, accessToken);
+      const result = await client.rpc("record_daily_activity");
+      const activity = Array.isArray(result.data) ? result.data[0] : result.data;
+      if (result.error || !activity) {
+        profileFailure(result.error, "daily_activity_unavailable", "Daily activity could not be recorded.");
+      }
+      return activity as DailyActivity;
+    },
+
     async loadCanonicalUser(userId: string, accessToken: string): Promise<CanonicalUser> {
       const client = createSupabaseUserClient(env, accessToken);
       const [{ profile, private_settings }, progressResult, questsResult] = await Promise.all([
         loadMyProfile(userId, accessToken),
         client.from("user_progress")
-          .select("total_xp,level,streak_days,requests_count,material_count,patent_count,modules_used")
+          .select("total_xp,level,streak_days,longest_streak,requests_count,material_count,patent_count,modules_used")
           .eq("user_id", userId)
           .single(),
         client.from("user_quests").select("quest_id").eq("user_id", userId).eq("status", "completed"),

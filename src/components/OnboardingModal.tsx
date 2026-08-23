@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Language } from '../types';
 import { TRANSLATIONS } from '../data';
-import { Sparkles, Trophy, Layers, BookOpen, CheckCircle2, ArrowRight, X } from 'lucide-react';
+import { Sparkles, Trophy, Layers, CheckCircle2, ArrowRight, X } from 'lucide-react';
 
 interface OnboardingModalProps {
   isOpen: boolean;
@@ -57,19 +57,6 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
         : lang === 'en'
         ? 'Complete assignments, visit daily to preserve your streak, and earn unique badges and leaderboard spots!'
         : 'Выполняй задания, заходи каждый день для сохранения стрика и получай уникальные бейджи и позиции в таблице лидеров!',
-    },
-    {
-      title: lang === 'kk'
-        ? 'Telegram-мен синхрондау 📱'
-        : lang === 'en'
-        ? 'Sync with Telegram 📱'
-        : 'Синхронизация с Telegram 📱',
-      icon: <BookOpen className="w-8 h-8 text-indigo-600" />,
-      desc: lang === 'kk'
-        ? 'Telegram-мен қауіпсіз байланыстыру кейінірек қосылады. Құпия сөзіңізді ботқа ешқашан жібермеңіз.'
-        : lang === 'en'
-        ? 'Secure Telegram linking will be added later. Never send your password to a bot.'
-        : 'Безопасная привязка Telegram появится позже. Никогда не отправляйте пароль боту.',
     },
   ];
 

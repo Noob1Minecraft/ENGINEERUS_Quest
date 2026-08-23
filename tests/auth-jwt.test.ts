@@ -124,6 +124,7 @@ test("GET /api/me loads only the verified user's canonical data", async () => {
       total_xp: 25,
       level: 1,
       streak_days: 2,
+      longest_streak: 4,
       requests_count: 1,
       material_count: 0,
       patent_count: 0,
@@ -140,7 +141,7 @@ test("GET /api/me loads only the verified user's canonical data", async () => {
     requestedUserId = userId;
     receivedToken = token;
     return canonical;
-  }));
+  }, async () => ({ current_streak: 2, longest_streak: 4, last_active_date: "2026-08-23" })));
 
   await withServer(app, async (baseUrl) => {
     const response = await fetch(`${baseUrl}/api/me?userId=${USER_B}&email=forged@example.com`, {

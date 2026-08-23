@@ -8,7 +8,6 @@ import { QuestsTab } from './components/QuestsTab';
 import { LeaderboardTab } from './components/LeaderboardTab';
 import { AIAssistantTab } from './components/AIAssistantTab';
 import { RoadmapBooksTab } from './components/RoadmapBooksTab';
-import { TelegramSyncTab } from './components/TelegramSyncTab';
 import { BottomNav } from './components/BottomNav';
 import { AuthModal } from './components/AuthModal';
 import { OnboardingModal } from './components/OnboardingModal';
@@ -116,10 +115,11 @@ export default function App() {
 
     let active = true;
     setQuests({});
-    Promise.all([
-      apiFetch<MeResponse>('/api/me'),
-      apiFetch<QuestStateResponse>('/api/quests'),
-    ])
+    apiFetch('/api/me/daily-activity', { method: 'POST' })
+      .then(() => Promise.all([
+        apiFetch<MeResponse>('/api/me'),
+        apiFetch<QuestStateResponse>('/api/quests'),
+      ]))
       .then(([{ profile, private_settings, progress, completed_quests }, questState]) => {
         if (!active) return;
         setQuests(mapQuestDefinitions(questState.quests));
@@ -303,18 +303,15 @@ export default function App() {
                 </p>
               </div>
 
-              <div
-                onClick={() => setActiveTab('sync')}
-                className="bg-white p-5 rounded-2xl border border-slate-200/60 hover:border-blue-200 hover:shadow-xs cursor-pointer transition-all duration-300 sm:col-span-2 lg:col-span-1 group"
-              >
-                <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-500 flex items-center justify-center font-bold mb-3 group-hover:translate-y-[-2px] transition-transform duration-300">
+              <div className="bg-white p-5 rounded-2xl border border-slate-200/60 sm:col-span-2 lg:col-span-1">
+                <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-500 flex items-center justify-center font-bold mb-3">
                   <ShieldCheck className="w-4.5 h-4.5" />
                 </div>
-                <h3 className="font-bold text-sm sm:text-base text-slate-900 group-hover:text-blue-600 transition-colors">
-                  {t.tgModuleTitle}
+                <h3 className="font-bold text-sm sm:text-base text-slate-900">
+                  {t.progressModuleTitle}
                 </h3>
                 <p className="text-xs text-slate-400 font-medium mt-1 leading-relaxed">
-                  {t.tgModuleDesc}
+                  {t.progressModuleDesc}
                 </p>
               </div>
             </div>
@@ -349,9 +346,6 @@ export default function App() {
           <RoadmapBooksTab lang={lang} />
         )}
 
-        {activeTab === 'sync' && (
-          <TelegramSyncTab lang={lang} />
-        )}
       </main>
 
       {/* Bottom Navigation for Mobile Devices */}

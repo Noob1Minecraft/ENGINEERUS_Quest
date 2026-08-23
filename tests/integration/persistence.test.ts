@@ -10,7 +10,11 @@ import { createQuestRepository } from "../../server/persistence/quests";
 import { createChatsRouter } from "../../server/routes/chats";
 import { createAiRouter } from "../../server/routes/ai";
 import { createQuestsRouter } from "../../server/routes/quests";
-import { createCanonicalUserLoader, createMeRouter } from "../../server/routes/me";
+import {
+  createCanonicalUserLoader,
+  createDailyActivityRecorder,
+  createMeRouter,
+} from "../../server/routes/me";
 import { createSupabaseUserClient } from "../../server/lib/supabaseUser";
 import { withServer } from "../helpers";
 
@@ -51,7 +55,12 @@ function createTestApp(generateResponse: () => Promise<string>) {
   const noLimit: RequestHandler = (_request, _response, next) => next();
   const chats = createChatRepository(env);
   const quests = createQuestRepository(env);
-  app.use(createMeRouter(authenticate, noLimit, createCanonicalUserLoader(env)));
+  app.use(createMeRouter(
+    authenticate,
+    noLimit,
+    createCanonicalUserLoader(env),
+    createDailyActivityRecorder(env),
+  ));
   app.use(createChatsRouter(authenticate, noLimit, chats));
   app.use(createQuestsRouter(authenticate, noLimit, quests));
   app.use(createAiRouter(authenticate, noLimit, {

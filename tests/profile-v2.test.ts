@@ -29,6 +29,11 @@ const publicProfile: PublicProfile = {
 
 function repository(overrides: Partial<ProfileRepository> = {}): ProfileRepository {
   return {
+    recordDailyActivity: async () => ({
+      current_streak: 1,
+      longest_streak: 1,
+      last_active_date: "2026-08-23",
+    }),
     loadCanonicalUser: async () => { throw new Error("unused"); },
     updateProfile: async () => ({
       ...publicProfile,

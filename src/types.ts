@@ -58,6 +58,7 @@ export interface UserProgress {
   total_xp: number;
   level: number;
   streak_days: number;
+  longest_streak: number;
   requests_count: number;
   material_count: number;
   patent_count: number;
