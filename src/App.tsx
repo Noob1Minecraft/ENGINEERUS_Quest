@@ -358,6 +358,7 @@ export default function App() {
             loading={accountLoading || auth.loading}
             lang={lang}
             onRequireAuth={() => setIsAuthOpen(true)}
+            onSignOut={auth.signOut}
             onAccountChange={(updatedAccount) => {
               setAccount(updatedAccount);
               setUser((current) => ({

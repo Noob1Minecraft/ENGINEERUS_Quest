@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { Session } from "@supabase/supabase-js";
-import { restoreAuthSession } from "../src/auth/AuthContext";
+import { restoreAuthSession, signOutAuthSession } from "../src/auth/AuthContext";
 
 const session = {
   access_token: "local-test-token",
@@ -35,4 +35,38 @@ test("restores the existing Supabase session and unsubscribes cleanly", async ()
   assert.ok(listener);
   cleanup();
   assert.equal(unsubscribed, true);
+});
+
+test("successful sign-out calls Supabase once and clears the auth snapshot", async () => {
+  let calls = 0;
+  let cleared = 0;
+  await signOutAuthSession({
+    auth: {
+      async signOut() {
+        calls += 1;
+        return { error: null };
+      },
+    },
+  }, () => { cleared += 1; });
+
+  assert.equal(calls, 1);
+  assert.equal(cleared, 1);
+});
+
+test("failed sign-out preserves auth state and surfaces the error", async () => {
+  let calls = 0;
+  let cleared = 0;
+  const failure = new Error("sign out failed");
+
+  await assert.rejects(signOutAuthSession({
+    auth: {
+      async signOut() {
+        calls += 1;
+        return { error: failure };
+      },
+    },
+  }, () => { cleared += 1; }), failure);
+
+  assert.equal(calls, 1);
+  assert.equal(cleared, 0);
 });

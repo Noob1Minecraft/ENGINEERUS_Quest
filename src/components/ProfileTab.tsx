@@ -1,10 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   CheckCircle2,
   ExternalLink,
   Flame,
   LoaderCircle,
   LockKeyhole,
+  LogOut,
   Search,
   ShieldCheck,
   Sparkles,
@@ -34,6 +35,7 @@ type ProfileTabProps = {
   lang: Language;
   onRequireAuth: () => void;
   onAccountChange: (account: CanonicalUser) => void;
+  onSignOut: () => Promise<void>;
 };
 
 type Copy = {
@@ -49,6 +51,9 @@ type Copy = {
   noResults: string;
   privateProfile: string;
   loadMore: string;
+  signOut: string;
+  signingOut: string;
+  signOutError: string;
 };
 
 const COPY: Record<Language, Copy> = {
@@ -57,18 +62,21 @@ const COPY: Record<Language, Copy> = {
     discover: 'Найти инженеров', save: 'Сохранить', saving: 'Сохранение…', cancel: 'Отмена',
     settings: 'Приватные настройки', search: 'Найти', noResults: 'Подходящие профили не найдены.',
     privateProfile: 'Этот профиль недоступен или скрыт настройками приватности.', loadMore: 'Показать ещё',
+    signOut: 'Выйти из аккаунта', signingOut: 'Выход…', signOutError: 'Не удалось выйти из аккаунта. Попробуйте ещё раз.',
   },
   kk: {
     title: 'Инженер профилі', subtitle: 'Дағдылар, қызығушылықтар және жобаларға дайындық', edit: 'Менің профилім',
     discover: 'Инженерлерді табу', save: 'Сақтау', saving: 'Сақталуда…', cancel: 'Бас тарту',
     settings: 'Жеке баптаулар', search: 'Іздеу', noResults: 'Сәйкес профильдер табылмады.',
     privateProfile: 'Бұл профиль қолжетімсіз немесе құпиялылық баптауларымен жасырылған.', loadMore: 'Тағы көрсету',
+    signOut: 'Аккаунттан шығу', signingOut: 'Шығу…', signOutError: 'Аккаунттан шығу мүмкін болмады. Қайталап көріңіз.',
   },
   en: {
     title: 'Engineering profile', subtitle: 'Skills, interests, and project availability', edit: 'My profile',
     discover: 'Find engineers', save: 'Save', saving: 'Saving…', cancel: 'Cancel',
     settings: 'Private settings', search: 'Search', noResults: 'No matching profiles found.',
     privateProfile: 'This profile is unavailable or hidden by its privacy settings.', loadMore: 'Load more',
+    signOut: 'Sign out', signingOut: 'Signing out…', signOutError: 'Sign out failed. Please try again.',
   },
 };
 
@@ -90,6 +98,19 @@ function nullable(value: string): string | null {
 function errorMessage(error: unknown): string {
   if (error instanceof ApiError) return error.message;
   return 'The request could not be completed. Please try again.';
+}
+
+export async function performProfileSignOut(
+  signOut: () => Promise<void>,
+  onError: () => void,
+): Promise<boolean> {
+  try {
+    await signOut();
+    return true;
+  } catch {
+    onError();
+    return false;
+  }
 }
 
 function ProfileAvatar({ profile, large = false }: { profile: PublicProfile; large?: boolean }) {
@@ -195,6 +216,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
   lang,
   onRequireAuth,
   onAccountChange,
+  onSignOut,
 }) => {
   const copy = COPY[lang];
   const [mode, setMode] = useState<'owner' | 'discover'>('owner');
@@ -209,6 +231,8 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [selectedPublic, setSelectedPublic] = useState<PublicProfile | null>(null);
   const [publicError, setPublicError] = useState('');
+  const [signingOut, setSigningOut] = useState(false);
+  const signOutPending = useRef(false);
   const [filters, setFilters] = useState({ query: '', discipline: '', skill: '', available: false });
 
   const profile = account?.profile;
@@ -320,6 +344,16 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
     }
   };
 
+  const handleSignOut = async () => {
+    if (signOutPending.current) return;
+    signOutPending.current = true;
+    setSigningOut(true);
+    setError('');
+    await performProfileSignOut(onSignOut, () => setError(copy.signOutError));
+    signOutPending.current = false;
+    setSigningOut(false);
+  };
+
   return (
     <section className="space-y-5 animate-fade-in">
       <div className="flex flex-col gap-3 rounded-3xl border border-slate-200 bg-white p-5 shadow-xs sm:flex-row sm:items-center sm:justify-between">
@@ -414,6 +448,15 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
               ['allow_direct_messages', settings.allow_direct_messages, lang === 'ru' ? 'Личные сообщения' : lang === 'kk' ? 'Жеке хабарламалар' : 'Direct messages'],
             ].map(([key, checked, label]) => <label key={String(key)} className="mt-3 flex items-center justify-between gap-3 rounded-xl bg-slate-50 p-3 text-xs font-bold text-slate-700"><span>{String(label)}</span><input type="checkbox" checked={Boolean(checked)} disabled={saving} onChange={(event) => saveSettings({ [String(key)]: event.target.checked })} className="accent-blue-600" /></label>)}
             <div className="mt-4 rounded-xl bg-emerald-50 p-3 text-xs font-semibold text-emerald-700"><CheckCircle2 className="mr-1 inline h-4 w-4" />{lang === 'ru' ? 'Прогресс автоматически сохраняется в вашем аккаунте Engineerus.' : lang === 'kk' ? 'Прогресс Engineerus аккаунтыңызда автоматты түрде сақталады.' : 'Progress is saved automatically to your Engineerus account.'}</div>
+            <button
+              type="button"
+              disabled={signingOut}
+              onClick={() => { void handleSignOut(); }}
+              className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 px-4 py-2.5 text-xs font-bold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {signingOut ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}
+              {signingOut ? copy.signingOut : copy.signOut}
+            </button>
           </aside>
         </div>
       ) : (

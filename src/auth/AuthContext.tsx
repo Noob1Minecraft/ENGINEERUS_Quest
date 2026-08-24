@@ -74,6 +74,23 @@ export async function restoreAuthSession(
 
 type SignUpResult = { requiresEmailConfirmation: boolean };
 
+type SignOutClient = {
+  auth: {
+    signOut: () => Promise<{ error: Error | null }>;
+  };
+};
+
+export async function signOutAuthSession(
+  client: SignOutClient,
+  onSignedOut: () => void,
+): Promise<void> {
+  const { error } = await client.auth.signOut();
+  if (error) throw error;
+
+  setApiAccessToken(null);
+  onSignedOut();
+}
+
 type AuthContextValue = AuthSnapshot & {
   configured: boolean;
   signUp: (email: string, password: string, username: string) => Promise<SignUpResult>;
@@ -161,8 +178,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
     },
     async signOut() {
       const client = requireSupabase();
-      const { error } = await client.auth.signOut();
-      if (error) throw error;
+      await signOutAuthSession(client, () => {
+        setSnapshot({ session: null, user: null, loading: false });
+      });
     },
   }), [snapshot]);
 

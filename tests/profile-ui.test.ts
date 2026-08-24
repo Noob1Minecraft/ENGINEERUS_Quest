@@ -4,7 +4,7 @@ import path from 'node:path';
 import test from 'node:test';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { PublicProfileCard, ProfileTab } from '../src/components/ProfileTab';
+import { performProfileSignOut, PublicProfileCard, ProfileTab } from '../src/components/ProfileTab';
 import {
   loadProfileWorkspace,
   saveOwnerProfile,
@@ -139,12 +139,14 @@ test('Owner Profile v2 UI renders progress and private settings without private 
     lang: 'ru',
     onRequireAuth: () => undefined,
     onAccountChange: () => undefined,
+    onSignOut: async () => undefined,
   }));
   assert.match(markup, /Engineer One/);
   assert.match(markup, /125 XP/);
   assert.match(markup, />3 \/ 7</);
   assert.match(markup, /Приватные настройки/);
   assert.match(markup, /Прогресс автоматически сохраняется/);
+  assert.match(markup, /Выйти из аккаунта/);
   assert.doesNotMatch(markup, /telegram|oauth|auth metadata|email/i);
 });
 
@@ -154,6 +156,22 @@ test('Public profile view contains only PublicProfile fields', () => {
   assert.match(markup, /Mechanical engineering/);
   assert.match(markup, /CAD/);
   assert.doesNotMatch(markup, /private_settings|profile_visibility|telegram|email|oauth/i);
+  assert.doesNotMatch(markup, /Выйти из аккаунта|Sign out|Аккаунттан шығу/);
+});
+
+test('Profile logout invokes signOut once and reports a failure without throwing', async () => {
+  let calls = 0;
+  let errors = 0;
+  assert.equal(await performProfileSignOut(async () => { calls += 1; }, () => { errors += 1; }), true);
+  assert.equal(calls, 1);
+  assert.equal(errors, 0);
+
+  assert.equal(await performProfileSignOut(async () => {
+    calls += 1;
+    throw new Error('sign out failed');
+  }, () => { errors += 1; }), false);
+  assert.equal(calls, 2);
+  assert.equal(errors, 1);
 });
 
 test('Profile UI source wires validation, privacy failure, taxonomy relations, and cursor states without Telegram', () => {
@@ -164,5 +182,8 @@ test('Profile UI source wires validation, privacy failure, taxonomy relations, a
   assert.match(source, /nextCursor/);
   assert.match(source, /status === 404/);
   assert.match(source, /skills: form\.skills/);
+  assert.match(source, /disabled=\{signingOut\}/);
+  assert.match(source, /signingOut \? copy\.signingOut : copy\.signOut/);
+  assert.match(source, /setError\(copy\.signOutError\)/);
   assert.doesNotMatch(source, /Telegram|telegram_user_id/);
 });
