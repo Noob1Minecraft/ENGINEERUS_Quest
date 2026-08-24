@@ -184,6 +184,32 @@ export interface ProjectInvitation {
   decided_at: string | null;
 }
 
+export interface EngiMatchScore {
+  score: number;
+  scoring_version: 'engi-match-v1';
+  matched_required_skills: string[];
+  missing_required_skills: string[];
+  matched_optional_skills: string[];
+  discipline_match: boolean;
+  shared_tools: string[];
+  shared_interests: string[];
+  shared_languages: string[];
+  reasons: string[];
+  explanation: string;
+}
+
+export interface EngiMatchTeammate extends EngiMatchScore { profile: PublicProfile; }
+export interface EngiMatchProject extends EngiMatchScore {
+  project: ProjectSummary;
+  role: Omit<ProjectRole, 'positions_filled' | 'positions_available' | 'updated_at'>;
+}
+export interface EngiMatchResponse<T> {
+  matches: T[];
+  scoring_version: 'engi-match-v1';
+  candidate_pool_limited_to: number;
+  ineligible_reason?: string;
+}
+
 // Existing UI state; authentication identity and Profile v2 DTOs stay separate.
 export interface UserProfile {
   id: string;

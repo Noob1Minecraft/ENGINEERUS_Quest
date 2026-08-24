@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Flag, BarChart3, BriefcaseBusiness, Sparkles, UserRound } from 'lucide-react';
+import { Home, Flag, BarChart3, BriefcaseBusiness, Sparkles, UserRound, UsersRound } from 'lucide-react';
 import { Language } from '../types';
 
 interface BottomNavProps {
@@ -32,6 +32,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
     if (tab === 'projects') {
       return lang === 'kk' ? 'Жобалар' : lang === 'en' ? 'Projects' : 'Проекты';
     }
+    if (tab === 'engimatch') return 'EngiMatch';
     return '';
   };
 
@@ -41,6 +42,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
     { id: 'leaderboard', icon: BarChart3 },
     { id: 'ai', icon: Sparkles },
     { id: 'projects', icon: BriefcaseBusiness },
+    { id: 'engimatch', icon: UsersRound },
     { id: 'profile', icon: UserRound },
   ];
 

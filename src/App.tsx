@@ -13,6 +13,7 @@ import { AuthModal } from './components/AuthModal';
 import { OnboardingModal } from './components/OnboardingModal';
 import { ProfileTab } from './components/ProfileTab';
 import { ProjectsTab } from './components/ProjectsTab';
+import { EngiMatchTab } from './components/EngiMatchTab';
 import { Sparkles, Zap, ArrowRight, ShieldCheck, Cpu } from 'lucide-react';
 import mascotImg from './assets/images/eq_robot_mascot_1784719916472.jpg';
 import { useAuth } from './auth/AuthContext';
@@ -379,6 +380,10 @@ export default function App() {
             lang={lang}
             onRequireAuth={() => setIsAuthOpen(true)}
           />
+        )}
+
+        {activeTab === 'engimatch' && (
+          <EngiMatchTab authenticated={Boolean(auth.user)} lang={lang} onRequireAuth={() => setIsAuthOpen(true)} />
         )}
 
       </main>

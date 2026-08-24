@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(24);
+select plan(27);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -79,7 +79,15 @@ select ok(
 );
 select ok(
   not has_column_privilege('service_role', 'public.profile_private_settings', 'preferred_lang', 'select'),
-  'service_role has no private-settings column SELECT'
+  'service_role cannot read preferred language'
+);
+select ok(
+  has_column_privilege('service_role', 'public.profile_private_settings', 'allow_project_invitations', 'select'),
+  'service_role can enforce invitation eligibility'
+);
+select ok(
+  not has_column_privilege('service_role', 'public.profile_private_settings', 'allow_direct_messages', 'select'),
+  'service_role cannot read the direct-message preference'
 );
 
 select ok(
@@ -158,6 +166,11 @@ select throws_ok(
   '42501',
   'permission denied for table profile_private_settings',
   'service_role cannot query private profile settings'
+);
+
+select lives_ok(
+  $$select profile_id from public.profile_private_settings where allow_project_invitations = true$$,
+  'service_role can read only the bounded EngiMatch invitation eligibility surface'
 );
 
 reset role;
