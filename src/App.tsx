@@ -14,6 +14,7 @@ import { OnboardingModal } from './components/OnboardingModal';
 import { ProfileTab } from './components/ProfileTab';
 import { ProjectsTab } from './components/ProjectsTab';
 import { EngiMatchTab } from './components/EngiMatchTab';
+import { DirectChatTab } from './components/DirectChatTab';
 import { Sparkles, Zap, ArrowRight, ShieldCheck, Cpu } from 'lucide-react';
 import mascotImg from './assets/images/eq_robot_mascot_1784719916472.jpg';
 import { useAuth } from './auth/AuthContext';
@@ -152,6 +153,7 @@ export default function App() {
   }, [auth.loading, auth.user]);
 
   const [selectedAiModule, setSelectedAiModule] = useState<string>('tutor');
+  const [selectedDirectConversation, setSelectedDirectConversation] = useState<string | null>(null);
 
   const handleNavigateToQuest = (tab: string, module?: string) => {
     setActiveTab(tab);
@@ -379,11 +381,17 @@ export default function App() {
             authenticated={Boolean(auth.user)}
             lang={lang}
             onRequireAuth={() => setIsAuthOpen(true)}
+            onOpenConversation={(conversationId) => { setSelectedDirectConversation(conversationId); setActiveTab('messages'); }}
           />
         )}
 
         {activeTab === 'engimatch' && (
           <EngiMatchTab authenticated={Boolean(auth.user)} lang={lang} onRequireAuth={() => setIsAuthOpen(true)} />
+        )}
+
+        {activeTab === 'messages' && (
+          <DirectChatTab authenticated={Boolean(auth.user)} currentUserId={account?.profile.id ?? null} lang={lang}
+            initialConversationId={selectedDirectConversation} onRequireAuth={() => setIsAuthOpen(true)} />
         )}
 
       </main>

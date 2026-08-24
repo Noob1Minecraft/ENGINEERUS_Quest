@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Flag, BarChart3, BriefcaseBusiness, Sparkles, UserRound, UsersRound } from 'lucide-react';
+import { Home, Flag, BarChart3, BriefcaseBusiness, Sparkles, UserRound, UsersRound, MessageCircle } from 'lucide-react';
 import { Language } from '../types';
 
 interface BottomNavProps {
@@ -33,6 +33,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
       return lang === 'kk' ? 'Жобалар' : lang === 'en' ? 'Projects' : 'Проекты';
     }
     if (tab === 'engimatch') return 'EngiMatch';
+    if (tab === 'messages') return lang === 'kk' ? 'Хабарламалар' : lang === 'en' ? 'Messages' : 'Сообщения';
     return '';
   };
 
@@ -43,6 +44,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
     { id: 'ai', icon: Sparkles },
     { id: 'projects', icon: BriefcaseBusiness },
     { id: 'engimatch', icon: UsersRound },
+    { id: 'messages', icon: MessageCircle },
     { id: 'profile', icon: UserRound },
   ];
 

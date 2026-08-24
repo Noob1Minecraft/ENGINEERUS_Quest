@@ -5,7 +5,7 @@ import type { ServerEnv } from "./config/env";
 import { createHealthRouter } from "./routes/health";
 import { createSupabaseAccessTokenVerifier } from "./auth/supabaseJwt";
 import { createRequireAuth } from "./middleware/requireAuth";
-import { createAuthenticatedRateLimit, createEngiMatchRateLimit } from "./middleware/authenticatedRateLimit";
+import { createAuthenticatedRateLimit, createDirectChatCreateRateLimit, createDirectChatReadRateLimit, createDirectChatWriteRateLimit, createEngiMatchRateLimit } from "./middleware/authenticatedRateLimit";
 import { createMeRouter } from "./routes/me";
 import { createProfilesRouter } from "./routes/profiles";
 import { createProfileRepository } from "./persistence/profiles";
@@ -15,6 +15,8 @@ import { createProjectRecruitmentRepository } from "./persistence/projectRecruit
 import { createProjectRecruitmentRouter } from "./routes/projectRecruitment";
 import { createEngiMatchRepository } from "./persistence/engimatch";
 import { createEngiMatchRouter } from "./routes/engimatch";
+import { createDirectChatRepository } from "./persistence/directChats";
+import { createDirectChatsRouter } from "./routes/directChats";
 
 const DEFAULT_ALLOWED_ORIGINS = [
   "https://engineerus-quest.vercel.app",
@@ -52,6 +54,7 @@ export function createApp(env: ServerEnv): Express {
   const projects = createProjectRepository(env);
   const projectRecruitment = createProjectRecruitmentRepository(env);
   const engimatch = createEngiMatchRepository(env);
+  const directChats = createDirectChatRepository(env);
   app.use(createMeRouter(
     authenticate,
     rateLimiter,
@@ -62,6 +65,13 @@ export function createApp(env: ServerEnv): Express {
   app.use(createProjectsRouter(authenticate, rateLimiter, projects));
   app.use(createProjectRecruitmentRouter(authenticate, rateLimiter, projectRecruitment));
   app.use(createEngiMatchRouter(authenticate, createEngiMatchRateLimit(), engimatch));
+  app.use(createDirectChatsRouter(
+    authenticate,
+    createDirectChatReadRateLimit(),
+    createDirectChatCreateRateLimit(),
+    createDirectChatWriteRateLimit(),
+    directChats,
+  ));
 
   return app;
 }

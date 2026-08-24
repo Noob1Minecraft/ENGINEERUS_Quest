@@ -32,6 +32,7 @@ type ProjectsTabProps = {
   authenticated: boolean;
   lang: Language;
   onRequireAuth: () => void;
+  onOpenConversation?: (conversationId: string) => void;
 };
 
 type ProjectForm = {
@@ -175,7 +176,7 @@ function ProjectFields({
   );
 }
 
-export const ProjectsTab: React.FC<ProjectsTabProps> = ({ authenticated, lang, onRequireAuth }) => {
+export const ProjectsTab: React.FC<ProjectsTabProps> = ({ authenticated, lang, onRequireAuth, onOpenConversation }) => {
   const copy = COPY[lang];
   const [mode, setMode] = useState<'mine' | 'discover' | 'requests'>('mine');
   const [loading, setLoading] = useState(false);
@@ -386,7 +387,7 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({ authenticated, lang, o
               <p className="mt-5 whitespace-pre-wrap text-sm leading-relaxed text-slate-600">{selected.description || '—'}</p>
               {'owner_id' in selected && <p className="mt-3 text-xs text-slate-500">Visibility: {selected.visibility}</p>}
               {'owner_id' in selected && <div className="mt-5 flex gap-2"><button type="button" onClick={() => startEdit(selected)} className="inline-flex items-center gap-1 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white"><Pencil className="h-3.5 w-3.5" />{copy.edit}</button><button type="button" disabled={saving || selected.status === 'archived'} onClick={archiveSelected} className="inline-flex items-center gap-1 rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-bold text-slate-700 disabled:opacity-50"><Archive className="h-3.5 w-3.5" />{copy.archive}</button></div>}
-              {taxonomies && <ProjectRecruitmentPanel project={selected} owner={'owner_id' in selected} taxonomies={taxonomies} lang={lang} />}
+              {taxonomies && <ProjectRecruitmentPanel project={selected} owner={'owner_id' in selected} taxonomies={taxonomies} lang={lang} onOpenConversation={onOpenConversation} />}
             </div>
           )}
         </article>
@@ -401,7 +402,7 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({ authenticated, lang, o
         </form>
       )}
 
-      {mode === 'requests' && !selected && <ProjectRequestsPanel />}
+      {mode === 'requests' && !selected && <ProjectRequestsPanel onOpenConversation={onOpenConversation} />}
 
       {!selected && mode !== 'requests' && (loading && projects.length === 0 ? <div className="flex justify-center p-10"><LoaderCircle className="h-7 w-7 animate-spin text-blue-600" /></div> : projects.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-300 p-10 text-center text-sm text-slate-500">{mode === 'mine' ? copy.emptyMine : copy.emptyDiscover}</div> : <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{projects.map((project) => <div key={project.id}><ProjectCard project={project} lang={lang} ownerView={mode === 'mine'} onOpen={openProject} /></div>)}</div>)}
 

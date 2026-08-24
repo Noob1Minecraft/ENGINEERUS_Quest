@@ -150,7 +150,7 @@ export interface ProjectRequestRoleSummary {
   project_id: string;
   title: string;
   status: ProjectRoleStatus;
-  project: { id: string; title: string; status: ProjectStatus } | null;
+  project: { id: string; owner_id: string; title: string; status: ProjectStatus } | null;
 }
 
 export interface ProjectApplication {

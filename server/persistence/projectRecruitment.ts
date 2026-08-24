@@ -62,7 +62,7 @@ export type ProjectRequestRoleSummary = {
   project_id: string;
   title: string;
   status: ProjectRoleStatus;
-  project: { id: string; title: string; status: ProjectStatus } | null;
+  project: { id: string; owner_id: string; title: string; status: ProjectStatus } | null;
 };
 
 export type ProjectApplication = {
@@ -103,7 +103,7 @@ type RoleRow = Omit<ProjectRole, "discipline" | "positions_filled" | "positions_
   members: Array<{ user_id: string }>;
 };
 type RequestRoleRow = Omit<ProjectRequestRoleSummary, "project"> & {
-  project: Embedded<{ id: string; title: string; status: ProjectStatus }>;
+  project: Embedded<{ id: string; owner_id: string; title: string; status: ProjectStatus }>;
 };
 type ApplicationRow = Omit<ProjectApplication, "applicant" | "role"> & {
   applicant: Embedded<SafeProfileSummary>;
@@ -124,7 +124,7 @@ const ROLE_COLUMNS = [
   `skills:project_role_skills(requirement,weight,skill:skills(${TAXONOMY_COLUMNS}))`,
   "members:project_members(user_id)",
 ].join(",");
-const REQUEST_ROLE_COLUMNS = "id,project_id,title,status,project:projects(id,title,status)";
+const REQUEST_ROLE_COLUMNS = "id,project_id,title,status,project:projects(id,owner_id,title,status)";
 const APPLICATION_COLUMNS = [
   "id", "project_id", "role_id", "applicant_id", "note", "status",
   "created_at", "updated_at", "decided_at",
