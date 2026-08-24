@@ -118,6 +118,72 @@ export interface ProjectListResponse<TProject extends ProjectSummary = ProjectSu
   next_cursor: string | null;
 }
 
+export type ProjectRoleStatus = 'open' | 'filled' | 'closed';
+export type RoleSkillRequirement = 'required' | 'optional';
+export type ProjectRequestStatus = 'pending' | 'accepted' | 'rejected' | 'withdrawn' | 'cancelled';
+export type ProjectInvitationStatus = Exclude<ProjectRequestStatus, 'withdrawn'>;
+
+export interface ProjectRoleSkill {
+  skill: TaxonomyItem;
+  requirement: RoleSkillRequirement;
+  weight: number;
+}
+
+export interface ProjectRole {
+  id: string;
+  project_id: string;
+  title: string;
+  description: string;
+  discipline_id: string | null;
+  discipline: TaxonomyItem | null;
+  positions_total: number;
+  positions_filled: number;
+  positions_available: number;
+  status: ProjectRoleStatus;
+  skills: ProjectRoleSkill[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProjectRequestRoleSummary {
+  id: string;
+  project_id: string;
+  title: string;
+  status: ProjectRoleStatus;
+  project: { id: string; title: string; status: ProjectStatus } | null;
+}
+
+export interface ProjectApplication {
+  id: string;
+  project_id: string;
+  role_id: string;
+  applicant_id: string;
+  applicant: ProjectOwnerSummary | null;
+  role: ProjectRequestRoleSummary | null;
+  note: string;
+  status: ProjectRequestStatus;
+  created_at: string;
+  updated_at: string;
+  decided_at: string | null;
+}
+
+export interface ProjectInvitation {
+  id: string;
+  project_id: string;
+  role_id: string;
+  invitee_id: string;
+  inviter_id: string;
+  invitee: ProjectOwnerSummary | null;
+  inviter: ProjectOwnerSummary | null;
+  role: ProjectRequestRoleSummary | null;
+  note: string;
+  status: ProjectInvitationStatus;
+  expires_at: string;
+  created_at: string;
+  updated_at: string;
+  decided_at: string | null;
+}
+
 // Existing UI state; authentication identity and Profile v2 DTOs stay separate.
 export interface UserProfile {
   id: string;

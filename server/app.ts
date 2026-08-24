@@ -11,6 +11,8 @@ import { createProfilesRouter } from "./routes/profiles";
 import { createProfileRepository } from "./persistence/profiles";
 import { createProjectRepository } from "./persistence/projects";
 import { createProjectsRouter } from "./routes/projects";
+import { createProjectRecruitmentRepository } from "./persistence/projectRecruitment";
+import { createProjectRecruitmentRouter } from "./routes/projectRecruitment";
 
 const DEFAULT_ALLOWED_ORIGINS = [
   "https://engineerus-quest.vercel.app",
@@ -46,6 +48,7 @@ export function createApp(env: ServerEnv): Express {
   const rateLimiter = createAuthenticatedRateLimit();
   const profiles = createProfileRepository(env);
   const projects = createProjectRepository(env);
+  const projectRecruitment = createProjectRecruitmentRepository(env);
   app.use(createMeRouter(
     authenticate,
     rateLimiter,
@@ -54,6 +57,7 @@ export function createApp(env: ServerEnv): Express {
   ));
   app.use(createProfilesRouter(authenticate, rateLimiter, profiles));
   app.use(createProjectsRouter(authenticate, rateLimiter, projects));
+  app.use(createProjectRecruitmentRouter(authenticate, rateLimiter, projectRecruitment));
 
   return app;
 }

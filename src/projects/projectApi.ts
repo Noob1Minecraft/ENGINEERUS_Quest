@@ -1,7 +1,11 @@
 import type {
   MyProject,
+  ProjectApplication,
   ProjectDetail,
+  ProjectInvitation,
   ProjectListResponse,
+  ProjectRole,
+  RoleSkillRequirement,
   ProjectStatus,
   ProjectVisibility,
 } from '../types';
@@ -18,6 +22,24 @@ export type CreateProjectInput = {
 };
 
 export type UpdateProjectInput = Partial<CreateProjectInput>;
+
+export type RoleSkillInput = {
+  skill_id: string;
+  requirement: RoleSkillRequirement;
+  weight: number;
+};
+
+export type CreateProjectRoleInput = {
+  title: string;
+  description?: string;
+  discipline_id?: string | null;
+  positions_total?: number;
+  skills?: RoleSkillInput[];
+};
+
+export type UpdateProjectRoleInput = Partial<CreateProjectRoleInput> & {
+  status?: 'open' | 'closed';
+};
 
 export type ProjectSearchInput = {
   query?: string;
@@ -88,3 +110,120 @@ export async function archiveProject(
   });
   return result.project;
 }
+
+export async function listProjectRoles(
+  projectId: string,
+  fetcher: ProjectFetcher = apiFetch,
+): Promise<ProjectRole[]> {
+  return (await fetcher<{ roles: ProjectRole[] }>(`/api/projects/${projectId}/roles`)).roles;
+}
+
+export async function createProjectRole(
+  projectId: string,
+  input: CreateProjectRoleInput,
+  fetcher: ProjectFetcher = apiFetch,
+): Promise<ProjectRole> {
+  return (await fetcher<{ role: ProjectRole }>(`/api/projects/${projectId}/roles`, {
+    method: 'POST', body: JSON.stringify(input),
+  })).role;
+}
+
+export async function updateProjectRole(
+  roleId: string,
+  input: UpdateProjectRoleInput,
+  fetcher: ProjectFetcher = apiFetch,
+): Promise<ProjectRole> {
+  return (await fetcher<{ role: ProjectRole }>(`/api/project-roles/${roleId}`, {
+    method: 'PATCH', body: JSON.stringify(input),
+  })).role;
+}
+
+export async function closeProjectRole(
+  roleId: string,
+  fetcher: ProjectFetcher = apiFetch,
+): Promise<ProjectRole> {
+  return (await fetcher<{ role: ProjectRole; closed: true }>(`/api/project-roles/${roleId}`, {
+    method: 'DELETE',
+  })).role;
+}
+
+export async function applyToProjectRole(
+  roleId: string,
+  note: string,
+  fetcher: ProjectFetcher = apiFetch,
+): Promise<ProjectApplication> {
+  return (await fetcher<{ application: ProjectApplication }>(`/api/project-roles/${roleId}/applications`, {
+    method: 'POST', body: JSON.stringify({ note }),
+  })).application;
+}
+
+export async function listMyProjectApplications(
+  fetcher: ProjectFetcher = apiFetch,
+): Promise<ProjectApplication[]> {
+  return (await fetcher<{ applications: ProjectApplication[] }>('/api/me/project-applications')).applications;
+}
+
+export async function listProjectApplications(
+  projectId: string,
+  fetcher: ProjectFetcher = apiFetch,
+): Promise<ProjectApplication[]> {
+  return (await fetcher<{ applications: ProjectApplication[] }>(`/api/projects/${projectId}/applications`)).applications;
+}
+
+async function applicationAction(
+  applicationId: string,
+  action: 'accept' | 'reject' | 'withdraw',
+  fetcher: ProjectFetcher,
+): Promise<ProjectApplication> {
+  return (await fetcher<{ application: ProjectApplication }>(`/api/project-applications/${applicationId}/${action}`, {
+    method: 'POST',
+  })).application;
+}
+
+export const acceptProjectApplication = (id: string, fetcher: ProjectFetcher = apiFetch) =>
+  applicationAction(id, 'accept', fetcher);
+export const rejectProjectApplication = (id: string, fetcher: ProjectFetcher = apiFetch) =>
+  applicationAction(id, 'reject', fetcher);
+export const withdrawProjectApplication = (id: string, fetcher: ProjectFetcher = apiFetch) =>
+  applicationAction(id, 'withdraw', fetcher);
+
+export async function inviteToProjectRole(
+  roleId: string,
+  inviteeId: string,
+  note: string,
+  fetcher: ProjectFetcher = apiFetch,
+): Promise<ProjectInvitation> {
+  return (await fetcher<{ invitation: ProjectInvitation }>(`/api/project-roles/${roleId}/invitations`, {
+    method: 'POST', body: JSON.stringify({ invitee_id: inviteeId, note }),
+  })).invitation;
+}
+
+export async function listMyProjectInvitations(
+  fetcher: ProjectFetcher = apiFetch,
+): Promise<ProjectInvitation[]> {
+  return (await fetcher<{ invitations: ProjectInvitation[] }>('/api/me/project-invitations')).invitations;
+}
+
+export async function listProjectInvitations(
+  projectId: string,
+  fetcher: ProjectFetcher = apiFetch,
+): Promise<ProjectInvitation[]> {
+  return (await fetcher<{ invitations: ProjectInvitation[] }>(`/api/projects/${projectId}/invitations`)).invitations;
+}
+
+async function invitationAction(
+  invitationId: string,
+  action: 'accept' | 'reject' | 'cancel',
+  fetcher: ProjectFetcher,
+): Promise<ProjectInvitation> {
+  return (await fetcher<{ invitation: ProjectInvitation }>(`/api/project-invitations/${invitationId}/${action}`, {
+    method: 'POST',
+  })).invitation;
+}
+
+export const acceptProjectInvitation = (id: string, fetcher: ProjectFetcher = apiFetch) =>
+  invitationAction(id, 'accept', fetcher);
+export const rejectProjectInvitation = (id: string, fetcher: ProjectFetcher = apiFetch) =>
+  invitationAction(id, 'reject', fetcher);
+export const cancelProjectInvitation = (id: string, fetcher: ProjectFetcher = apiFetch) =>
+  invitationAction(id, 'cancel', fetcher);

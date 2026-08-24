@@ -107,7 +107,7 @@ test('owner card and unauthenticated Projects page have safe distinct states', (
   assert.match(guestMarkup, /Engineering projects/);
 });
 
-test('Projects UI source includes loading, empty, validation, owner edit, discovery, and future-role states', () => {
+test('Projects UI source includes loading, empty, validation, owner edit, discovery, and recruitment states', () => {
   const source = readFileSync(path.resolve('src/components/ProjectsTab.tsx'), 'utf8');
   assert.match(source, /listMyProjects/);
   assert.match(source, /discoverProjects/);
@@ -117,6 +117,7 @@ test('Projects UI source includes loading, empty, validation, owner edit, discov
   assert.match(source, /LoaderCircle/);
   assert.match(source, /emptyMine/);
   assert.match(source, /emptyDiscover/);
-  assert.match(source, /future/);
-  assert.doesNotMatch(source, /application|invitation|direct chat|EngiMatch|Realtime/i);
+  assert.match(source, /ProjectRecruitmentPanel/);
+  assert.match(source, /ProjectRequestsPanel/);
+  assert.doesNotMatch(source, /direct chat|EngiMatch|Realtime/i);
 });

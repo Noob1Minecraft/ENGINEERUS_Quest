@@ -6,7 +6,6 @@ import {
   Pencil,
   Plus,
   Search,
-  ShieldCheck,
 } from 'lucide-react';
 import type {
   Language,
@@ -27,6 +26,7 @@ import {
   loadProject,
   updateProject,
 } from '../projects/projectApi';
+import { ProjectRecruitmentPanel, ProjectRequestsPanel } from './ProjectRecruitmentPanel';
 
 type ProjectsTabProps = {
   authenticated: boolean;
@@ -53,24 +53,24 @@ const EMPTY_FORM: ProjectForm = {
 const COPY = {
   ru: {
     title: 'Инженерные проекты', subtitle: 'Создавайте реальные проекты и находите открытые инициативы.',
-    mine: 'Мои проекты', discover: 'Найти проекты', create: 'Создать проект', save: 'Сохранить',
+    mine: 'Мои проекты', discover: 'Найти проекты', requests: 'Заявки', create: 'Создать проект', save: 'Сохранить',
     cancel: 'Отмена', edit: 'Редактировать', archive: 'Архивировать', loadMore: 'Показать ещё',
     emptyMine: 'У вас пока нет проектов.', emptyDiscover: 'Подходящие открытые проекты не найдены.',
-    future: 'Роли и участники проекта появятся в следующей фазе.', signIn: 'Войдите, чтобы работать с проектами.',
+    signIn: 'Войдите, чтобы работать с проектами.',
   },
   kk: {
     title: 'Инженерлік жобалар', subtitle: 'Нақты жобалар құрыңыз және ашық бастамаларды табыңыз.',
-    mine: 'Менің жобаларым', discover: 'Жобаларды табу', create: 'Жоба құру', save: 'Сақтау',
+    mine: 'Менің жобаларым', discover: 'Жобаларды табу', requests: 'Өтінімдер', create: 'Жоба құру', save: 'Сақтау',
     cancel: 'Бас тарту', edit: 'Өзгерту', archive: 'Мұрағаттау', loadMore: 'Тағы көрсету',
     emptyMine: 'Сізде әзірге жоба жоқ.', emptyDiscover: 'Сәйкес ашық жобалар табылмады.',
-    future: 'Жоба рөлдері мен қатысушылары келесі кезеңде қосылады.', signIn: 'Жобалармен жұмыс істеу үшін кіріңіз.',
+    signIn: 'Жобалармен жұмыс істеу үшін кіріңіз.',
   },
   en: {
     title: 'Engineering projects', subtitle: 'Create real projects and discover open engineering initiatives.',
-    mine: 'My Projects', discover: 'Discover Projects', create: 'Create project', save: 'Save',
+    mine: 'My Projects', discover: 'Discover Projects', requests: 'Requests', create: 'Create project', save: 'Save',
     cancel: 'Cancel', edit: 'Edit', archive: 'Archive', loadMore: 'Load more',
     emptyMine: 'You do not have any projects yet.', emptyDiscover: 'No matching open projects were found.',
-    future: 'Project roles and members will be added in the next phase.', signIn: 'Sign in to work with projects.',
+    signIn: 'Sign in to work with projects.',
   },
 } satisfies Record<Language, Record<string, string>>;
 
@@ -177,7 +177,7 @@ function ProjectFields({
 
 export const ProjectsTab: React.FC<ProjectsTabProps> = ({ authenticated, lang, onRequireAuth }) => {
   const copy = COPY[lang];
-  const [mode, setMode] = useState<'mine' | 'discover'>('mine');
+  const [mode, setMode] = useState<'mine' | 'discover' | 'requests'>('mine');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -362,7 +362,7 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({ authenticated, lang, o
       </header>
 
       <div className="flex gap-2 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xs">
-        {(['mine', 'discover'] as const).map((value) => <button key={value} type="button" onClick={() => { setMode(value); setSelected(null); setCreating(false); }} className={`flex-1 rounded-xl px-4 py-2 text-xs font-bold ${mode === value ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>{value === 'mine' ? copy.mine : copy.discover}</button>)}
+        {(['mine', 'discover', 'requests'] as const).map((value) => <button key={value} type="button" onClick={() => { setMode(value); setSelected(null); setCreating(false); }} className={`flex-1 rounded-xl px-4 py-2 text-xs font-bold ${mode === value ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>{value === 'mine' ? copy.mine : value === 'discover' ? copy.discover : copy.requests}</button>)}
       </div>
 
       {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</div>}
@@ -385,8 +385,8 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({ authenticated, lang, o
               <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-xl font-black">{selected.title}</h2><p className="mt-1 text-sm font-semibold text-blue-700">{selected.primary_discipline ? label(selected.primary_discipline, lang) : '—'}</p></div><span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold">{STATUS_LABEL[lang][selected.status]}</span></div>
               <p className="mt-5 whitespace-pre-wrap text-sm leading-relaxed text-slate-600">{selected.description || '—'}</p>
               {'owner_id' in selected && <p className="mt-3 text-xs text-slate-500">Visibility: {selected.visibility}</p>}
-              <div className="mt-5 rounded-2xl border border-dashed border-slate-300 p-4 text-xs font-semibold text-slate-500"><ShieldCheck className="mr-1 inline h-4 w-4" />{copy.future}</div>
               {'owner_id' in selected && <div className="mt-5 flex gap-2"><button type="button" onClick={() => startEdit(selected)} className="inline-flex items-center gap-1 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white"><Pencil className="h-3.5 w-3.5" />{copy.edit}</button><button type="button" disabled={saving || selected.status === 'archived'} onClick={archiveSelected} className="inline-flex items-center gap-1 rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-bold text-slate-700 disabled:opacity-50"><Archive className="h-3.5 w-3.5" />{copy.archive}</button></div>}
+              {taxonomies && <ProjectRecruitmentPanel project={selected} owner={'owner_id' in selected} taxonomies={taxonomies} lang={lang} />}
             </div>
           )}
         </article>
@@ -401,7 +401,9 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({ authenticated, lang, o
         </form>
       )}
 
-      {!selected && (loading && projects.length === 0 ? <div className="flex justify-center p-10"><LoaderCircle className="h-7 w-7 animate-spin text-blue-600" /></div> : projects.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-300 p-10 text-center text-sm text-slate-500">{mode === 'mine' ? copy.emptyMine : copy.emptyDiscover}</div> : <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{projects.map((project) => <div key={project.id}><ProjectCard project={project} lang={lang} ownerView={mode === 'mine'} onOpen={openProject} /></div>)}</div>)}
+      {mode === 'requests' && !selected && <ProjectRequestsPanel />}
+
+      {!selected && mode !== 'requests' && (loading && projects.length === 0 ? <div className="flex justify-center p-10"><LoaderCircle className="h-7 w-7 animate-spin text-blue-600" /></div> : projects.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-300 p-10 text-center text-sm text-slate-500">{mode === 'mine' ? copy.emptyMine : copy.emptyDiscover}</div> : <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{projects.map((project) => <div key={project.id}><ProjectCard project={project} lang={lang} ownerView={mode === 'mine'} onOpen={openProject} /></div>)}</div>)}
 
       {!selected && mode === 'mine' && myCursor && <button type="button" disabled={loading} onClick={loadMoreMine} className="mx-auto block rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-xs font-bold disabled:opacity-50">{copy.loadMore}</button>}
       {!selected && mode === 'discover' && discoverCursor && <button type="button" onClick={() => runDiscovery(discoverCursor)} className="mx-auto block rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-xs font-bold">{copy.loadMore}</button>}
