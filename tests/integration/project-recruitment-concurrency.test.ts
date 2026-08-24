@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import path from 'node:path';
 import test from 'node:test';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
@@ -28,12 +30,14 @@ test('concurrent acceptance of the final role slot creates exactly one member', 
   const owner = await identity(admin, 'owner');
   const first = await identity(admin, 'first');
   const second = await identity(admin, 'second');
+  let projectId: string | null = null;
 
   try {
     const projectResult = await owner.client.from('projects').insert({
       title: 'Concurrent final slot', status: 'open', visibility: 'authenticated',
     }).select('id').single();
     if (projectResult.error) throw projectResult.error;
+    projectId = projectResult.data.id;
 
     const roleResult = await owner.client.rpc('create_project_role', {
       p_project_id: projectResult.data.id,
@@ -70,8 +74,21 @@ test('concurrent acceptance of the final role slot creates exactly one member', 
     if (applications.error) throw applications.error;
     assert.deepEqual(applications.data.map(({ status }) => status).sort(), ['accepted', 'cancelled']);
   } finally {
-    await admin.auth.admin.deleteUser(owner.id);
-    await admin.auth.admin.deleteUser(first.id);
-    await admin.auth.admin.deleteUser(second.id);
+    if (projectId) {
+      assert.match(projectId, /^[0-9a-f-]{36}$/i);
+      execFileSync(process.execPath, [
+        path.resolve('node_modules/supabase/dist/supabase.js'),
+        'db', 'query', '--local',
+        `delete from public.projects where id = '${projectId}'::uuid;`,
+      ], { stdio: ['ignore', 'ignore', 'pipe'] });
+    }
+    const deleted = await Promise.all([
+      admin.auth.admin.deleteUser(owner.id),
+      admin.auth.admin.deleteUser(first.id),
+      admin.auth.admin.deleteUser(second.id),
+    ]);
+    for (const result of deleted) {
+      if (result.error) throw result.error;
+    }
   }
 });

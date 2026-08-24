@@ -35,17 +35,33 @@ select ok(not has_table_privilege('authenticated', 'public.project_members', 'IN
 select ok(not has_table_privilege('authenticated', 'public.project_applications', 'UPDATE'), 'clients cannot mutate application status');
 select ok(not has_table_privilege('authenticated', 'public.project_invitations', 'UPDATE'), 'clients cannot mutate invitation status');
 select ok(not has_table_privilege('anon', 'public.project_roles', 'SELECT'), 'anon receives no role access');
+select ok(not has_table_privilege('service_role', 'public.project_roles', 'SELECT'), 'service_role receives no role table access');
+select ok(not has_table_privilege('service_role', 'public.project_applications', 'SELECT'), 'service_role receives no application table access');
+select ok(not has_table_privilege('service_role', 'public.project_invitations', 'SELECT'), 'service_role receives no invitation table access');
 select ok(has_function_privilege('authenticated', 'public.accept_project_application(uuid)', 'EXECUTE'), 'authenticated can call hardened application acceptance');
 select ok(not has_function_privilege('anon', 'public.accept_project_application(uuid)', 'EXECUTE'), 'anon cannot accept applications');
-select like(
-  pg_get_functiondef('public.accept_project_application(uuid)'::regprocedure),
+select ok(not has_function_privilege('service_role', 'public.accept_project_application(uuid)', 'EXECUTE'), 'service_role cannot call application acceptance');
+select ok(
+  pg_get_functiondef('public.accept_project_application(uuid)'::regprocedure)
+    like
   '%where id = v_application.role_id for update%',
   'application acceptance locks the shared role before the request'
 );
-select like(
-  pg_get_functiondef('public.accept_project_invitation(uuid)'::regprocedure),
+select ok(
+  pg_get_functiondef('public.accept_project_invitation(uuid)'::regprocedure)
+    like
   '%where id = v_invitation.role_id for update%',
   'invitation acceptance locks the shared role before the request'
+);
+select ok(
+  pg_get_functiondef('public.accept_project_application(uuid)'::regprocedure)
+    like '%where id = p_application_id for update%',
+  'application acceptance locks the request row'
+);
+select ok(
+  pg_get_functiondef('public.accept_project_invitation(uuid)'::regprocedure)
+    like '%where id = p_invitation_id for update%',
+  'invitation acceptance locks the request row'
 );
 
 set local request.jwt.claim.sub = '92000000-0000-4000-8000-000000000001';
@@ -95,6 +111,23 @@ select lives_ok(
   $$select public.create_project_application((select id from public.project_roles where title = 'Mechanical designer'), 'Applicant one')$$,
   'eligible user applies to an open role'
 );
+select is(
+  (select applicant_id from public.project_applications where note = 'Applicant one'),
+  '92000000-0000-4000-8000-000000000002'::uuid,
+  'application identity is derived from auth.uid()'
+);
+select is(
+  (select count(*)::integer from public.project_applications where applicant_id = '92000000-0000-4000-8000-000000000002'),
+  1,
+  'applicant reads their own application'
+);
+select ok(
+  public._phase_c_throws($$select public.create_project_invitation(
+    (select id from public.project_roles where title = 'Mechanical designer'),
+    '92000000-0000-4000-8000-000000000004', '', null
+  )$$),
+  'non-owner cannot create invitations'
+);
 select ok(
   public._phase_c_throws($$select public.create_project_application((select id from public.project_roles where title = 'Mechanical designer'), 'Duplicate')$$),
   'duplicate application is blocked'
@@ -116,6 +149,11 @@ select is(
   (select count(*)::integer from public.project_applications where applicant_id = '92000000-0000-4000-8000-000000000002'),
   0,
   'an unrelated applicant cannot read another application'
+);
+select is(
+  (select count(*)::integer from public.project_invitations),
+  0,
+  'an unrelated authenticated user cannot read invitations'
 );
 
 reset role;
@@ -154,6 +192,27 @@ select ok(
   'accepted application cannot be accepted twice'
 );
 
+reset role;
+set local request.jwt.claim.sub = '92000000-0000-4000-8000-000000000004';
+set local role authenticated;
+select ok(
+  public._phase_c_throws($$select public.create_project_application(
+    (select id from public.project_roles where title = 'Mechanical designer'), ''
+  )$$),
+  'filled role rejects applications'
+);
+
+reset role;
+set local request.jwt.claim.sub = '92000000-0000-4000-8000-000000000001';
+set local role authenticated;
+select ok(
+  public._phase_c_throws($$select public.create_project_invitation(
+    (select id from public.project_roles where title = 'Mechanical designer'),
+    '92000000-0000-4000-8000-000000000004', '', null
+  )$$),
+  'filled role rejects invitations'
+);
+
 select lives_ok(
   $$select public.create_project_role(
     (select id from public.projects where title = 'Phase C project'),
@@ -179,9 +238,31 @@ select lives_ok(
 );
 select is((select count(*)::integer from public.project_members where user_id = '92000000-0000-4000-8000-000000000003'), 1, 'invitation acceptance inserts one membership');
 select is((select status from public.project_roles where title = 'Electrical engineer'), 'filled', 'invitation fills final role slot');
+
+reset role;
+set local request.jwt.claim.sub = '92000000-0000-4000-8000-000000000001';
+set local role authenticated;
+select lives_ok(
+  $$select public.create_project_role(
+    (select id from public.projects where title = 'Phase C project'),
+    'Member guard role', '', null, 2, '{}'::uuid[], '{}'::text[], '{}'::integer[]
+  )$$,
+  'owner creates an open role for existing-member checks'
+);
 select ok(
-  public._phase_c_throws($$select public.create_project_application((select id from public.project_roles where title = 'Mechanical designer'), '')$$),
-  'existing project member cannot apply to another project role'
+  public._phase_c_throws($$select public.create_project_invitation(
+    (select id from public.project_roles where title = 'Member guard role'),
+    '92000000-0000-4000-8000-000000000003', '', null
+  )$$),
+  'existing project member cannot be invited to an open role'
+);
+
+reset role;
+set local request.jwt.claim.sub = '92000000-0000-4000-8000-000000000003';
+set local role authenticated;
+select ok(
+  public._phase_c_throws($$select public.create_project_application((select id from public.project_roles where title = 'Member guard role'), '')$$),
+  'existing project member cannot apply to an open project role'
 );
 
 reset role;
