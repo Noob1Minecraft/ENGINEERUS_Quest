@@ -84,6 +84,40 @@ export interface ProfileSearchResponse {
   next_cursor: string | null;
 }
 
+export type ProjectStatus = 'draft' | 'open' | 'in_progress' | 'completed' | 'cancelled' | 'archived';
+export type ProjectVisibility = 'private' | 'authenticated' | 'public';
+
+export interface ProjectOwnerSummary {
+  id: string;
+  username: string | null;
+  display_name: string | null;
+  avatar_url: string | null;
+}
+
+export interface ProjectSummary {
+  id: string;
+  title: string;
+  description: string;
+  primary_discipline: TaxonomyItem | null;
+  status: ProjectStatus;
+  owner: ProjectOwnerSummary | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ProjectDetail = ProjectSummary;
+
+export interface MyProject extends ProjectDetail {
+  owner_id: string;
+  primary_discipline_id: string | null;
+  visibility: ProjectVisibility;
+}
+
+export interface ProjectListResponse<TProject extends ProjectSummary = ProjectSummary> {
+  projects: TProject[];
+  next_cursor: string | null;
+}
+
 // Existing UI state; authentication identity and Profile v2 DTOs stay separate.
 export interface UserProfile {
   id: string;

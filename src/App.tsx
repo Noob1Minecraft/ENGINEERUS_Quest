@@ -12,6 +12,7 @@ import { BottomNav } from './components/BottomNav';
 import { AuthModal } from './components/AuthModal';
 import { OnboardingModal } from './components/OnboardingModal';
 import { ProfileTab } from './components/ProfileTab';
+import { ProjectsTab } from './components/ProjectsTab';
 import { Sparkles, Zap, ArrowRight, ShieldCheck, Cpu } from 'lucide-react';
 import mascotImg from './assets/images/eq_robot_mascot_1784719916472.jpg';
 import { useAuth } from './auth/AuthContext';
@@ -368,6 +369,14 @@ export default function App() {
                 preferred_lang: updatedAccount.private_settings.preferred_lang,
               }));
             }}
+          />
+        )}
+
+        {activeTab === 'projects' && (
+          <ProjectsTab
+            authenticated={Boolean(auth.user)}
+            lang={lang}
+            onRequireAuth={() => setIsAuthOpen(true)}
           />
         )}
 

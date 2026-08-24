@@ -9,6 +9,8 @@ import { createAuthenticatedRateLimit } from "./middleware/authenticatedRateLimi
 import { createMeRouter } from "./routes/me";
 import { createProfilesRouter } from "./routes/profiles";
 import { createProfileRepository } from "./persistence/profiles";
+import { createProjectRepository } from "./persistence/projects";
+import { createProjectsRouter } from "./routes/projects";
 
 const DEFAULT_ALLOWED_ORIGINS = [
   "https://engineerus-quest.vercel.app",
@@ -43,6 +45,7 @@ export function createApp(env: ServerEnv): Express {
   const authenticate = createRequireAuth(createSupabaseAccessTokenVerifier(env));
   const rateLimiter = createAuthenticatedRateLimit();
   const profiles = createProfileRepository(env);
+  const projects = createProjectRepository(env);
   app.use(createMeRouter(
     authenticate,
     rateLimiter,
@@ -50,6 +53,7 @@ export function createApp(env: ServerEnv): Express {
     profiles.recordDailyActivity,
   ));
   app.use(createProfilesRouter(authenticate, rateLimiter, profiles));
+  app.use(createProjectsRouter(authenticate, rateLimiter, projects));
 
   return app;
 }

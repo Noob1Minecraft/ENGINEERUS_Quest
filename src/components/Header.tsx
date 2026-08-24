@@ -100,6 +100,16 @@ export const Header: React.FC<HeaderProps> = ({
             {t.navAI}
           </button>
           <button
+            onClick={() => onSelectTab('projects')}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              activeTab === 'projects'
+                ? 'bg-white text-blue-600 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            {lang === 'ru' ? 'Проекты' : lang === 'kk' ? 'Жобалар' : 'Projects'}
+          </button>
+          <button
             onClick={() => onSelectTab('roadmap')}
             className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
               activeTab === 'roadmap'
