@@ -16,6 +16,7 @@ import { createGroqResponder } from "./server/ai/groqClient";
 import { resolveResponseLanguage } from "./server/ai/languagePolicy";
 import { createKazStandardClient } from "./server/standards/kazStandardClient";
 import { createStandardsService } from "./server/standards/standardsService";
+import { apiErrorHandler } from "./server/middleware/apiErrorHandler";
 
 // Load environment variables from .env for local development. Hosted platforms
 // inject their environment variables directly.
@@ -69,6 +70,7 @@ async function startServer() {
     app.use(express.static(distPath));
     app.get("*", (req, res) => res.sendFile(path.join(distPath, "index.html")));
   }
+  app.use(apiErrorHandler);
   app.listen(PORT, "0.0.0.0", () => console.log(`Engineerus Quest server running on http://0.0.0.0:${PORT}`));
 }
 

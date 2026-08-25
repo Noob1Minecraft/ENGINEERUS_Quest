@@ -698,6 +698,58 @@ test("fails closed when no lookup result exists and the model introduces an iden
   assert.doesNotMatch(result.content, /2\.03-01-2006/u);
 });
 
+test("fails closed for disabled lookup while preserving generic and qualified user-supplied guidance", () => {
+  const generic = guardStandardsResponse({
+    content: "Можно объяснить общие требования к оформлению инженерной документации.",
+    userPrompt: "Какие стандарты относятся к инженерной документации?",
+    lookupResult: { kind: "disabled" },
+    language: "ru",
+  });
+  assert.deepEqual(generic, {
+    content: "Можно объяснить общие требования к оформлению инженерной документации.",
+    rejected: false,
+  });
+
+  const introduced = guardStandardsResponse({
+    content: "Для этого применяется СТ РК ISO 9999-2099.",
+    userPrompt: "Какие стандарты относятся к инженерной документации?",
+    lookupResult: { kind: "disabled" },
+    language: "ru",
+  });
+  assert.equal(introduced.rejected, true);
+  assert.deepEqual(introduced.rejectedDesignations, ["СТ РК ISO 9999-2099"]);
+  assert.doesNotMatch(introduced.content, /9999-2099/u);
+  assert.match(introduced.content, /не удалось проверить/u);
+
+  const userSupplied = guardStandardsResponse({
+    content: "Вы указали СТ РК ISO 9999-2099, но его статус не удалось подтвердить по официальному источнику.",
+    userPrompt: "Что означает СТ РК ISO 9999-2099?",
+    lookupResult: { kind: "disabled" },
+    language: "ru",
+  });
+  assert.equal(userSupplied.rejected, false);
+});
+
+test("disabled lookup regenerates once and persists only a response without invented identifiers", async () => {
+  const result = await exerciseGuardedGeneration({
+    userPrompt: "Какой стандарт применяется к оформлению инженерной документации?",
+    lookupResult: { kind: "disabled" },
+    generatedResponses: [
+      "Применяется СТ РК ISO 9999-2099.",
+      "Можно объяснить общие требования к оформлению документации без неподтверждённых номеров.",
+    ],
+  });
+
+  assert.equal(result.generateCalls, 2);
+  assert.equal(result.persistedResponses.length, 1);
+  assert.equal(result.responseText, result.persistedResponses[0]);
+  assert.doesNotMatch(result.responseText, /9999-2099/u);
+  assert.match(result.systemPolicies[1], /\[ALLOWED STANDARD IDENTIFIERS\]/u);
+  assert.deepEqual(result.diagnostics[0]?.rejectedDesignations, ["СТ РК ISO 9999-2099"]);
+  assert.equal(result.diagnostics[0]?.regenerationAttempted, true);
+  assert.equal(result.diagnostics[0]?.regenerationAccepted, true);
+});
+
 test("extracts complete Kazakh, regional, slash, multipart, and colon standard identifiers", () => {
   const identifiers = extractStandardIdentifiers([
     "ГОСТ EN 1234-5:2020",

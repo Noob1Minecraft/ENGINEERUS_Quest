@@ -1,4 +1,5 @@
 import { Router, type RequestHandler } from "express";
+import { z } from "zod";
 import type { ChatModule, ChatRepository } from "../persistence/chats";
 import { PersistenceError, sendPersistenceError } from "../persistence/errors";
 import { createIdempotencyKey } from "../services/progress";
@@ -17,8 +18,32 @@ import { buildVerifiedStandardsResponse } from "../standards/verifiedStandardsRe
 import type { SupportedLanguage } from "../ai/languagePolicy";
 import { AiProviderError } from "../ai/groqClient";
 
-const SESSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const MODULES: readonly ChatModule[] = ["tutor", "material", "patent", "engi_legal", "engi_match"];
+const MODULES = ["tutor", "material", "patent", "engi_legal", "engi_match"] as const;
+const baseAiRequestSchema = z.object({
+  text: z.string().max(20_000).refine((value) => value.trim().length > 0),
+  lang: z.enum(["ru", "kk", "en"]).default("ru"),
+  session_id: z.string().uuid(),
+}).strip();
+const moduleAiRequestSchema = baseAiRequestSchema.extend({ module: z.enum(MODULES) }).strip();
+
+type AiRequest = z.infer<typeof baseAiRequestSchema>;
+
+function safeAsync(handler: RequestHandler): RequestHandler {
+  return (request, response, next) => {
+    Promise.resolve(handler(request, response, next)).catch(next);
+  };
+}
+
+function sendInvalidAiRequest(response: import("express").Response, moduleRequest = false): void {
+  response.status(400).json({
+    error: {
+      code: moduleRequest ? "invalid_module_request" : "invalid_ai_request",
+      message: moduleRequest
+        ? "A valid module, chat session, and prompt are required."
+        : "A valid chat session and prompt are required.",
+    },
+  });
+}
 
 function uniqueDesignations(designations: readonly string[]): string[] {
   return [...new Set(designations.map((designation) => designation.trim()).filter(Boolean))];
@@ -26,7 +51,7 @@ function uniqueDesignations(designations: readonly string[]): string[] {
 
 type AiDependencies = {
   repository: ChatRepository;
-  detectLanguage: (text: string, requestedLanguage: string) => SupportedLanguage;
+  detectLanguage: (text: string, requestedLanguage: SupportedLanguage) => SupportedLanguage;
   generateResponse: (
     text: string,
     module: ChatModule,
@@ -48,20 +73,9 @@ export function createAiRouter(
     response: import("express").Response,
     moduleName: ChatModule,
     xpAmount: 10 | 15,
+    input: AiRequest,
   ) {
-    const { text, lang = "ru", session_id: sessionId } = request.body;
-    if (
-      typeof text !== "string"
-      || !text.trim()
-      || text.length > 20_000
-      || typeof sessionId !== "string"
-      || !SESSION_ID_PATTERN.test(sessionId)
-    ) {
-      response.status(400).json({
-        error: { code: "invalid_ai_request", message: "A valid chat session and prompt are required." },
-      });
-      return;
-    }
+    const { text, lang, session_id: sessionId } = input;
 
     let requestId: string;
     try {
@@ -216,20 +230,23 @@ export function createAiRouter(
     }
   }
 
-  router.post("/api/ai", authenticate, rateLimiter, (request, response) => (
-    handle(request, response, "tutor", 10)
-  ));
-
-  router.post("/api/module", authenticate, rateLimiter, (request, response) => {
-    const moduleName = request.body?.module;
-    if (typeof moduleName !== "string" || !MODULES.includes(moduleName as ChatModule)) {
-      response.status(400).json({
-        error: { code: "invalid_module_request", message: "A valid module is required." },
-      });
+  router.post("/api/ai", authenticate, rateLimiter, safeAsync(async (request, response) => {
+    const parsed = baseAiRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      sendInvalidAiRequest(response);
       return;
     }
-    return handle(request, response, moduleName as ChatModule, 15);
-  });
+    await handle(request, response, "tutor", 10, parsed.data);
+  }));
+
+  router.post("/api/module", authenticate, rateLimiter, safeAsync(async (request, response) => {
+    const parsed = moduleAiRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      sendInvalidAiRequest(response, true);
+      return;
+    }
+    await handle(request, response, parsed.data.module, 15, parsed.data);
+  }));
 
   return router;
 }

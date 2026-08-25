@@ -147,8 +147,6 @@ export function guardStandardsResponse(options: {
       unverifiedDesignations: uniqueMatches(introducedMatches),
     };
   }
-  if (lookupResult.kind === "disabled") return { content, rejected: false };
-
   const verified = verifiedStandards(lookupResult);
   const verifiedByDesignation = new Map(
     verified.map((standard) => [normalizeIdentifier(standard.designation), standard]),
@@ -175,7 +173,9 @@ export function guardStandardsResponse(options: {
   return {
     content: lookupResult.kind === "no_result"
       ? noResultGuidanceFallback(language, userPrompt)
-      : standardsGuardFallback(language, partialVerification),
+      : lookupResult.kind === "disabled"
+        ? unverifiedWithoutLookupFallback(language)
+        : standardsGuardFallback(language, partialVerification),
     rejected: true,
     rejectedDesignations: uniqueMatches([...unverifiedMatches, ...unsupportedCurrentMatches]),
     unverifiedDesignations: uniqueMatches(unverifiedMatches),

@@ -66,7 +66,7 @@ test("never persists or returns think content and preserves the Russian final an
     },
   } as unknown as ChatRepository;
   const authenticate: RequestHandler = (_request, response, next) => {
-    response.locals.auth = { userId: USER_ID, accessToken: "test-access-token" };
+    response.locals.auth = { userId: USER_ID, accessToken: "test-access-token", claims: {} };
     next();
   };
   const noLimit: RequestHandler = (_request, _response, next) => next();
