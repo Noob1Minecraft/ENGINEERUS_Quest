@@ -17,6 +17,7 @@ import { createEngiMatchRepository } from "./persistence/engimatch";
 import { createEngiMatchRouter } from "./routes/engimatch";
 import { createDirectChatRepository } from "./persistence/directChats";
 import { createDirectChatsRouter } from "./routes/directChats";
+import { createContentSecurityPolicyDirectives } from "./security/contentSecurityPolicy";
 
 const DEFAULT_ALLOWED_ORIGINS = [
   "https://engineerus-quest.vercel.app",
@@ -33,7 +34,13 @@ export function createApp(env: ServerEnv): Express {
   const allowedOrigins = new Set([...DEFAULT_ALLOWED_ORIGINS, ...configuredOrigins]);
 
   app.disable("x-powered-by");
-  app.use(helmet({ contentSecurityPolicy: false }));
+  app.use(helmet({
+    contentSecurityPolicy: {
+      useDefaults: false,
+      directives: createContentSecurityPolicyDirectives(env.NODE_ENV),
+      reportOnly: true,
+    },
+  }));
   app.use(express.json({ limit: "1mb" }));
   app.use(cors({
     origin(origin, callback) {

@@ -1,5 +1,3 @@
-import express from "express";
-import path from "path";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import { createApp } from "./server/app";
@@ -17,6 +15,7 @@ import { resolveResponseLanguage } from "./server/ai/languagePolicy";
 import { createKazStandardClient } from "./server/standards/kazStandardClient";
 import { createStandardsService } from "./server/standards/standardsService";
 import { apiErrorHandler } from "./server/middleware/apiErrorHandler";
+import { mountProductionFrontend } from "./server/staticFrontend";
 
 // Load environment variables from .env for local development. Hosted platforms
 // inject their environment variables directly.
@@ -66,9 +65,7 @@ async function startServer() {
     const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
-    app.get("*", (req, res) => res.sendFile(path.join(distPath, "index.html")));
+    mountProductionFrontend(app);
   }
   app.use(apiErrorHandler);
   app.listen(PORT, "0.0.0.0", () => console.log(`Engineerus Quest server running on http://0.0.0.0:${PORT}`));
