@@ -55,11 +55,12 @@ values
   ('public.begin_ai_exchange(uuid,uuid,text,text,text)'::regprocedure, 'SERVICE_INTERNAL'),
   ('public.complete_ai_exchange(uuid,uuid,text,text,text,integer)'::regprocedure, 'SERVICE_INTERNAL'),
   ('public.complete_quest(uuid,text,text)'::regprocedure, 'SERVICE_INTERNAL'),
+  ('public.refresh_gamification(uuid,timestamptz)'::regprocedure, 'SERVICE_INTERNAL'),
   ('public.direct_chat_shared_project(uuid,uuid,uuid)'::regprocedure, 'INTERNAL_HELPER');
 
 select is(
   (select count(*)::integer from expected_security_definers),
-  30,
+  31,
   'the SECURITY DEFINER classification inventory contains every application function'
 );
 
@@ -85,7 +86,7 @@ select is(
     where function_schema.nspname = 'public'
       and function_record.prosecdef
   ),
-  30,
+  31,
   'the public schema has no unclassified SECURITY DEFINER function'
 );
 
@@ -96,7 +97,7 @@ select is(
     join pg_proc function_record on function_record.oid = expected.function_oid
     where function_record.prosecdef
   ),
-  30,
+  31,
   'every classified function remains SECURITY DEFINER'
 );
 
@@ -107,7 +108,7 @@ select is(
     join pg_proc function_record on function_record.oid = expected.function_oid
     where function_record.proconfig @> array['search_path=""']::text[]
   ),
-  30,
+  31,
   'every classified SECURITY DEFINER function fixes search_path to empty'
 );
 
@@ -118,7 +119,7 @@ select is(
     join pg_proc function_record on function_record.oid = expected.function_oid
     where pg_get_userbyid(function_record.proowner) = 'postgres'
   ),
-  30,
+  31,
   'function ownership remains postgres'
 );
 

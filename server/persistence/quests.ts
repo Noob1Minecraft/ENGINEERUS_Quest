@@ -14,6 +14,7 @@ export type PersistedQuestDefinition = {
   xp_reward: number;
   repeat_policy: string;
   achievement_code: string | null;
+  quest_kind: "legacy";
 };
 
 export type QuestState = {
@@ -27,8 +28,9 @@ export function createQuestRepository(env: ServerEnv) {
     const [definitions, completions] = await Promise.all([
       client
         .from("quest_definitions")
-        .select("id,name,description,reward_label,criteria,xp_reward,repeat_policy,achievement_code")
+        .select("id,name,description,reward_label,criteria,xp_reward,repeat_policy,achievement_code,quest_kind")
         .eq("is_active", true)
+        .eq("quest_kind", "legacy")
         .order("created_at", { ascending: true }),
       client
         .from("user_quests")

@@ -14,6 +14,11 @@ export const PRODUCT_EVENT_NAMES = [
   "direct_chat_opened",
   "direct_message_sent",
   "feedback_submitted",
+  "daily_quest_completed",
+  "weekly_quest_completed",
+  "achievement_unlocked",
+  "level_up",
+  "quest_chain_completed",
 ] as const;
 
 export type ProductEventName = typeof PRODUCT_EVENT_NAMES[number];

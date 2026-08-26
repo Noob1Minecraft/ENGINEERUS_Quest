@@ -11,6 +11,8 @@ test('controlled beta event allowlist covers only the documented product journey
     'onboarding_started', 'onboarding_completed', 'ai_session_started', 'ai_message_sent',
     'quest_completed', 'project_created', 'project_applied', 'engimatch_viewed',
     'direct_chat_opened', 'direct_message_sent', 'feedback_submitted',
+    'daily_quest_completed', 'weekly_quest_completed', 'achievement_unlocked',
+    'level_up', 'quest_chain_completed',
   ]);
 });
 

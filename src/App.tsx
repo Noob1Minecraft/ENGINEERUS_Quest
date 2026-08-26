@@ -20,6 +20,8 @@ import { useAuth } from './auth/AuthContext';
 import { apiFetch } from './utils/api';
 import { BetaOnboardingCard } from './components/BetaOnboardingCard';
 import { BetaFeedbackModal } from './components/BetaFeedbackModal';
+import { GamificationPanel } from './components/GamificationPanel';
+import { loadGamification, type GamificationState } from './gamification/gamificationApi';
 import {
   completeBetaOnboarding,
   loadBetaState,
@@ -88,6 +90,7 @@ export default function App() {
   const [account, setAccount] = useState<CanonicalUser | null>(null);
   const [accountLoading, setAccountLoading] = useState(false);
   const [quests, setQuests] = useState<Record<string, Quest>>(QUESTS);
+  const [gamification, setGamification] = useState<GamificationState | null>(null);
 
   const t = TRANSLATIONS[lang];
 
@@ -107,6 +110,7 @@ export default function App() {
       setAccount(null);
       setAccountLoading(false);
       setQuests(QUESTS);
+      setGamification(null);
       return;
     }
 
@@ -114,10 +118,14 @@ export default function App() {
     setAccountLoading(true);
     setQuests({});
     apiFetch('/api/me/daily-activity', { method: 'POST' })
-      .then(() => Promise.all([
+      .then(() => loadGamification())
+      .then((gamificationState) => {
+        if (active) setGamification(gamificationState);
+        return Promise.all([
         apiFetch<CanonicalUser>('/api/me'),
         apiFetch<QuestStateResponse>('/api/quests'),
-      ]))
+        ]);
+      })
       .then(([{ profile, private_settings, progress, completed_quests }, questState]) => {
         if (!active) return;
         const canonical = { profile, private_settings, progress, completed_quests };
@@ -190,7 +198,26 @@ export default function App() {
 
   const handleUpdateUser = (updated: Partial<UserProfile>) => {
     setUser((prev) => ({ ...prev, ...updated }));
+    if (auth.user && (updated.xp !== undefined || updated.level !== undefined)) {
+      loadGamification().then(setGamification).catch(() => undefined);
+    }
   };
+
+  useEffect(() => {
+    if (!auth.user || activeTab !== 'home' || accountLoading) return;
+    const timeout = window.setTimeout(() => {
+      loadGamification().then((state) => {
+        setGamification(state);
+        setUser((previous) => ({
+          ...previous,
+          xp: state.progression.total_xp,
+          level: state.progression.level,
+          streak: state.streak.current,
+        }));
+      }).catch(() => undefined);
+    }, 300);
+    return () => window.clearTimeout(timeout);
+  }, [activeTab, accountLoading, auth.user]);
 
   const completeOnboarding = async () => {
     setBetaCompleting(true);
@@ -233,6 +260,7 @@ export default function App() {
             achievements: updatedAchievements,
           };
         });
+        loadGamification().then(setGamification).catch(() => undefined);
       }
     } catch (err) {
       console.error(err);
@@ -270,6 +298,7 @@ export default function App() {
             {auth.user && betaParticipant && !betaParticipant.onboarding_completed_at && <BetaOnboardingCard
               lang={lang} completing={betaCompleting} onNavigate={setActiveTab} onComplete={completeOnboarding}
             />}
+            {auth.user && gamification && <GamificationPanel state={gamification} language={lang} />}
             {/* Hero Section Banner (Soft, minimalist and elegant) */}
             <div className="bg-gradient-to-br from-slate-50 via-slate-100/40 to-blue-50/30 text-slate-800 rounded-2xl p-6 sm:p-8 md:p-10 shadow-xs relative overflow-hidden border border-slate-200/60">
               {/* Background ambient glow effects */}

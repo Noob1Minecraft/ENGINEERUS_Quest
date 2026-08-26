@@ -311,8 +311,8 @@ select ok(
 );
 select is(
   (select count(*)::integer from public.quest_definitions where is_active = true),
-  5,
-  'authenticated users can read active quest definitions'
+  11,
+  'authenticated users can read active legacy and G2 quest definitions'
 );
 
 reset role;

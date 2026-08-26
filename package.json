@@ -20,6 +20,7 @@
     "test:security": "tsx --test tests/ai-chat-history.test.ts tests/ai-response-safety.test.ts tests/ai-route-security.test.ts tests/auth-diagnostics.test.ts tests/auth-jwt.test.ts tests/auth-session.test.ts tests/build-output-security.test.ts tests/cors-security.test.ts tests/direct-chat-api.test.ts tests/direct-chat-ui.test.ts tests/kazstandard.test.ts tests/profile-ui.test.ts tests/profile-v2.test.ts tests/saved-ai-notes.test.ts tests/security-ci.test.ts tests/security-headers.test.ts tests/security-logging.test.ts tests/security-rate-limits.test.ts",
     "test:security:db": "supabase test db",
     "test:persistence": "tsx tests/run-local-persistence-tests.ts",
+    "test:gamification:integration": "tsx tests/run-local-gamification-tests.ts",
     "test:rls": "supabase test db"
   },
   "dependencies": {
