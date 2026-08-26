@@ -30,6 +30,7 @@ values
   ('public.handle_new_user_progress()'::regprocedure, 'TRIGGER_ONLY'),
   ('public.guard_project_member()'::regprocedure, 'TRIGGER_ONLY'),
   ('public.record_daily_activity()'::regprocedure, 'AUTH_RPC'),
+  ('public.replace_my_profile_relations(jsonb,jsonb,jsonb,jsonb)'::regprocedure, 'AUTH_RPC'),
   ('public.create_project_role(uuid,text,text,uuid,integer,uuid[],text[],integer[])'::regprocedure, 'AUTH_RPC'),
   ('public.update_project_role(uuid,text,text,uuid,boolean,integer,text,uuid[],text[],integer[])'::regprocedure, 'AUTH_RPC'),
   ('public.close_project_role(uuid)'::regprocedure, 'AUTH_RPC'),
@@ -57,7 +58,7 @@ values
 
 select is(
   (select count(*)::integer from expected_security_definers),
-  28,
+  29,
   'the SECURITY DEFINER classification inventory contains every application function'
 );
 
@@ -83,7 +84,7 @@ select is(
     where function_schema.nspname = 'public'
       and function_record.prosecdef
   ),
-  28,
+  29,
   'the public schema has no unclassified SECURITY DEFINER function'
 );
 
@@ -94,7 +95,7 @@ select is(
     join pg_proc function_record on function_record.oid = expected.function_oid
     where function_record.prosecdef
   ),
-  28,
+  29,
   'every classified function remains SECURITY DEFINER'
 );
 
@@ -105,7 +106,7 @@ select is(
     join pg_proc function_record on function_record.oid = expected.function_oid
     where function_record.proconfig @> array['search_path=""']::text[]
   ),
-  28,
+  29,
   'every classified SECURITY DEFINER function fixes search_path to empty'
 );
 
@@ -116,7 +117,7 @@ select is(
     join pg_proc function_record on function_record.oid = expected.function_oid
     where pg_get_userbyid(function_record.proowner) = 'postgres'
   ),
-  28,
+  29,
   'function ownership remains postgres'
 );
 

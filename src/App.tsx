@@ -98,13 +98,6 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    console.info("[auth-token-trace]", {
-      stage: "app_auth_effect",
-      timestamp: new Date().toISOString(),
-      authLoading: auth.loading,
-      hasAuthUser: Boolean(auth.user),
-      hasAuthSession: Boolean(auth.session),
-    });
     if (auth.loading) return;
     if (!auth.user) {
       setUser(GUEST_USER);

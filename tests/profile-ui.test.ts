@@ -21,7 +21,7 @@ const publicProfile: PublicProfile = {
   id: '70000000-0000-4000-8000-000000000001',
   username: 'engineer',
   display_name: 'Engineer One',
-  avatar_url: null,
+  avatar_url: 'https://images.example.test/avatar.png',
   university_name: 'Engineering University',
   primary_discipline: {
     id: DISCIPLINE_ID,
@@ -142,6 +142,7 @@ test('Owner Profile v2 UI renders progress and private settings without private 
     onSignOut: async () => undefined,
   }));
   assert.match(markup, /Engineer One/);
+  assert.match(markup, /src="https:\/\/images\.example\.test\/avatar\.png"/);
   assert.match(markup, /125 XP/);
   assert.match(markup, />3 \/ 7</);
   assert.match(markup, /Приватные настройки/);

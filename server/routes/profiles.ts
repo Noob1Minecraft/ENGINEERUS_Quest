@@ -2,6 +2,7 @@ import { Router, type RequestHandler } from "express";
 import { z } from "zod";
 import { PersistenceError, sendPersistenceError } from "../persistence/errors";
 import type { ProfileRepository, ProfileSearch, ProfileUpdate } from "../persistence/profiles";
+import { isSafeAvatarUrl } from "../security/avatarUrl";
 
 const uuid = z.string().uuid();
 const nullableText = (max: number) => z.string().trim().min(1).max(max).nullable();
@@ -12,7 +13,7 @@ const unique = <T>(values: readonly T[]) => new Set(values).size === values.leng
 const profileUpdateSchema = z.object({
   username: z.string().trim().min(1).max(50).regex(/^[\p{L}\p{N}_.-]+$/u).optional(),
   display_name: nullableText(100).optional(),
-  avatar_url: z.string().url().max(2048).nullable().optional(),
+  avatar_url: z.string().max(2048).refine(isSafeAvatarUrl).nullable().optional(),
   university_name: nullableText(200).optional(),
   primary_discipline_id: uuid.nullable().optional(),
   bio: nullableText(2000).optional(),

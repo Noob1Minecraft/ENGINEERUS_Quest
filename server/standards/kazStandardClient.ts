@@ -1,6 +1,8 @@
 const KAZSTANDARD_ORIGIN = "https://new-shop.ksm.kz";
 const DEFAULT_TIMEOUT_MS = 5_000;
-const MAX_HTML_BYTES = 2_000_000;
+// Public catalog pages are normally far smaller. Two megabytes leave generous room for
+// metadata markup while bounding memory use from an unexpected upstream response.
+export const MAX_KAZSTANDARD_HTML_BYTES = 2_000_000;
 
 type Fetch = typeof fetch;
 
@@ -13,6 +15,40 @@ type KazStandardClientOptions = {
   fetchImpl?: Fetch;
   timeoutMs?: number;
 };
+
+async function readBoundedHtml(response: Response, controller: AbortController): Promise<string> {
+  const declaredLength = response.headers.get("content-length");
+  if (declaredLength !== null) {
+    const length = Number(declaredLength);
+    if (Number.isFinite(length) && length > MAX_KAZSTANDARD_HTML_BYTES) {
+      controller.abort();
+      throw new Error("KazStandard response exceeded the metadata-only size limit.");
+    }
+  }
+
+  if (!response.body) return "";
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let receivedBytes = 0;
+  let html = "";
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      receivedBytes += value.byteLength;
+      if (receivedBytes > MAX_KAZSTANDARD_HTML_BYTES) {
+        controller.abort();
+        await reader.cancel().catch(() => undefined);
+        throw new Error("KazStandard response exceeded the metadata-only size limit.");
+      }
+      html += decoder.decode(value, { stream: true });
+    }
+    return html + decoder.decode();
+  } finally {
+    reader.releaseLock();
+  }
+}
 
 function assertAllowedUrl(url: URL): void {
   if (url.origin !== KAZSTANDARD_ORIGIN) {
@@ -55,10 +91,7 @@ export function createKazStandardClient(options: KazStandardClientOptions = {}):
         throw new Error("KazStandard returned a non-HTML response.");
       }
 
-      const html = await response.text();
-      if (Buffer.byteLength(html, "utf8") > MAX_HTML_BYTES) {
-        throw new Error("KazStandard response exceeded the metadata-only size limit.");
-      }
+      const html = await readBoundedHtml(response, controller);
       return { html, sourceUrl: url.toString() };
     } finally {
       clearTimeout(timer);

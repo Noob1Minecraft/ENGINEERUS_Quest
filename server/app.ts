@@ -20,19 +20,34 @@ import { createDirectChatsRouter } from "./routes/directChats";
 import { createContentSecurityPolicyDirectives } from "./security/contentSecurityPolicy";
 import type { RateLimitStoreFactory } from "./security/securityControlStore";
 
-const DEFAULT_ALLOWED_ORIGINS = [
+const DEPLOYED_ALLOWED_ORIGINS = [
   "https://engineerus-quest.vercel.app",
   "https://engineerus-quest-git-main-enginnerus.vercel.app",
+  "https://engineerus-quest-git-feat-supabase-foundation-enginnerus.vercel.app",
+];
+
+const DEVELOPMENT_ALLOWED_ORIGINS = [
   "http://localhost:5173",
   "http://localhost:3000",
 ];
 
-export function createApp(env: ServerEnv, options: { rateLimitStoreFactory?: RateLimitStoreFactory } = {}): Express {
-  const app = express();
+export function createAllowedOrigins(env: ServerEnv): Set<string> {
   const configuredOrigins = env.FRONTEND_ORIGIN
     ? env.FRONTEND_ORIGIN.split(",").map((origin) => origin.trim())
     : [];
-  const allowedOrigins = new Set([...DEFAULT_ALLOWED_ORIGINS, ...configuredOrigins]);
+  const developmentOrigins = env.NODE_ENV === "production" ? [] : DEVELOPMENT_ALLOWED_ORIGINS;
+  const safeConfiguredOrigins = env.NODE_ENV === "production"
+    ? configuredOrigins.filter((origin) => {
+      const hostname = new URL(origin).hostname.toLowerCase();
+      return hostname !== "localhost" && hostname !== "127.0.0.1" && hostname !== "[::1]";
+    })
+    : configuredOrigins;
+  return new Set([...DEPLOYED_ALLOWED_ORIGINS, ...developmentOrigins, ...safeConfiguredOrigins]);
+}
+
+export function createApp(env: ServerEnv, options: { rateLimitStoreFactory?: RateLimitStoreFactory } = {}): Express {
+  const app = express();
+  const allowedOrigins = createAllowedOrigins(env);
 
   app.set("trust proxy", 1);
   app.disable("x-powered-by");
@@ -50,9 +65,10 @@ export function createApp(env: ServerEnv, options: { rateLimitStoreFactory?: Rat
         callback(null, true);
         return;
       }
-      callback(new Error("Origin is not allowed by CORS"));
+      // Return no CORS headers. The browser rejects access without exposing an
+      // application error body or turning CORS into an authentication control.
+      callback(null, false);
     },
-    credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "Idempotency-Key"],
   }));

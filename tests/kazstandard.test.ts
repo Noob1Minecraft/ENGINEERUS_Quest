@@ -6,7 +6,11 @@ import type { ChatRepository } from "../server/persistence/chats";
 import { AiProviderError } from "../server/ai/groqClient";
 import { createAiRouter } from "../server/routes/ai";
 import { loadServerEnv } from "../server/config/env";
-import { createKazStandardClient, type KazStandardClient } from "../server/standards/kazStandardClient";
+import {
+  MAX_KAZSTANDARD_HTML_BYTES,
+  createKazStandardClient,
+  type KazStandardClient,
+} from "../server/standards/kazStandardClient";
 import {
   KazStandardParserError,
   parseKazStandardDocument,
@@ -420,6 +424,100 @@ test("standards-related query performs a metadata-only GET with encoded input", 
   assert.ok(requests[0].url.includes("%26+test"));
   assert.doesNotMatch(requests[0].url, /\.pdf/iu);
   await assert.rejects(() => client.getKazStandardDocument("../media/paid.pdf"), /numeric/u);
+});
+
+test("KazStandard client accepts an exact-limit streamed HTML response", async () => {
+  const html = "x".repeat(MAX_KAZSTANDARD_HTML_BYTES);
+  const client = createKazStandardClient({
+    fetchImpl: async () => new Response(html, {
+      status: 200,
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": String(MAX_KAZSTANDARD_HTML_BYTES),
+      },
+    }),
+  });
+
+  const result = await client.searchKazStandard("safe");
+  assert.equal(Buffer.byteLength(result.html, "utf8"), MAX_KAZSTANDARD_HTML_BYTES);
+});
+
+test("KazStandard client rejects oversized Content-Length before reading the body", async () => {
+  let aborted = false;
+  const client = createKazStandardClient({
+    fetchImpl: async (_input, init) => {
+      init?.signal?.addEventListener("abort", () => { aborted = true; }, { once: true });
+      return new Response("small body", {
+        status: 200,
+        headers: {
+          "Content-Type": "text/html",
+          "Content-Length": String(MAX_KAZSTANDARD_HTML_BYTES + 1),
+        },
+      });
+    },
+  });
+
+  await assert.rejects(() => client.searchKazStandard("oversized"), /size limit/u);
+  assert.equal(aborted, true);
+});
+
+test("KazStandard client counts chunked bytes and aborts once the stream exceeds the limit", async () => {
+  let aborted = false;
+  let cancelled = false;
+  const chunks = [new Uint8Array(1_000_000), new Uint8Array(1_000_000), new Uint8Array(1)];
+  const client = createKazStandardClient({
+    fetchImpl: async (_input, init) => {
+      init?.signal?.addEventListener("abort", () => { aborted = true; }, { once: true });
+      let index = 0;
+      const body = new ReadableStream<Uint8Array>({
+        pull(controller) {
+          // Deliberately remain open after the oversized third chunk so the
+          // client cancellation is observable as an upstream cancel signal.
+          controller.enqueue(chunks[Math.min(index++, chunks.length - 1)]);
+        },
+        cancel() { cancelled = true; },
+      });
+      return new Response(body, { status: 200, headers: { "Content-Type": "text/html" } });
+    },
+  });
+
+  await assert.rejects(() => client.searchKazStandard("chunked"), /size limit/u);
+  assert.equal(aborted, true);
+  assert.equal(cancelled, true);
+});
+
+test("KazStandard timeout and safe upstream error mapping remain unchanged", async () => {
+  const timeoutClient = createKazStandardClient({
+    timeoutMs: 5,
+    fetchImpl: async (_input, init) => new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true });
+    }),
+  });
+  await assert.rejects(() => timeoutClient.searchKazStandard("timeout"), (error: unknown) => {
+    return error instanceof Error && error.name === "AbortError";
+  });
+
+  const nonHtmlClient = createKazStandardClient({
+    fetchImpl: async () => new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }),
+  });
+  await assert.rejects(() => nonHtmlClient.searchKazStandard("json"), /non-HTML/u);
+
+  const failedClient = createKazStandardClient({
+    fetchImpl: async () => new Response("unavailable", { status: 503, headers: { "Content-Type": "text/html" } }),
+  });
+  await assert.rejects(() => failedClient.searchKazStandard("failed"), /HTTP 503/u);
+});
+
+test("oversized KazStandard content never becomes verified metadata", async () => {
+  const client = createKazStandardClient({
+    fetchImpl: async () => new Response("x".repeat(MAX_KAZSTANDARD_HTML_BYTES + 1), {
+      status: 200,
+      headers: { "Content-Type": "text/html" },
+    }),
+  });
+  const result = await createStandardsService({ enabled: true, client })
+    .searchVerifiedStandards("СТ РК ISO 9001-2016");
+  assert.deepEqual(result, { kind: "unavailable" });
 });
 
 test("returns verified detail metadata and caches it in memory", async () => {

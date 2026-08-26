@@ -120,13 +120,11 @@ select ok(
   'authenticated users cannot read auth email'
 );
 select lives_ok(
-  $$insert into public.profile_skills (profile_id, skill_id, proficiency)
-    values (
-      '50000000-0000-4000-8000-000000000001',
-      '20000000-0000-4000-8000-000000000001',
-      4
-    )$$,
-  'owner can add a normalized skill'
+  $$select public.replace_my_profile_relations(
+    '[{"id":"20000000-0000-4000-8000-000000000001","proficiency":4}]'::jsonb,
+    null, null, null
+  )$$,
+  'owner can atomically add a normalized skill'
 );
 select is(
   (select proficiency::integer from public.profile_skills
@@ -143,13 +141,12 @@ select is(
 );
 select ok(
   public._profile_v2_sql_throws(
-    $$insert into public.profile_skills (profile_id, skill_id)
-      values (
-        '50000000-0000-4000-8000-000000000001',
-        '29999999-9999-4999-8999-999999999999'
-      )$$
+    $$select public.replace_my_profile_relations(
+      '[{"id":"29999999-9999-4999-8999-999999999999"}]'::jsonb,
+      null, null, null
+    )$$
   ),
-  'invalid taxonomy IDs are rejected by foreign keys'
+  'invalid taxonomy IDs are rejected by the atomic RPC'
 );
 select ok(
   public._profile_v2_sql_throws(

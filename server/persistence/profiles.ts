@@ -263,19 +263,6 @@ async function validateIds(
   }
 }
 
-async function replaceRelation(
-  client: SupabaseClient,
-  table: "profile_skills" | "profile_tools" | "profile_interests" | "profile_languages",
-  profileId: string,
-  rows: Array<Record<string, unknown>>,
-): Promise<void> {
-  const removed = await client.from(table).delete().eq("profile_id", profileId);
-  if (removed.error) profileFailure(removed.error, "profile_update_failed", "The profile could not be updated.");
-  if (rows.length === 0) return;
-  const inserted = await client.from(table).insert(rows);
-  if (inserted.error) profileFailure(inserted.error, "profile_update_failed", "The profile could not be updated.");
-}
-
 export function createProfileRepository(env: ServerEnv) {
   async function loadMyProfile(userId: string, accessToken: string): Promise<{ profile: MyProfile; private_settings: ProfilePrivateSettings }> {
     const client = createSupabaseUserClient(env, accessToken);
@@ -352,32 +339,21 @@ export function createProfileRepository(env: ServerEnv) {
         if (result.error) profileFailure(result.error, "profile_update_failed", "The profile could not be updated.");
       }
 
-      if (update.skills) {
-        await replaceRelation(client, "profile_skills", userId, update.skills.map(({ id, proficiency }) => ({
-          profile_id: userId,
-          skill_id: id,
-          proficiency: proficiency ?? null,
-        })));
-      }
-      if (update.tools) {
-        await replaceRelation(client, "profile_tools", userId, update.tools.map(({ id, proficiency }) => ({
-          profile_id: userId,
-          tool_id: id,
-          proficiency: proficiency ?? null,
-        })));
-      }
-      if (update.interests) {
-        await replaceRelation(client, "profile_interests", userId, update.interests.map((interestId) => ({
-          profile_id: userId,
-          interest_id: interestId,
-        })));
-      }
-      if (update.languages) {
-        await replaceRelation(client, "profile_languages", userId, update.languages.map(({ language_code, proficiency }) => ({
-          profile_id: userId,
-          language_code,
-          proficiency: proficiency ?? null,
-        })));
+      const hasRelationUpdate = update.skills !== undefined
+        || update.tools !== undefined
+        || update.interests !== undefined
+        || update.languages !== undefined;
+      if (hasRelationUpdate) {
+        const result = await client.rpc("replace_my_profile_relations", {
+          p_skills: update.skills?.map(({ id, proficiency }) => ({ id, proficiency: proficiency ?? null })) ?? null,
+          p_tools: update.tools?.map(({ id, proficiency }) => ({ id, proficiency: proficiency ?? null })) ?? null,
+          p_interests: update.interests ?? null,
+          p_languages: update.languages?.map(({ language_code, proficiency }) => ({
+            language_code,
+            proficiency: proficiency ?? null,
+          })) ?? null,
+        });
+        if (result.error) profileFailure(result.error, "profile_update_failed", "The profile could not be updated.");
       }
       return (await loadMyProfile(userId, accessToken)).profile;
     },

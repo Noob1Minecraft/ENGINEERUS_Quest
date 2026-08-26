@@ -157,6 +157,47 @@ test("owner profile and private-settings patches use only the verified JWT owner
   ]);
 });
 
+test("avatar input accepts only HTTPS or null at the authoritative API boundary", async () => {
+  const accepted: Array<string | null | undefined> = [];
+  const repo = repository({
+    updateProfile: async (_userId, _token, update) => {
+      accepted.push(update.avatar_url);
+      return repository().updateProfile(_userId, _token, update);
+    },
+  });
+
+  await withServer(appFor(repo), async (baseUrl) => {
+    for (const avatar_url of ["https://images.example.test/avatar.png", null]) {
+      const response = await fetch(`${baseUrl}/api/me/profile`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ avatar_url }),
+      });
+      assert.equal(response.status, 200);
+    }
+
+    for (const avatar_url of [
+      "not a url",
+      "javascript:alert(1)",
+      "data:image/svg+xml,<svg/>",
+      "blob:https://example.test/id",
+      "file:///tmp/avatar.png",
+      "ftp://example.test/avatar.png",
+      "custom://example/avatar.png",
+      "https://user:password@example.test/avatar.png",
+    ]) {
+      const response = await fetch(`${baseUrl}/api/me/profile`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ avatar_url }),
+      });
+      assert.equal(response.status, 400, avatar_url);
+    }
+  });
+
+  assert.deepEqual(accepted, ["https://images.example.test/avatar.png", null]);
+});
+
 test("invalid taxonomy identifiers are returned as validation errors", async () => {
   const repo = repository({
     updateProfile: async () => {
