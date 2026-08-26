@@ -18,6 +18,8 @@ import { buildVerifiedStandardsResponse } from "../standards/verifiedStandardsRe
 import type { SupportedLanguage } from "../ai/languagePolicy";
 import { AiProviderError } from "../ai/groqClient";
 import { securityLogger } from "../security/structuredLogger";
+import type { ProductEventRecorder } from "../persistence/beta";
+import { trackProductEvent } from "../beta/trackProductEvent";
 
 const MODULES = ["tutor", "material", "patent", "engi_legal", "engi_match"] as const;
 const baseAiRequestSchema = z.object({
@@ -61,6 +63,7 @@ type AiDependencies = {
   ) => Promise<string>;
   lookupStandards?: StandardsLookup;
   concurrencyGuard?: RequestHandler;
+  recordEvent?: ProductEventRecorder;
 };
 
 export function createAiRouter(
@@ -104,6 +107,10 @@ export function createAiRouter(
       const detectedLanguage = dependencies.detectLanguage(canonicalPrompt, lang);
 
       if (started.assistantMessage) {
+        await trackProductEvent(dependencies.recordEvent, userId, "ai_message_sent", {
+          module: moduleName,
+          language: detectedLanguage,
+        }, started.assistantMessage.id);
         response.json({
           status: "ok",
           response: started.assistantMessage.text,
@@ -212,6 +219,13 @@ export function createAiRouter(
         moduleName,
         xpAmount,
       );
+
+      if (completed.assistantMessage) {
+        await trackProductEvent(dependencies.recordEvent, userId, "ai_message_sent", {
+          module: moduleName,
+          language: detectedLanguage,
+        }, completed.assistantMessage.id);
+      }
 
       response.json({
         status: "ok",

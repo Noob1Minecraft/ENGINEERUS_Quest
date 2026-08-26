@@ -8,6 +8,8 @@ import {
   type ChatSessionCursor,
 } from "../persistence/chats";
 import { PersistenceError, sendPersistenceError } from "../persistence/errors";
+import type { ProductEventRecorder } from "../persistence/beta";
+import { trackProductEvent } from "../beta/trackProductEvent";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const sessionPageSchema = z.object({
@@ -60,6 +62,7 @@ export function createChatsRouter(
   authenticate: RequestHandler,
   rateLimiter: RequestHandler,
   repository: ChatRepository,
+  recordEvent?: ProductEventRecorder,
 ): Router {
   const router = Router();
 
@@ -92,6 +95,7 @@ export function createChatsRouter(
         parseTitle(request.body?.title),
         parseModule(request.body?.module ?? "tutor"),
       );
+      await trackProductEvent(recordEvent, userId, "ai_session_started", { module: session.module }, session.id);
       response.status(201).json({ session });
     } catch (error) {
       sendPersistenceError(response, error);

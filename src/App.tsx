@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { UserProfile, Language, Quest, CanonicalUser } from './types';
 import { TRANSLATIONS, QUESTS } from './data';
 import { verifySystemIntegrity } from './utils/integrity';
@@ -10,7 +10,6 @@ import { AIAssistantTab } from './components/AIAssistantTab';
 import { RoadmapBooksTab } from './components/RoadmapBooksTab';
 import { BottomNav } from './components/BottomNav';
 import { AuthModal } from './components/AuthModal';
-import { OnboardingModal } from './components/OnboardingModal';
 import { ProfileTab } from './components/ProfileTab';
 import { ProjectsTab } from './components/ProjectsTab';
 import { EngiMatchTab } from './components/EngiMatchTab';
@@ -19,6 +18,16 @@ import { Sparkles, Zap, ArrowRight, ShieldCheck, Cpu } from 'lucide-react';
 import mascotImg from './assets/images/eq_robot_mascot_1784719916472.jpg';
 import { useAuth } from './auth/AuthContext';
 import { apiFetch } from './utils/api';
+import { BetaOnboardingCard } from './components/BetaOnboardingCard';
+import { BetaFeedbackModal } from './components/BetaFeedbackModal';
+import {
+  completeBetaOnboarding,
+  loadBetaState,
+  recordBetaView,
+  startBetaOnboarding,
+  type BetaFeedbackInput,
+  type BetaParticipant,
+} from './beta/betaApi';
 
 const GUEST_USER: UserProfile = {
   id: 'guest',
@@ -70,7 +79,10 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState<string>('home');
   const [isAuthOpen, setIsAuthOpen] = useState<boolean>(false);
-  const [isOnboardingOpen, setIsOnboardingOpen] = useState<boolean>(false);
+  const [betaParticipant, setBetaParticipant] = useState<BetaParticipant | null>(null);
+  const [betaCompleting, setBetaCompleting] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const trackedBetaViews = useRef(new Set<string>());
 
   const [user, setUser] = useState<UserProfile>(GUEST_USER);
   const [account, setAccount] = useState<CanonicalUser | null>(null);
@@ -87,15 +99,6 @@ export default function App() {
     // Mandatory attribution token verification check
     verifySystemIntegrity(t.attributionCaption);
   }, [lang, t]);
-
-  useEffect(() => {
-    // Check onboarding preference
-    const hasSeenOnboarding = localStorage.getItem('hasSeenOnboarding');
-    if (!hasSeenOnboarding) {
-      setIsOnboardingOpen(true);
-      localStorage.setItem('hasSeenOnboarding', 'true');
-    }
-  }, []);
 
   useEffect(() => {
     if (auth.loading) return;
@@ -145,6 +148,36 @@ export default function App() {
     return () => { active = false; };
   }, [auth.loading, auth.user]);
 
+  useEffect(() => {
+    if (auth.loading) return;
+    if (!auth.user) {
+      setBetaParticipant(null);
+      trackedBetaViews.current.clear();
+      return;
+    }
+    let active = true;
+    loadBetaState()
+      .then(async (participant) => {
+        if (participant.onboarding_started_at || participant.onboarding_completed_at) return participant;
+        return startBetaOnboarding();
+      })
+      .then((participant) => { if (active) setBetaParticipant(participant); })
+      .catch(() => { if (active) setBetaParticipant(null); });
+    return () => { active = false; };
+  }, [auth.loading, auth.user]);
+
+  useEffect(() => {
+    if (!auth.user) return;
+    const eventName = activeTab === 'engimatch' ? 'engimatch_viewed'
+      : activeTab === 'messages' ? 'direct_chat_opened'
+      : null;
+    if (!eventName) return;
+    const key = `${auth.user.id}:${eventName}`;
+    if (trackedBetaViews.current.has(key)) return;
+    trackedBetaViews.current.add(key);
+    recordBetaView(eventName).catch(() => trackedBetaViews.current.delete(key));
+  }, [activeTab, auth.user]);
+
   const [selectedAiModule, setSelectedAiModule] = useState<string>('tutor');
   const [selectedDirectConversation, setSelectedDirectConversation] = useState<string | null>(null);
 
@@ -158,6 +191,18 @@ export default function App() {
   const handleUpdateUser = (updated: Partial<UserProfile>) => {
     setUser((prev) => ({ ...prev, ...updated }));
   };
+
+  const completeOnboarding = async () => {
+    setBetaCompleting(true);
+    try { setBetaParticipant(await completeBetaOnboarding()); }
+    catch { /* keep the checklist visible so the tester can retry safely */ }
+    finally { setBetaCompleting(false); }
+  };
+
+  const betaProductArea: BetaFeedbackInput['product_area'] = activeTab === 'home' ? 'dashboard'
+    : activeTab === 'ai' ? 'ai_tutor'
+    : activeTab === 'leaderboard' || activeTab === 'roadmap' ? 'other'
+    : activeTab as BetaFeedbackInput['product_area'];
 
   const handleCompleteQuest = async (questId: string) => {
     try {
@@ -204,6 +249,8 @@ export default function App() {
         activeTab={activeTab}
         onSelectTab={setActiveTab}
         onOpenProfile={() => auth.user ? setActiveTab('profile') : setIsAuthOpen(true)}
+        authenticated={Boolean(auth.user)}
+        onOpenFeedback={() => setFeedbackOpen(true)}
       />
 
       {/* Main Container - Optimized with 390px base width responsiveness (360px min, 430px max, desktop responsive) */}
@@ -216,6 +263,13 @@ export default function App() {
         {/* Tab Content Routing */}
         {activeTab === 'home' && (
           <div className="space-y-4 sm:space-y-6 animate-fade-in">
+            {auth.user && <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-950">
+              <span><strong>Controlled Beta.</strong> {lang === 'ru' ? 'Доступ ограничен, функции могут меняться — ваши отзывы помогают улучшать продукт.' : lang === 'kk' ? 'Қолжетімділік шектеулі, функциялар өзгеруі мүмкін — пікіріңіз өнімді жақсартады.' : 'Access is limited and features may change—your feedback helps improve the product.'}</span>
+              <button type="button" onClick={() => setFeedbackOpen(true)} className="font-black text-blue-700 hover:underline">{lang === 'ru' ? 'Отправить отзыв' : lang === 'kk' ? 'Пікір жіберу' : 'Send feedback'}</button>
+            </div>}
+            {auth.user && betaParticipant && !betaParticipant.onboarding_completed_at && <BetaOnboardingCard
+              lang={lang} completing={betaCompleting} onNavigate={setActiveTab} onComplete={completeOnboarding}
+            />}
             {/* Hero Section Banner (Soft, minimalist and elegant) */}
             <div className="bg-gradient-to-br from-slate-50 via-slate-100/40 to-blue-50/30 text-slate-800 rounded-2xl p-6 sm:p-8 md:p-10 shadow-xs relative overflow-hidden border border-slate-200/60">
               {/* Background ambient glow effects */}
@@ -412,6 +466,9 @@ export default function App() {
             <p className="text-[11px] text-slate-500 font-normal">
               {t.attributionCaption}
             </p>
+            {auth.user && <button type="button" onClick={() => setFeedbackOpen(true)} className="mt-2 text-[11px] font-bold text-blue-700 hover:underline">
+              {lang === 'ru' ? 'Сообщить о проблеме или отправить бета-отзыв' : lang === 'kk' ? 'Мәселе туралы хабарлау немесе бета-пікір жіберу' : 'Report a problem or send beta feedback'}
+            </button>}
           </div>
         </div>
       </footer>
@@ -423,11 +480,7 @@ export default function App() {
         lang={lang}
       />
 
-      <OnboardingModal
-        isOpen={isOnboardingOpen}
-        onClose={() => setIsOnboardingOpen(false)}
-        lang={lang}
-      />
+      <BetaFeedbackModal open={feedbackOpen} onClose={() => setFeedbackOpen(false)} lang={lang} productArea={betaProductArea} />
     </div>
   );
 }

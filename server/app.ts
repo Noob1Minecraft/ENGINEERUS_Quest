@@ -21,6 +21,8 @@ import { createContentSecurityPolicyDirectives } from "./security/contentSecurit
 import type { RateLimitStoreFactory } from "./security/securityControlStore";
 import { createRequestContext } from "./middleware/requestContext";
 import { securityLogger, type StructuredLogger } from "./security/structuredLogger";
+import { createBetaRepository } from "./persistence/beta";
+import { createBetaRouter } from "./routes/beta";
 
 const DEPLOYED_ALLOWED_ORIGINS = [
   "https://engineerus-quest.vercel.app",
@@ -88,6 +90,7 @@ export function createApp(env: ServerEnv, options: {
   const projectRecruitment = createProjectRecruitmentRepository(env);
   const engimatch = createEngiMatchRepository(env);
   const directChats = createDirectChatRepository(env);
+  const beta = createBetaRepository(env);
   app.use(createMeRouter(
     authenticate,
     rateLimiter,
@@ -95,15 +98,17 @@ export function createApp(env: ServerEnv, options: {
     profiles.recordDailyActivity,
   ));
   app.use(createProfilesRouter(authenticate, rateLimiter, profiles));
-  app.use(createProjectsRouter(authenticate, rateLimiter, projects));
-  app.use(createProjectRecruitmentRouter(authenticate, rateLimiter, projectRecruitment));
-  app.use(createEngiMatchRouter(authenticate, createEngiMatchRateLimit(options.rateLimitStoreFactory), engimatch));
+  app.use(createBetaRouter(authenticate, rateLimiter, beta));
+  app.use(createProjectsRouter(authenticate, rateLimiter, projects, beta.recordEvent));
+  app.use(createProjectRecruitmentRouter(authenticate, rateLimiter, projectRecruitment, beta.recordEvent));
+  app.use(createEngiMatchRouter(authenticate, createEngiMatchRateLimit(options.rateLimitStoreFactory), engimatch, beta.recordEvent));
   app.use(createDirectChatsRouter(
     authenticate,
     createDirectChatReadRateLimit(options.rateLimitStoreFactory),
     createDirectChatCreateRateLimit(options.rateLimitStoreFactory),
     createDirectChatWriteRateLimit(options.rateLimitStoreFactory),
     directChats,
+    beta.recordEvent,
   ));
 
   return app;

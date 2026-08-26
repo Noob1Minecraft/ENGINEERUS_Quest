@@ -28,6 +28,7 @@ insert into expected_security_definers (function_oid, classification)
 values
   ('public.handle_new_auth_user()'::regprocedure, 'TRIGGER_ONLY'),
   ('public.handle_new_user_progress()'::regprocedure, 'TRIGGER_ONLY'),
+  ('public.handle_new_beta_participant()'::regprocedure, 'TRIGGER_ONLY'),
   ('public.guard_project_member()'::regprocedure, 'TRIGGER_ONLY'),
   ('public.record_daily_activity()'::regprocedure, 'AUTH_RPC'),
   ('public.replace_my_profile_relations(jsonb,jsonb,jsonb,jsonb)'::regprocedure, 'AUTH_RPC'),
@@ -58,7 +59,7 @@ values
 
 select is(
   (select count(*)::integer from expected_security_definers),
-  29,
+  30,
   'the SECURITY DEFINER classification inventory contains every application function'
 );
 
@@ -84,7 +85,7 @@ select is(
     where function_schema.nspname = 'public'
       and function_record.prosecdef
   ),
-  29,
+  30,
   'the public schema has no unclassified SECURITY DEFINER function'
 );
 
@@ -95,7 +96,7 @@ select is(
     join pg_proc function_record on function_record.oid = expected.function_oid
     where function_record.prosecdef
   ),
-  29,
+  30,
   'every classified function remains SECURITY DEFINER'
 );
 
@@ -106,7 +107,7 @@ select is(
     join pg_proc function_record on function_record.oid = expected.function_oid
     where function_record.proconfig @> array['search_path=""']::text[]
   ),
-  29,
+  30,
   'every classified SECURITY DEFINER function fixes search_path to empty'
 );
 
@@ -117,14 +118,14 @@ select is(
     join pg_proc function_record on function_record.oid = expected.function_oid
     where pg_get_userbyid(function_record.proowner) = 'postgres'
   ),
-  29,
+  30,
   'function ownership remains postgres'
 );
 
 select is(
   (select count(*)::integer from expected_security_definers where classification = 'TRIGGER_ONLY'),
-  3,
-  'three SECURITY DEFINER functions are trigger-only'
+  4,
+  'four SECURITY DEFINER functions are trigger-only'
 );
 
 select is(
@@ -137,7 +138,7 @@ select is(
      and trigger_record.tgenabled <> 'D'
     where expected.classification = 'TRIGGER_ONLY'
   ),
-  3,
+  4,
   'each trigger-only function is referenced by one enabled application trigger'
 );
 

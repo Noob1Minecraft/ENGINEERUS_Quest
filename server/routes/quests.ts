@@ -1,11 +1,14 @@
 import { Router, type RequestHandler } from "express";
 import type { QuestRepository } from "../persistence/quests";
 import { PersistenceError, sendPersistenceError } from "../persistence/errors";
+import type { ProductEventRecorder } from "../persistence/beta";
+import { trackProductEvent } from "../beta/trackProductEvent";
 
 export function createQuestsRouter(
   authenticate: RequestHandler,
   rateLimiter: RequestHandler,
   repository: QuestRepository,
+  recordEvent?: ProductEventRecorder,
 ): Router {
   const router = Router();
 
@@ -30,6 +33,7 @@ export function createQuestsRouter(
       }
       const { userId, accessToken } = response.locals.auth;
       const result = await repository.complete(userId, accessToken, questId);
+      await trackProductEvent(recordEvent, userId, "quest_completed", { quest_id: questId }, questId);
       response.json({ status: "ok", ...result });
     } catch (error) {
       sendPersistenceError(response, error);

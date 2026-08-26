@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Language, UserProfile } from '../types';
 import { TRANSLATIONS } from '../data';
 import { verifySystemIntegrity } from '../utils/integrity';
-import { Globe, User, Sparkles, ChevronDown, MessageCircle } from 'lucide-react';
+import { Globe, User, Sparkles, ChevronDown, MessageCircle, MessageSquareText } from 'lucide-react';
 
 interface HeaderProps {
   user: UserProfile;
@@ -11,6 +11,8 @@ interface HeaderProps {
   activeTab: string;
   onSelectTab: (tab: string) => void;
   onOpenProfile: () => void;
+  authenticated: boolean;
+  onOpenFeedback: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -20,6 +22,8 @@ export const Header: React.FC<HeaderProps> = ({
   activeTab,
   onSelectTab,
   onOpenProfile,
+  authenticated,
+  onOpenFeedback,
 }) => {
   const t = TRANSLATIONS[lang];
   const [langOpen, setLangOpen] = useState(false);
@@ -47,8 +51,9 @@ export const Header: React.FC<HeaderProps> = ({
             EQ
           </div>
           <div>
-            <span className="font-black text-base md:text-lg text-slate-900 tracking-tight block leading-tight">
-              ENGINEERUS <span className="text-blue-600">Quest</span>
+            <span className="flex items-center gap-1.5 font-black text-base md:text-lg text-slate-900 tracking-tight leading-tight">
+              <span>ENGINEERUS <span className="text-blue-600">Quest</span></span>
+              <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wide text-amber-800">Beta</span>
             </span>
             <span className="text-[9px] md:text-[10px] font-bold uppercase tracking-wider text-slate-400 block -mt-0.5">
               AI ENGINEERING PLATFORM KZ
@@ -137,6 +142,12 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Right Actions: Lang Switcher & Profile Pills */}
         <div className="flex items-center gap-2 sm:gap-3">
+          {authenticated && <button type="button" onClick={onOpenFeedback}
+            aria-label={lang === 'ru' ? 'Отправить бета-отзыв' : lang === 'kk' ? 'Бета-пікір жіберу' : 'Send beta feedback'}
+            className="hidden sm:flex items-center gap-1.5 rounded-2xl border border-blue-100 bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-100">
+            <MessageSquareText className="h-3.5 w-3.5" />
+            <span className="hidden xl:inline">{lang === 'ru' ? 'Обратная связь' : lang === 'kk' ? 'Пікір' : 'Feedback'}</span>
+          </button>}
           {/* Lang Selector Pill */}
           <div className="relative">
             <button

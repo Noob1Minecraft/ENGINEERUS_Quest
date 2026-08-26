@@ -6,6 +6,8 @@ import type {
   ProjectRecruitmentRepository,
   UpdateProjectRoleInput,
 } from "../persistence/projectRecruitment";
+import type { ProductEventRecorder } from "../persistence/beta";
+import { trackProductEvent } from "../beta/trackProductEvent";
 
 const uuid = z.string().uuid();
 const note = z.string().max(1000).default("");
@@ -63,6 +65,7 @@ export function createProjectRecruitmentRouter(
   authenticate: RequestHandler,
   rateLimiter: RequestHandler,
   repository: ProjectRecruitmentRepository,
+  recordEvent?: ProductEventRecorder,
 ): Router {
   const router = Router();
 
@@ -114,6 +117,7 @@ export function createProjectRecruitmentRouter(
         roleId,
         input.note ?? "",
       );
+      await trackProductEvent(recordEvent, response.locals.auth.userId, "project_applied", {}, application.id);
       response.status(201).json({ application });
     } catch (error) {
       sendPersistenceError(response, error);

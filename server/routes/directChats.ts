@@ -2,6 +2,8 @@ import { Router, type RequestHandler } from "express";
 import { z } from "zod";
 import { PersistenceError, sendPersistenceError } from "../persistence/errors";
 import type { ConversationCursor, DirectChatRepository, MessageCursor } from "../persistence/directChats";
+import type { ProductEventRecorder } from "../persistence/beta";
+import { trackProductEvent } from "../beta/trackProductEvent";
 
 const uuid = z.string().uuid();
 const createSchema = z.object({ target_profile_id: uuid, project_id: uuid.nullish() }).strict();
@@ -29,6 +31,7 @@ export function createDirectChatsRouter(
   createRateLimit: RequestHandler,
   writeRateLimit: RequestHandler,
   repository: DirectChatRepository,
+  recordEvent?: ProductEventRecorder,
 ): Router {
   const router = Router();
   router.post("/api/direct-conversations", authenticate, createRateLimit, async (request, response) => {
@@ -62,7 +65,9 @@ export function createDirectChatsRouter(
       const conversationId = uuid.safeParse(request.params.conversationId);
       const parsed = sendSchema.safeParse(request.body);
       if (!conversationId.success || !parsed.success) throw new PersistenceError(400, "invalid_direct_message", "A valid message is required.");
-      response.status(201).json({ message: await repository.send(response.locals.auth.accessToken, conversationId.data, parsed.data.client_message_id, parsed.data.content) });
+      const message = await repository.send(response.locals.auth.accessToken, conversationId.data, parsed.data.client_message_id, parsed.data.content);
+      await trackProductEvent(recordEvent, response.locals.auth.userId, "direct_message_sent", {}, message.id);
+      response.status(201).json({ message });
     } catch (error) { sendPersistenceError(response, error); }
   });
   router.post("/api/direct-conversations/:conversationId/read", authenticate, writeRateLimit, async (request, response) => {

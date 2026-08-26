@@ -18,6 +18,7 @@ import { apiErrorHandler } from "./server/middleware/apiErrorHandler";
 import { mountProductionFrontend } from "./server/staticFrontend";
 import { InMemoryAiCapacityStore } from "./server/security/securityControlStore";
 import { securityLogger } from "./server/security/structuredLogger";
+import { createBetaRepository } from "./server/persistence/beta";
 
 // Load environment variables from .env for local development. Hosted platforms
 // inject their environment variables directly.
@@ -32,9 +33,10 @@ const aiRateLimit = createAiRateLimit();
 const aiConcurrencyGuard = createAiConcurrencyGuard(new InMemoryAiCapacityStore());
 const chatRepository = createChatRepository(env);
 const questRepository = createQuestRepository(env);
+const betaRepository = createBetaRepository(env);
 
-app.use(createChatsRouter(requireAuth, authenticatedRateLimit, chatRepository));
-app.use(createQuestsRouter(requireAuth, authenticatedRateLimit, questRepository));
+app.use(createChatsRouter(requireAuth, authenticatedRateLimit, chatRepository, betaRepository.recordEvent));
+app.use(createQuestsRouter(requireAuth, authenticatedRateLimit, questRepository, betaRepository.recordEvent));
 
 const detectLanguage = resolveResponseLanguage;
 const generateAIResponse = createGroqResponder({
@@ -61,6 +63,7 @@ app.use(createAiRouter(requireAuth, aiRateLimit, {
   generateResponse: generateAIResponse,
   lookupStandards: standardsService.searchVerifiedStandards,
   concurrencyGuard: aiConcurrencyGuard,
+  recordEvent: betaRepository.recordEvent,
 }));
 
 app.get("/api/leaderboard", (req, res) => res.json({ leaderboard: LEADERBOARD_SEED, total: LEADERBOARD_SEED.length }));

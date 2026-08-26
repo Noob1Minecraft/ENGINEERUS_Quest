@@ -8,6 +8,8 @@ import type {
   ProjectSearch,
   UpdateProjectInput,
 } from "../persistence/projects";
+import type { ProductEventRecorder } from "../persistence/beta";
+import { trackProductEvent } from "../beta/trackProductEvent";
 
 const uuid = z.string().uuid();
 const status = z.enum(["draft", "open", "in_progress", "completed", "cancelled", "archived"]);
@@ -82,6 +84,7 @@ export function createProjectsRouter(
   authenticate: RequestHandler,
   rateLimiter: RequestHandler,
   repository: ProjectRepository,
+  recordEvent?: ProductEventRecorder,
 ): Router {
   const router = Router();
 
@@ -89,7 +92,9 @@ export function createProjectsRouter(
     try {
       const input = parseBody(createSchema, request.body) as CreateProjectInput;
       const { userId, accessToken } = response.locals.auth;
-      response.status(201).json({ project: await repository.createProject(userId, accessToken, input) });
+      const project = await repository.createProject(userId, accessToken, input);
+      await trackProductEvent(recordEvent, userId, "project_created", {}, project.id);
+      response.status(201).json({ project });
     } catch (error) {
       sendPersistenceError(response, error);
     }
