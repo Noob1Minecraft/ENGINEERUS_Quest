@@ -26,6 +26,7 @@ const baseAiRequestSchema = z.object({
   text: z.string().max(20_000).refine((value) => value.trim().length > 0),
   lang: z.enum(["ru", "kk", "en"]).default("ru"),
   session_id: z.string().uuid(),
+  document_id: z.string().uuid().optional(),
 }).strip();
 const moduleAiRequestSchema = baseAiRequestSchema.extend({ module: z.enum(MODULES) }).strip();
 
@@ -62,6 +63,11 @@ type AiDependencies = {
     additionalSystemPolicy?: string,
   ) => Promise<string>;
   lookupStandards?: StandardsLookup;
+  loadDocumentContext?: (
+    userId: string,
+    documentId: string,
+    question: string,
+  ) => Promise<{ promptBlock: string; systemPolicy: string }>;
   concurrencyGuard?: RequestHandler;
   recordEvent?: ProductEventRecorder;
 };
@@ -81,7 +87,7 @@ export function createAiRouter(
     xpAmount: 10 | 15,
     input: AiRequest,
   ) {
-    const { text, lang, session_id: sessionId } = input;
+    const { text, lang, session_id: sessionId, document_id: documentId } = input;
 
     let requestId: string;
     try {
@@ -124,15 +130,23 @@ export function createAiRouter(
       }
 
       const prepared = await preparePromptWithStandardsMetadata(canonicalPrompt, dependencies.lookupStandards);
+      const documentContext = documentId
+        ? await dependencies.loadDocumentContext?.(userId, documentId, canonicalPrompt)
+        : undefined;
+      if (documentId && !documentContext) {
+        throw new PersistenceError(503, "document_context_unavailable", "Document context is temporarily unavailable.");
+      }
+      const providerPrompt = [prepared.prompt, documentContext?.promptBlock].filter(Boolean).join("\n\n");
+      const baseSystemPolicy = [prepared.systemInstructions, documentContext?.systemPolicy].filter(Boolean).join("\n\n");
       let providerFailureCategory: string | undefined;
       let providerStatus: number | undefined;
       let generatedResponse: string;
       try {
         generatedResponse = await dependencies.generateResponse(
-          prepared.prompt,
+          providerPrompt,
           moduleName,
           detectedLanguage,
-          prepared.systemInstructions,
+          baseSystemPolicy,
         );
       } catch (error) {
         if (!(error instanceof AiProviderError)) throw error;
@@ -160,10 +174,10 @@ export function createAiRouter(
         const userProvidedDesignations = extractStandardIdentifiers(canonicalPrompt).map(({ raw }) => raw);
         const allowedDesignations = uniqueDesignations([...verifiedDesignations, ...userProvidedDesignations]);
         const strictPolicy = buildStrictStandardsAllowlistPolicy(allowedDesignations);
-        const retrySystemPolicy = [prepared.systemInstructions, strictPolicy].filter(Boolean).join("\n\n");
+        const retrySystemPolicy = [baseSystemPolicy, strictPolicy].filter(Boolean).join("\n\n");
         try {
           const regeneratedResponse = await dependencies.generateResponse(
-            prepared.prompt,
+            providerPrompt,
             moduleName,
             detectedLanguage,
             retrySystemPolicy,

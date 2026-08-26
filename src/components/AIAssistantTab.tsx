@@ -42,6 +42,8 @@ interface AIAssistantTabProps {
   onUpdateUser: (updated: Partial<UserProfile>) => void;
   onCompleteQuest?: (questId: string) => Promise<void>;
   initialModule?: string;
+  documentContext?: { id: string; name: string } | null;
+  onClearDocumentContext?: () => void;
 }
 
 const PRESET_QUESTIONS: Record<string, Record<Language, string[]>> = {
@@ -156,6 +158,8 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
   onUpdateUser,
   onCompleteQuest,
   initialModule,
+  documentContext,
+  onClearDocumentContext,
 }) => {
   const t = TRANSLATIONS[lang];
   const [activeSubView, setActiveSubView] = useState<'chat' | 'saved'>('chat');
@@ -524,6 +528,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
           module: selectedModule,
           text: query,
           lang,
+          ...(documentContext ? { document_id: documentContext.id } : {}),
         }),
       });
       if (data.status !== 'ok' || !data.assistant_message) {
@@ -665,6 +670,13 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
       {persistenceError && (
         <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold p-3 rounded-xl">
           {persistenceError}
+        </div>
+      )}
+
+      {documentContext && (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs font-semibold text-blue-900">
+          <span className="min-w-0 truncate">{lang === 'en' ? 'Document context' : lang === 'kk' ? 'Құжат контексті' : 'Контекст документа'}: {documentContext.name}</span>
+          <button type="button" onClick={onClearDocumentContext} className="shrink-0 rounded-lg bg-white px-2 py-1 font-bold text-blue-700">{lang === 'en' ? 'Clear' : lang === 'kk' ? 'Алып тастау' : 'Убрать'}</button>
         </div>
       )}
 

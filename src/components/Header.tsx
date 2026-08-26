@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Language, UserProfile } from '../types';
 import { TRANSLATIONS } from '../data';
 import { verifySystemIntegrity } from '../utils/integrity';
-import { Globe, User, Sparkles, ChevronDown, MessageCircle, MessageSquareText } from 'lucide-react';
+import { Globe, User, Sparkles, ChevronDown, MessageCircle, MessageSquareText, Files } from 'lucide-react';
 
 interface HeaderProps {
   user: UserProfile;
@@ -127,6 +127,9 @@ export const Header: React.FC<HeaderProps> = ({
             className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${activeTab === 'messages' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
           >
             <MessageCircle className="h-3.5 w-3.5" />{lang === 'ru' ? 'Сообщения' : lang === 'kk' ? 'Хабарламалар' : 'Messages'}
+          </button>
+          <button onClick={() => onSelectTab('documents')} className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${activeTab === 'documents' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}>
+            <Files className="h-3.5 w-3.5" />{lang === 'ru' ? 'Документы' : lang === 'kk' ? 'Құжаттар' : 'Documents'}
           </button>
           <button
             onClick={() => onSelectTab('roadmap')}

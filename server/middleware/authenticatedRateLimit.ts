@@ -86,6 +86,18 @@ export function createEngiMatchRateLimit(factory?: RateLimitStoreFactory) {
   });
 }
 
+export function createDocumentUploadRateLimit(factory?: RateLimitStoreFactory, limit = 10) {
+  return rateLimit({
+    windowMs: WINDOW_MS,
+    limit,
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+    keyGenerator: (_request, response) => response.locals.auth.userId,
+    handler: handler("document_upload_rate_limit_exceeded", "Too many document uploads. Try again later."),
+    ...storeOptions(factory, "authenticated-document-upload"),
+  });
+}
+
 export function createDirectChatReadRateLimit(factory?: RateLimitStoreFactory) {
   return rateLimit({
     windowMs: WINDOW_MS, limit: 180, standardHeaders: "draft-8", legacyHeaders: false,

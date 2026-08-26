@@ -21,6 +21,7 @@
     "test:security:db": "supabase test db",
     "test:persistence": "tsx tests/run-local-persistence-tests.ts",
     "test:gamification:integration": "tsx tests/run-local-gamification-tests.ts",
+    "test:documents:integration": "tsx tests/run-local-document-tests.ts",
     "test:rls": "supabase test db"
   },
   "dependencies": {
@@ -35,16 +36,21 @@
     "jose": "6.2.9",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
+    "multer": "2.2.0",
     "openai": "^4.52.0",
+    "pdfjs-dist": "6.2.108",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
     "react-markdown": "^10.1.0",
     "vite": "^6.2.3",
+    "yauzl": "3.4.0",
     "zod": "3.25.76"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
+    "@types/multer": "2.2.0",
     "@types/node": "^22.14.0",
+    "@types/yauzl": "2.10.3",
     "autoprefixer": "^10.4.21",
     "esbuild": "^0.25.0",
     "supabase": "2.114.0",

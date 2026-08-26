@@ -14,6 +14,8 @@ import { ProfileTab } from './components/ProfileTab';
 import { ProjectsTab } from './components/ProjectsTab';
 import { EngiMatchTab } from './components/EngiMatchTab';
 import { DirectChatTab } from './components/DirectChatTab';
+import { DocumentsTab } from './components/DocumentsTab';
+import type { AiDocument } from './documents/documentApi';
 import { Sparkles, Zap, ArrowRight, ShieldCheck, Cpu } from 'lucide-react';
 import mascotImg from './assets/images/eq_robot_mascot_1784719916472.jpg';
 import { useAuth } from './auth/AuthContext';
@@ -84,6 +86,7 @@ export default function App() {
   const [betaParticipant, setBetaParticipant] = useState<BetaParticipant | null>(null);
   const [betaCompleting, setBetaCompleting] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [aiDocument, setAiDocument] = useState<{ id: string; name: string } | null>(null);
   const trackedBetaViews = useRef(new Set<string>());
 
   const [user, setUser] = useState<UserProfile>(GUEST_USER);
@@ -425,6 +428,8 @@ export default function App() {
             onUpdateUser={handleUpdateUser}
             onCompleteQuest={handleCompleteQuest}
             initialModule={selectedAiModule}
+            documentContext={aiDocument}
+            onClearDocumentContext={() => setAiDocument(null)}
           />
         )}
 
@@ -470,6 +475,11 @@ export default function App() {
         {activeTab === 'messages' && (
           <DirectChatTab authenticated={Boolean(auth.user)} currentUserId={account?.profile.id ?? null} lang={lang}
             initialConversationId={selectedDirectConversation} onRequireAuth={() => setIsAuthOpen(true)} />
+        )}
+
+        {activeTab === 'documents' && (
+          <DocumentsTab authenticated={Boolean(auth.user)} lang={lang} onRequireAuth={() => setIsAuthOpen(true)}
+            onUseWithTutor={(document: AiDocument) => { setAiDocument({ id: document.id, name: document.original_filename }); setSelectedAiModule('tutor'); setActiveTab('ai'); }} />
         )}
 
       </main>

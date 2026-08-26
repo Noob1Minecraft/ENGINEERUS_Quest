@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Flag, BarChart3, BriefcaseBusiness, Sparkles, UserRound, UsersRound, MessageCircle } from 'lucide-react';
+import { Home, Flag, BarChart3, BriefcaseBusiness, Sparkles, UserRound, UsersRound, MessageCircle, Files } from 'lucide-react';
 import { Language } from '../types';
 
 interface BottomNavProps {
@@ -34,6 +34,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
     }
     if (tab === 'engimatch') return 'EngiMatch';
     if (tab === 'messages') return lang === 'kk' ? 'Хабарламалар' : lang === 'en' ? 'Messages' : 'Сообщения';
+    if (tab === 'documents') return lang === 'kk' ? 'Құжаттар' : lang === 'en' ? 'Documents' : 'Документы';
     return '';
   };
 
@@ -45,12 +46,13 @@ export const BottomNav: React.FC<BottomNavProps> = ({
     { id: 'projects', icon: BriefcaseBusiness },
     { id: 'engimatch', icon: UsersRound },
     { id: 'messages', icon: MessageCircle },
+    { id: 'documents', icon: Files },
     { id: 'profile', icon: UserRound },
   ];
 
   return (
     <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-slate-200/80 px-2 pt-2 pb-2 shadow-lg">
-      <div className="max-w-md mx-auto flex items-center justify-between gap-1 px-1">
+      <div className="mx-auto flex max-w-xl items-center justify-between gap-1 overflow-x-auto px-1">
         {navItems.map((item) => {
           const isActive = activeTab === item.id;
           const Icon = item.icon;

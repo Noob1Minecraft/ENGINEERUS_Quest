@@ -4,7 +4,7 @@ import { createApp } from "./server/app";
 import { loadServerEnv } from "./server/config/env";
 import { createSupabaseAccessTokenVerifier } from "./server/auth/supabaseJwt";
 import { createRequireAuth } from "./server/middleware/requireAuth";
-import { createAiConcurrencyGuard, createAiRateLimit, createAuthenticatedRateLimit } from "./server/middleware/authenticatedRateLimit";
+import { createAiConcurrencyGuard, createAiRateLimit, createAuthenticatedRateLimit, createDocumentUploadRateLimit } from "./server/middleware/authenticatedRateLimit";
 import { createChatRepository } from "./server/persistence/chats";
 import { createQuestRepository } from "./server/persistence/quests";
 import { createChatsRouter } from "./server/routes/chats";
@@ -19,6 +19,8 @@ import { mountProductionFrontend } from "./server/staticFrontend";
 import { InMemoryAiCapacityStore } from "./server/security/securityControlStore";
 import { securityLogger } from "./server/security/structuredLogger";
 import { createBetaRepository } from "./server/persistence/beta";
+import { createDocumentRepository } from "./server/persistence/documents";
+import { createDocumentsRouter } from "./server/routes/documents";
 
 // Load environment variables from .env for local development. Hosted platforms
 // inject their environment variables directly.
@@ -34,9 +36,16 @@ const aiConcurrencyGuard = createAiConcurrencyGuard(new InMemoryAiCapacityStore(
 const chatRepository = createChatRepository(env);
 const questRepository = createQuestRepository(env);
 const betaRepository = createBetaRepository(env);
+const documentRepository = createDocumentRepository(env);
 
 app.use(createChatsRouter(requireAuth, authenticatedRateLimit, chatRepository, betaRepository.recordEvent));
 app.use(createQuestsRouter(requireAuth, authenticatedRateLimit, questRepository, betaRepository.recordEvent));
+app.use(createDocumentsRouter(
+  requireAuth,
+  authenticatedRateLimit,
+  createDocumentUploadRateLimit(),
+  documentRepository,
+));
 
 const detectLanguage = resolveResponseLanguage;
 const generateAIResponse = createGroqResponder({
@@ -64,6 +73,7 @@ app.use(createAiRouter(requireAuth, aiRateLimit, {
   lookupStandards: standardsService.searchVerifiedStandards,
   concurrencyGuard: aiConcurrencyGuard,
   recordEvent: betaRepository.recordEvent,
+  loadDocumentContext: documentRepository.loadAiContext,
 }));
 
 app.get("/api/leaderboard", (req, res) => res.json({ leaderboard: LEADERBOARD_SEED, total: LEADERBOARD_SEED.length }));
