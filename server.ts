@@ -4,7 +4,7 @@ import { createApp } from "./server/app";
 import { loadServerEnv } from "./server/config/env";
 import { createSupabaseAccessTokenVerifier } from "./server/auth/supabaseJwt";
 import { createRequireAuth } from "./server/middleware/requireAuth";
-import { createAuthenticatedRateLimit } from "./server/middleware/authenticatedRateLimit";
+import { createAiConcurrencyGuard, createAiRateLimit, createAuthenticatedRateLimit } from "./server/middleware/authenticatedRateLimit";
 import { createChatRepository } from "./server/persistence/chats";
 import { createQuestRepository } from "./server/persistence/quests";
 import { createChatsRouter } from "./server/routes/chats";
@@ -16,6 +16,7 @@ import { createKazStandardClient } from "./server/standards/kazStandardClient";
 import { createStandardsService } from "./server/standards/standardsService";
 import { apiErrorHandler } from "./server/middleware/apiErrorHandler";
 import { mountProductionFrontend } from "./server/staticFrontend";
+import { InMemoryAiCapacityStore } from "./server/security/securityControlStore";
 
 // Load environment variables from .env for local development. Hosted platforms
 // inject their environment variables directly.
@@ -26,6 +27,8 @@ const app = createApp(env);
 const PORT = env.PORT;
 const requireAuth = createRequireAuth(createSupabaseAccessTokenVerifier(env));
 const authenticatedRateLimit = createAuthenticatedRateLimit();
+const aiRateLimit = createAiRateLimit();
+const aiConcurrencyGuard = createAiConcurrencyGuard(new InMemoryAiCapacityStore());
 const chatRepository = createChatRepository(env);
 const questRepository = createQuestRepository(env);
 
@@ -51,11 +54,12 @@ const LEADERBOARD_SEED = [
   { rank: 5, name: "Аружан Муратова (ENU)", xp: 620, level: 7, streak: 5 },
 ];
 
-app.use(createAiRouter(requireAuth, authenticatedRateLimit, {
+app.use(createAiRouter(requireAuth, aiRateLimit, {
   repository: chatRepository,
   detectLanguage,
   generateResponse: generateAIResponse,
   lookupStandards: standardsService.searchVerifiedStandards,
+  concurrencyGuard: aiConcurrencyGuard,
 }));
 
 app.get("/api/leaderboard", (req, res) => res.json({ leaderboard: LEADERBOARD_SEED, total: LEADERBOARD_SEED.length }));

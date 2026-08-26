@@ -5,7 +5,7 @@ import type { ServerEnv } from "./config/env";
 import { createHealthRouter } from "./routes/health";
 import { createSupabaseAccessTokenVerifier } from "./auth/supabaseJwt";
 import { createRequireAuth } from "./middleware/requireAuth";
-import { createAuthenticatedRateLimit, createDirectChatCreateRateLimit, createDirectChatReadRateLimit, createDirectChatWriteRateLimit, createEngiMatchRateLimit } from "./middleware/authenticatedRateLimit";
+import { createAuthenticatedRateLimit, createDirectChatCreateRateLimit, createDirectChatReadRateLimit, createDirectChatWriteRateLimit, createEngiMatchRateLimit, createPreAuthRateLimit } from "./middleware/authenticatedRateLimit";
 import { createMeRouter } from "./routes/me";
 import { createProfilesRouter } from "./routes/profiles";
 import { createProfileRepository } from "./persistence/profiles";
@@ -18,6 +18,7 @@ import { createEngiMatchRouter } from "./routes/engimatch";
 import { createDirectChatRepository } from "./persistence/directChats";
 import { createDirectChatsRouter } from "./routes/directChats";
 import { createContentSecurityPolicyDirectives } from "./security/contentSecurityPolicy";
+import type { RateLimitStoreFactory } from "./security/securityControlStore";
 
 const DEFAULT_ALLOWED_ORIGINS = [
   "https://engineerus-quest.vercel.app",
@@ -26,13 +27,14 @@ const DEFAULT_ALLOWED_ORIGINS = [
   "http://localhost:3000",
 ];
 
-export function createApp(env: ServerEnv): Express {
+export function createApp(env: ServerEnv, options: { rateLimitStoreFactory?: RateLimitStoreFactory } = {}): Express {
   const app = express();
   const configuredOrigins = env.FRONTEND_ORIGIN
     ? env.FRONTEND_ORIGIN.split(",").map((origin) => origin.trim())
     : [];
   const allowedOrigins = new Set([...DEFAULT_ALLOWED_ORIGINS, ...configuredOrigins]);
 
+  app.set("trust proxy", 1);
   app.disable("x-powered-by");
   app.use(helmet({
     contentSecurityPolicy: {
@@ -55,8 +57,9 @@ export function createApp(env: ServerEnv): Express {
     allowedHeaders: ["Content-Type", "Authorization", "Idempotency-Key"],
   }));
   app.use(createHealthRouter());
+  app.use("/api", createPreAuthRateLimit(options.rateLimitStoreFactory));
   const authenticate = createRequireAuth(createSupabaseAccessTokenVerifier(env));
-  const rateLimiter = createAuthenticatedRateLimit();
+  const rateLimiter = createAuthenticatedRateLimit(options.rateLimitStoreFactory);
   const profiles = createProfileRepository(env);
   const projects = createProjectRepository(env);
   const projectRecruitment = createProjectRecruitmentRepository(env);
@@ -71,12 +74,12 @@ export function createApp(env: ServerEnv): Express {
   app.use(createProfilesRouter(authenticate, rateLimiter, profiles));
   app.use(createProjectsRouter(authenticate, rateLimiter, projects));
   app.use(createProjectRecruitmentRouter(authenticate, rateLimiter, projectRecruitment));
-  app.use(createEngiMatchRouter(authenticate, createEngiMatchRateLimit(), engimatch));
+  app.use(createEngiMatchRouter(authenticate, createEngiMatchRateLimit(options.rateLimitStoreFactory), engimatch));
   app.use(createDirectChatsRouter(
     authenticate,
-    createDirectChatReadRateLimit(),
-    createDirectChatCreateRateLimit(),
-    createDirectChatWriteRateLimit(),
+    createDirectChatReadRateLimit(options.rateLimitStoreFactory),
+    createDirectChatCreateRateLimit(options.rateLimitStoreFactory),
+    createDirectChatWriteRateLimit(options.rateLimitStoreFactory),
     directChats,
   ));
 

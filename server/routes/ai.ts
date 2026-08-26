@@ -59,6 +59,7 @@ type AiDependencies = {
     additionalSystemPolicy?: string,
   ) => Promise<string>;
   lookupStandards?: StandardsLookup;
+  concurrencyGuard?: RequestHandler;
 };
 
 export function createAiRouter(
@@ -67,6 +68,7 @@ export function createAiRouter(
   dependencies: AiDependencies,
 ): Router {
   const router = Router();
+  const concurrencyGuard = dependencies.concurrencyGuard ?? ((_request, _response, next) => next());
 
   async function handle(
     request: import("express").Request,
@@ -230,7 +232,7 @@ export function createAiRouter(
     }
   }
 
-  router.post("/api/ai", authenticate, rateLimiter, safeAsync(async (request, response) => {
+  router.post("/api/ai", authenticate, rateLimiter, concurrencyGuard, safeAsync(async (request, response) => {
     const parsed = baseAiRequestSchema.safeParse(request.body);
     if (!parsed.success) {
       sendInvalidAiRequest(response);
@@ -239,7 +241,7 @@ export function createAiRouter(
     await handle(request, response, "tutor", 10, parsed.data);
   }));
 
-  router.post("/api/module", authenticate, rateLimiter, safeAsync(async (request, response) => {
+  router.post("/api/module", authenticate, rateLimiter, concurrencyGuard, safeAsync(async (request, response) => {
     const parsed = moduleAiRequestSchema.safeParse(request.body);
     if (!parsed.success) {
       sendInvalidAiRequest(response, true);

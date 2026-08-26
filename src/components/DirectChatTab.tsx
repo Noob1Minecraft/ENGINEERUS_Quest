@@ -6,6 +6,7 @@ import {
   listDirectConversations, listDirectMessages, markDirectConversationRead, sendDirectMessage,
   type DirectConversation, type DirectMessage,
 } from '../directChat/directChatApi';
+import { directChatPollDelay } from '../directChat/pollingPolicy';
 
 const TEXT = {
   ru: { title: 'Сообщения', empty: 'Пока нет личных диалогов.', choose: 'Выберите диалог.', placeholder: 'Написать сообщение…', send: 'Отправить', signIn: 'Войдите, чтобы открыть сообщения.' },
@@ -37,15 +38,16 @@ export function DirectChatTab({ authenticated, currentUserId, lang, initialConve
     const result = await listDirectConversations();
     setConversations(result.conversations);
     setSelectedId((current) => current ?? initialConversationId ?? result.conversations[0]?.id ?? null);
+    return result.conversations;
   }, [initialConversationId]);
 
-  const refreshMessages = useCallback(async (conversationId: string) => {
+  const refreshMessages = useCallback(async (conversationId: string, markRead: boolean) => {
     const result = await listDirectMessages(conversationId);
     setMessages((current) => {
       const merged = new Map([...current, ...result.messages].map((message) => [message.id, message]));
       return [...merged.values()].sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id));
     });
-    await markDirectConversationRead(conversationId);
+    if (markRead) await markDirectConversationRead(conversationId);
   }, []);
 
   useEffect(() => {
@@ -58,19 +60,53 @@ export function DirectChatTab({ authenticated, currentUserId, lang, initialConve
 
   useEffect(() => {
     if (!selectedId || !authenticated) { setMessages([]); return; }
-    setMessages([]); void refreshMessages(selectedId).catch((requestError) => setError(errorText(requestError)));
+    setMessages([]); void refreshMessages(selectedId, true).catch((requestError) => setError(errorText(requestError)));
   }, [authenticated, selectedId, refreshMessages]);
 
   useEffect(() => {
     if (!authenticated) return;
-    const poll = () => {
-      if (document.visibilityState !== 'visible') return;
-      void refreshConversations().catch(() => undefined);
-      if (selectedRef.current) void refreshMessages(selectedRef.current).catch(() => undefined);
+    let active = true;
+    let timer: number | undefined;
+    let failures = 0;
+    let inFlight = false;
+    const schedule = () => {
+      if (!active || document.visibilityState !== 'visible') return;
+      if (timer !== undefined) window.clearTimeout(timer);
+      timer = window.setTimeout(() => { void poll(); }, directChatPollDelay(failures));
     };
-    const timer = window.setInterval(poll, 5000);
-    const onFocus = () => poll(); window.addEventListener('focus', onFocus);
-    return () => { window.clearInterval(timer); window.removeEventListener('focus', onFocus); };
+    const poll = async () => {
+      if (!active || inFlight || document.visibilityState !== 'visible') return;
+      inFlight = true;
+      try {
+        const latestConversations = await refreshConversations();
+        const conversationId = selectedRef.current;
+        if (conversationId) {
+          const hasUnread = (latestConversations.find(({ id }) => id === conversationId)?.unread_count ?? 0) > 0;
+          await refreshMessages(conversationId, hasUnread);
+        }
+        failures = 0;
+      } catch {
+        failures += 1;
+      } finally {
+        inFlight = false;
+        schedule();
+      }
+    };
+    const pollNow = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (timer !== undefined) window.clearTimeout(timer);
+      void poll();
+    };
+    const onVisibilityChange = () => { if (document.visibilityState === 'visible') pollNow(); };
+    schedule();
+    window.addEventListener('focus', pollNow);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      active = false;
+      if (timer !== undefined) window.clearTimeout(timer);
+      window.removeEventListener('focus', pollNow);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
   }, [authenticated, refreshConversations, refreshMessages]);
 
   const selected = useMemo(() => conversations.find(({ id }) => id === selectedId) ?? null, [conversations, selectedId]);
