@@ -19,6 +19,8 @@ import { createDirectChatRepository } from "./persistence/directChats";
 import { createDirectChatsRouter } from "./routes/directChats";
 import { createContentSecurityPolicyDirectives } from "./security/contentSecurityPolicy";
 import type { RateLimitStoreFactory } from "./security/securityControlStore";
+import { createRequestContext } from "./middleware/requestContext";
+import { securityLogger, type StructuredLogger } from "./security/structuredLogger";
 
 const DEPLOYED_ALLOWED_ORIGINS = [
   "https://engineerus-quest.vercel.app",
@@ -45,12 +47,17 @@ export function createAllowedOrigins(env: ServerEnv): Set<string> {
   return new Set([...DEPLOYED_ALLOWED_ORIGINS, ...developmentOrigins, ...safeConfiguredOrigins]);
 }
 
-export function createApp(env: ServerEnv, options: { rateLimitStoreFactory?: RateLimitStoreFactory } = {}): Express {
+export function createApp(env: ServerEnv, options: {
+  rateLimitStoreFactory?: RateLimitStoreFactory;
+  logger?: StructuredLogger;
+} = {}): Express {
   const app = express();
   const allowedOrigins = createAllowedOrigins(env);
+  const logger = options.logger ?? securityLogger;
 
   app.set("trust proxy", 1);
   app.disable("x-powered-by");
+  app.use(createRequestContext(logger));
   app.use(helmet({
     contentSecurityPolicy: {
       useDefaults: false,

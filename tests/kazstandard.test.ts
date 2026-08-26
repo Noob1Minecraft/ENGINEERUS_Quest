@@ -133,10 +133,24 @@ async function exerciseGuardedGeneration(options: {
     },
   }));
 
-  const originalWarn = console.warn;
-  console.warn = (message?: unknown, details?: unknown) => {
-    if (message === "KazStandard response guard rejection" && typeof details === "string") {
-      diagnostics.push(JSON.parse(details));
+  const originalLog = console.log;
+  console.log = (message?: unknown) => {
+    if (typeof message !== "string") return;
+    try {
+      const entry = JSON.parse(message) as Record<string, unknown>;
+      if (entry.event !== "standards_response_rejected") return;
+      diagnostics.push({
+        verifiedDesignationCount: entry.verified_designation_count,
+        rejectedDesignationCount: entry.rejected_designation_count,
+        regenerationAttempted: entry.regenerationAttempted,
+        regenerationAccepted: entry.regenerationAccepted,
+        deterministicFallbackUsed: entry.deterministicFallbackUsed,
+        deterministicFallbackCandidateCount: entry.deterministicFallbackCandidateCount,
+        ...(entry.providerFailureCategory ? { providerFailureCategory: entry.providerFailureCategory } : {}),
+        ...(entry.providerStatus !== undefined ? { providerStatus: entry.providerStatus } : {}),
+      });
+    } catch {
+      originalLog(message);
     }
   };
   let responseText = "";
@@ -156,7 +170,7 @@ async function exerciseGuardedGeneration(options: {
       responseText = body.response;
     });
   } finally {
-    console.warn = originalWarn;
+    console.log = originalLog;
   }
 
   return { diagnostics, generateCalls, persistedResponses, persistedUserPrompt, responseText, systemPolicies };
@@ -843,7 +857,8 @@ test("disabled lookup regenerates once and persists only a response without inve
   assert.equal(result.responseText, result.persistedResponses[0]);
   assert.doesNotMatch(result.responseText, /9999-2099/u);
   assert.match(result.systemPolicies[1], /\[ALLOWED STANDARD IDENTIFIERS\]/u);
-  assert.deepEqual(result.diagnostics[0]?.rejectedDesignations, ["СТ РК ISO 9999-2099"]);
+  assert.equal(result.diagnostics[0]?.rejectedDesignationCount, 1);
+  assert.equal(result.diagnostics[0]?.verifiedDesignationCount, 0);
   assert.equal(result.diagnostics[0]?.regenerationAttempted, true);
   assert.equal(result.diagnostics[0]?.regenerationAccepted, true);
 });
@@ -1101,8 +1116,8 @@ test("regenerates exactly once with a strict allowlist and persists only the acc
   assert.match(result.systemPolicies[1], /\[ALLOWED STANDARD IDENTIFIERS\][\s\S]*ГОСТ 2\.001-2013/u);
   assert.doesNotMatch(result.systemPolicies[1], /9\.999-2099/u);
   assert.deepEqual(result.diagnostics, [{
-    verifiedDesignations: ["ГОСТ 2.001-2013"],
-    rejectedDesignations: ["ГОСТ 9.999-2099"],
+    verifiedDesignationCount: 1,
+    rejectedDesignationCount: 1,
     regenerationAttempted: true,
     regenerationAccepted: true,
     deterministicFallbackUsed: false,
@@ -1159,8 +1174,8 @@ test("uses three verified metadata records after one regeneration still invents 
   assert.match(result.persistedResponses[0], /https:\/\/new-shop\.ksm\.kz\/catalog\/document\/57001\//u);
   assert.match(result.persistedResponses[0], /Полный текст стандартов не анализировался/u);
   assert.deepEqual(result.diagnostics, [{
-    verifiedDesignations: ["ГОСТ 2.001-2013", "ГОСТ 2.002-2013", "ГОСТ 2.003-2013"],
-    rejectedDesignations: ["ГОСТ 9.999-2099", "ГОСТ 8.888-2099"],
+    verifiedDesignationCount: 3,
+    rejectedDesignationCount: 2,
     regenerationAttempted: true,
     regenerationAccepted: false,
     deterministicFallbackUsed: true,
@@ -1223,8 +1238,8 @@ test("keeps the existing no-result fallback when no verified candidates exist", 
   assert.doesNotMatch(result.responseText, /9\.999-2099|8\.888-2099/u);
   assert.match(result.responseText, /не удалось подтвердить конкретный действующий стандарт/u);
   assert.deepEqual(result.diagnostics, [{
-    verifiedDesignations: [],
-    rejectedDesignations: ["ГОСТ 9.999-2099", "ГОСТ 8.888-2099"],
+    verifiedDesignationCount: 0,
+    rejectedDesignationCount: 2,
     regenerationAttempted: true,
     regenerationAccepted: false,
     deterministicFallbackUsed: false,
@@ -1256,8 +1271,8 @@ test("uses deterministic verified metadata when guarded regeneration is rate-lim
   assert.match(result.responseText, /ГОСТ 2\.001-2013/u);
   assert.doesNotMatch(result.responseText, /9\.999-2099|Не удалось получить ответ от ИИ/u);
   assert.deepEqual(result.diagnostics, [{
-    verifiedDesignations: ["ГОСТ 2.001-2013"],
-    rejectedDesignations: ["ГОСТ 9.999-2099"],
+    verifiedDesignationCount: 1,
+    rejectedDesignationCount: 1,
     regenerationAttempted: true,
     regenerationAccepted: false,
     deterministicFallbackUsed: true,

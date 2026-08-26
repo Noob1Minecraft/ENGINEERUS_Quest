@@ -65,5 +65,30 @@ npm test
 npm run test:persistence
 ```
 
+## Security gates
+
+The fast security gate is safe for ordinary local and GitHub-hosted CI runs:
+
+```bash
+npm run test:security
+npm audit --omit=dev --audit-level=critical
+npm sbom --sbom-format cyclonedx --omit dev
+```
+
+The dependency audit fails only on critical production advisories. Lower
+severity findings remain visible for triage rather than silently changing the
+dependency tree. The SBOM is generated from the exact npm dependency graph and
+is retained as a CI artifact; it is not committed.
+
+Database security tests are a separate Docker-dependent local/pre-release gate:
+
+```bash
+npm run test:security:db
+```
+
+Start local Supabase first. This command is intentionally excluded from normal
+frontend CI until an isolated, credential-free Supabase CI environment is
+reviewed. Never substitute a cloud database for this local gate.
+
 The liveness endpoints are `GET /health` and `GET /api/health`. They do not
 contact Supabase or expose configuration values.

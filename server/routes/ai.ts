@@ -17,6 +17,7 @@ import {
 import { buildVerifiedStandardsResponse } from "../standards/verifiedStandardsResponse";
 import type { SupportedLanguage } from "../ai/languagePolicy";
 import { AiProviderError } from "../ai/groqClient";
+import { securityLogger } from "../security/structuredLogger";
 
 const MODULES = ["tutor", "material", "patent", "engi_legal", "engi_match"] as const;
 const baseAiRequestSchema = z.object({
@@ -189,16 +190,16 @@ export function createAiRouter(
       }
 
       if (firstGuardResult.rejected) {
-        console.warn("KazStandard response guard rejection", JSON.stringify({
-          verifiedDesignations: verifiedStandardDesignations(prepared.lookupResult),
-          rejectedDesignations: uniqueDesignations(rejectedDesignations),
+        securityLogger.warn("standards_response_rejected", {
+          verified_designation_count: verifiedStandardDesignations(prepared.lookupResult).length,
+          rejected_designation_count: uniqueDesignations(rejectedDesignations).length,
           regenerationAttempted,
           regenerationAccepted,
           deterministicFallbackUsed,
           deterministicFallbackCandidateCount,
           ...(providerFailureCategory ? { providerFailureCategory } : {}),
           ...(providerStatus !== undefined ? { providerStatus } : {}),
-        }));
+        });
       }
 
       if (!responseText) throw new Error("AI response did not contain user-facing content.");

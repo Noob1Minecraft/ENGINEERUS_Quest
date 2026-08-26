@@ -17,6 +17,7 @@ import { createStandardsService } from "./server/standards/standardsService";
 import { apiErrorHandler } from "./server/middleware/apiErrorHandler";
 import { mountProductionFrontend } from "./server/staticFrontend";
 import { InMemoryAiCapacityStore } from "./server/security/securityControlStore";
+import { securityLogger } from "./server/security/structuredLogger";
 
 // Load environment variables from .env for local development. Hosted platforms
 // inject their environment variables directly.
@@ -72,7 +73,7 @@ async function startServer() {
     mountProductionFrontend(app);
   }
   app.use(apiErrorHandler);
-  app.listen(PORT, "0.0.0.0", () => console.log(`Engineerus Quest server running on http://0.0.0.0:${PORT}`));
+  app.listen(PORT, "0.0.0.0", () => securityLogger.info("server_started", { port: PORT }));
 }
 
 startServer();

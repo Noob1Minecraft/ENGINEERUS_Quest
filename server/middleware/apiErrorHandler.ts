@@ -1,4 +1,5 @@
 import type { ErrorRequestHandler } from "express";
+import { securityLogger } from "../security/structuredLogger";
 
 function isMalformedJson(error: unknown): boolean {
   const candidate = error as SyntaxError & { status?: number; body?: unknown };
@@ -35,6 +36,11 @@ export const apiErrorHandler: ErrorRequestHandler = (error, _request, response, 
   }
 
   response.status(500).json({
-    error: { code: "internal_error", message: "The request could not be completed." },
+    error: {
+      code: "internal_error",
+      message: "The request could not be completed.",
+      request_id: response.locals.requestId,
+    },
   });
+  securityLogger.error("unhandled_request_error", { error_category: "internal_error" });
 };
