@@ -342,7 +342,9 @@ export default function App() {
 
         {activeTab === 'ai' && (
           <AIAssistantTab
+            key={auth.user?.id ?? 'signed-out-ai'}
             user={user}
+            authenticatedUserId={auth.user?.id ?? null}
             lang={lang}
             onUpdateUser={handleUpdateUser}
             onCompleteQuest={handleCompleteQuest}

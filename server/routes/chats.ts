@@ -1,12 +1,41 @@
 import { Router, type RequestHandler } from "express";
+import { z } from "zod";
 import {
   CHAT_MODULES,
   type ChatModule,
+  type ChatMessageCursor,
   type ChatRepository,
+  type ChatSessionCursor,
 } from "../persistence/chats";
 import { PersistenceError, sendPersistenceError } from "../persistence/errors";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const sessionPageSchema = z.object({
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+  cursor: z.string().max(1024).optional(),
+}).strict();
+const messagePageSchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  cursor: z.string().max(1024).optional(),
+}).strict();
+const sessionCursorSchema = z.object({ updatedAt: z.string().datetime({ offset: true }), id: z.string().uuid() }).strict();
+const messageCursorSchema = z.object({ createdAt: z.string().datetime({ offset: true }), id: z.string().uuid() }).strict();
+
+function encodeCursor(value: object | null): string | null {
+  return value ? Buffer.from(JSON.stringify(value), "utf8").toString("base64url") : null;
+}
+
+function decodeCursor<T>(value: string | undefined, schema: z.ZodTypeAny): T | undefined {
+  if (!value) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(Buffer.from(value, "base64url").toString("utf8"));
+    const result = schema.safeParse(parsed);
+    if (!result.success) throw new Error("invalid cursor payload");
+    return result.data as T;
+  } catch {
+    throw new PersistenceError(400, "invalid_chat_cursor", "The chat pagination cursor is invalid.");
+  }
+}
 
 function parseSessionId(value: string): string {
   if (!UUID_PATTERN.test(value)) throw new PersistenceError(400, "invalid_session_id", "Chat session ID is invalid.");
@@ -34,10 +63,21 @@ export function createChatsRouter(
 ): Router {
   const router = Router();
 
-  router.get("/api/chats", authenticate, rateLimiter, async (_request, response) => {
+  router.get("/api/chats", authenticate, rateLimiter, async (request, response) => {
     try {
+      const parsed = sessionPageSchema.safeParse(request.query);
+      if (!parsed.success) {
+        throw new PersistenceError(400, "invalid_chat_query", "Chat pagination parameters are invalid.");
+      }
       const { userId, accessToken } = response.locals.auth;
-      response.json({ sessions: await repository.list(userId, accessToken) });
+      const result = await repository.list(
+        userId,
+        accessToken,
+        parsed.data.limit,
+        decodeCursor<ChatSessionCursor>(parsed.data.cursor, sessionCursorSchema),
+      );
+      const nextCursor = encodeCursor(result.nextCursor);
+      response.json({ items: result.items, next_cursor: nextCursor, sessions: result.items });
     } catch (error) {
       sendPersistenceError(response, error);
     }
@@ -60,13 +100,20 @@ export function createChatsRouter(
 
   router.get("/api/chats/:sessionId/messages", authenticate, rateLimiter, async (request, response) => {
     try {
+      const parsed = messagePageSchema.safeParse(request.query);
+      if (!parsed.success) {
+        throw new PersistenceError(400, "invalid_chat_query", "Chat pagination parameters are invalid.");
+      }
       const { userId, accessToken } = response.locals.auth;
-      const messages = await repository.messages(
+      const result = await repository.messages(
         userId,
         accessToken,
         parseSessionId(request.params.sessionId),
+        parsed.data.limit,
+        decodeCursor<ChatMessageCursor>(parsed.data.cursor, messageCursorSchema),
       );
-      response.json({ messages });
+      const nextCursor = encodeCursor(result.nextCursor);
+      response.json({ items: result.items, next_cursor: nextCursor, messages: result.items });
     } catch (error) {
       sendPersistenceError(response, error);
     }

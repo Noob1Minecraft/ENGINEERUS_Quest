@@ -4,6 +4,7 @@ import { UserProfile, Language, SavedNote, ChatMessage, ChatSession } from '../t
 import { TRANSLATIONS } from '../data';
 import { verifySystemIntegrity } from '../utils/integrity';
 import { apiFetch } from '../utils/api';
+import { loadSavedAiNotes, storeSavedAiNotes } from '../utils/savedAiNotes';
 import {
   Sparkles,
   Send,
@@ -36,6 +37,7 @@ import {
 
 interface AIAssistantTabProps {
   user: UserProfile;
+  authenticatedUserId: string | null;
   lang: Language;
   onUpdateUser: (updated: Partial<UserProfile>) => void;
   onCompleteQuest?: (questId: string) => Promise<void>;
@@ -138,8 +140,18 @@ const MODULE_CONFIG: Record<string, { label: string; icon: React.FC<{ className?
   engi_match: { label: 'EngiMatch', icon: Users, color: 'text-indigo-600', badgeBg: 'bg-indigo-600' },
 };
 
+type PageResponse<T> = { items: T[]; next_cursor: string | null };
+
+function mergeMessages(...groups: ChatMessage[][]): ChatMessage[] {
+  const byId = new Map<string, ChatMessage>();
+  groups.flat().forEach((message) => byId.set(message.id, message));
+  return [...byId.values()].sort((left, right) =>
+    left.timestamp.localeCompare(right.timestamp) || left.id.localeCompare(right.id));
+}
+
 export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
   user,
+  authenticatedUserId,
   lang,
   onUpdateUser,
   onCompleteQuest,
@@ -163,37 +175,19 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
   // User Multi-Chat Sessions
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string>('');
+  const [sessionCursor, setSessionCursor] = useState<string | null>(null);
+  const [messageCursors, setMessageCursors] = useState<Record<string, string | null>>({});
+  const [loadingOlderSessions, setLoadingOlderSessions] = useState(false);
+  const [loadingMessageSessions, setLoadingMessageSessions] = useState<Set<string>>(new Set());
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [newTitleInput, setNewTitleInput] = useState<string>('');
+  const loadedMessageSessionsRef = useRef<Set<string>>(new Set());
+  const sessionPageInFlightRef = useRef(false);
+  const messagePagesInFlightRef = useRef<Set<string>>(new Set());
 
   // Saved Notes Library
-  const [savedNotes, setSavedNotes] = useState<SavedNote[]>(() => {
-    const saved = localStorage.getItem('eq_saved_ai_notes');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    return [
-      {
-        id: 'sample-saved-1',
-        module: 'material',
-        query: 'Сравни конструкционную сталь 09Г2С и Сталь 45 для северного Казахстана',
-        response: `**Сравнение Стали 09Г2С и Стали 45 для северных регионов РК:**\n\n` +
-          `1. **Сталь 09Г2С (Низколегированная)**:\n` +
-          `   - **Предел текучести**: ~345 МПа\n` +
-          `   - **Хладноломкость**: Сохраняет ударную вязкость при температурах до -70°C (ГОСТ 19281).\n` +
-          `   - **Свариваемость**: Без ограничений.\n` +
-          `2. **Сталь 45 (Качественная углеродистая)**:\n` +
-          `   - **Предел текучести**: ~355 МПа\n` +
-          `   - **Хладноломкость**: Склонна к хрупкому разрушению при температурах ниже -20°C.\n` +
-          `   - **Вывод**: Для уличных несущих металлоконструкций рекомендована **Сталь 09Г2С**.`,
-        savedAt: '22 Июля 2026, 11:30',
-      },
-    ];
-  });
+  const [savedNotes, setSavedNotes] = useState<SavedNote[]>(() =>
+    loadSavedAiNotes(localStorage, authenticatedUserId));
 
   // UI Toast & Search States
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -207,9 +201,20 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
     verifySystemIntegrity(t.attributionCaption);
   }, [lang, t]);
 
+  useEffect(() => {
+    setSavedNotes(loadSavedAiNotes(localStorage, authenticatedUserId));
+  }, [authenticatedUserId]);
+
   // Load chats for user from server
   useEffect(() => {
-    if (user.id === 'guest') {
+    loadedMessageSessionsRef.current = new Set();
+    messagePagesInFlightRef.current = new Set();
+    sessionPageInFlightRef.current = false;
+    setMessageCursors({});
+    setSessionCursor(null);
+    setLoadingMessageSessions(new Set());
+
+    if (!authenticatedUserId) {
       setSessions([]);
       setActiveSessionId('');
       setPersistenceError(null);
@@ -220,8 +225,9 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
     const loadPersistentChats = async () => {
       try {
         setPersistenceError(null);
-        const data = await apiFetch<{ sessions: Array<Omit<ChatSession, 'messages'>> }>('/api/chats');
-        let persistentSessions = data.sessions;
+        const data = await apiFetch<PageResponse<Omit<ChatSession, 'messages'>>>('/api/chats?limit=20');
+        let persistentSessions = data.items;
+        let nextCursor = data.next_cursor;
         if (persistentSessions.length === 0) {
           const created = await apiFetch<{ session: Omit<ChatSession, 'messages'> }>('/api/chats', {
             method: 'POST',
@@ -231,18 +237,14 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
             }),
           });
           persistentSessions = [created.session];
+          nextCursor = null;
+          loadedMessageSessionsRef.current.add(created.session.id);
         }
 
-        const hydrated = await Promise.all(persistentSessions.map(async (session) => {
-          const result = await apiFetch<{ messages: ChatMessage[] }>(
-            `/api/chats/${encodeURIComponent(session.id)}/messages`,
-          );
-          return { ...session, messages: result.messages };
-        }));
-
         if (active) {
-          setSessions(hydrated);
-          setActiveSessionId(hydrated[0]?.id || '');
+          setSessions(persistentSessions.map((session) => ({ ...session, messages: [] })));
+          setSessionCursor(nextCursor);
+          setActiveSessionId(persistentSessions[0]?.id || '');
         }
       } catch {
         if (active) {
@@ -259,12 +261,47 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
 
     void loadPersistentChats();
     return () => { active = false; };
-  }, [user.id]);
+  }, [authenticatedUserId]);
 
-  // Sync saved notes to local storage
+  // Hydrate only the selected chat. Other sessions remain lightweight until opened.
   useEffect(() => {
-    localStorage.setItem('eq_saved_ai_notes', JSON.stringify(savedNotes));
-  }, [savedNotes]);
+    if (!authenticatedUserId || !activeSessionId
+      || loadedMessageSessionsRef.current.has(activeSessionId)
+      || messagePagesInFlightRef.current.has(activeSessionId)) return;
+
+    let active = true;
+    loadedMessageSessionsRef.current.add(activeSessionId);
+    messagePagesInFlightRef.current.add(activeSessionId);
+    setLoadingMessageSessions((current) => new Set(current).add(activeSessionId));
+
+    void apiFetch<PageResponse<ChatMessage>>(
+      `/api/chats/${encodeURIComponent(activeSessionId)}/messages?limit=50`,
+    ).then((result) => {
+      if (!active) return;
+      setSessions((current) => current.map((session) => session.id === activeSessionId
+        ? { ...session, messages: result.items }
+        : session));
+      setMessageCursors((current) => ({ ...current, [activeSessionId]: result.next_cursor }));
+    }).catch(() => {
+      loadedMessageSessionsRef.current.delete(activeSessionId);
+      if (active) {
+        setPersistenceError(lang === 'kk'
+          ? 'Чат хабарларын жүктеу мүмкін болмады.'
+          : lang === 'en'
+            ? 'Chat messages could not be loaded.'
+            : 'Не удалось загрузить сообщения чата.');
+      }
+    }).finally(() => {
+      messagePagesInFlightRef.current.delete(activeSessionId);
+      setLoadingMessageSessions((current) => {
+        const next = new Set(current);
+        next.delete(activeSessionId);
+        return next;
+      });
+    });
+
+    return () => { active = false; };
+  }, [activeSessionId, authenticatedUserId, lang]);
 
   // Active Chat Session
   const activeSession = sessions.find((s) => s.id === activeSessionId) || sessions[0];
@@ -320,6 +357,64 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
     }
   }, [messages, loading, activeSubView]);
 
+  const loadOlderSessions = async () => {
+    if (!sessionCursor || sessionPageInFlightRef.current) return;
+    sessionPageInFlightRef.current = true;
+    setLoadingOlderSessions(true);
+    try {
+      const result = await apiFetch<PageResponse<Omit<ChatSession, 'messages'>>>(
+        `/api/chats?limit=20&cursor=${encodeURIComponent(sessionCursor)}`,
+      );
+      setSessions((current) => {
+        const byId = new Map(current.map((session) => [session.id, session]));
+        result.items.forEach((session) => {
+          if (!byId.has(session.id)) byId.set(session.id, { ...session, messages: [] });
+        });
+        return [...byId.values()];
+      });
+      setSessionCursor(result.next_cursor);
+    } catch {
+      setPersistenceError(lang === 'kk'
+        ? 'Ескі чаттарды жүктеу мүмкін болмады.'
+        : lang === 'en'
+          ? 'Older chats could not be loaded.'
+          : 'Не удалось загрузить старые чаты.');
+    } finally {
+      sessionPageInFlightRef.current = false;
+      setLoadingOlderSessions(false);
+    }
+  };
+
+  const loadOlderMessages = async () => {
+    const cursor = activeSessionId ? messageCursors[activeSessionId] : null;
+    if (!activeSessionId || !cursor || messagePagesInFlightRef.current.has(activeSessionId)) return;
+    const sessionId = activeSessionId;
+    messagePagesInFlightRef.current.add(sessionId);
+    setLoadingMessageSessions((current) => new Set(current).add(sessionId));
+    try {
+      const result = await apiFetch<PageResponse<ChatMessage>>(
+        `/api/chats/${encodeURIComponent(sessionId)}/messages?limit=50&cursor=${encodeURIComponent(cursor)}`,
+      );
+      setSessions((current) => current.map((session) => session.id === sessionId
+        ? { ...session, messages: mergeMessages(result.items, session.messages) }
+        : session));
+      setMessageCursors((current) => ({ ...current, [sessionId]: result.next_cursor }));
+    } catch {
+      setPersistenceError(lang === 'kk'
+        ? 'Ескі хабарларды жүктеу мүмкін болмады.'
+        : lang === 'en'
+          ? 'Older messages could not be loaded.'
+          : 'Не удалось загрузить старые сообщения.');
+    } finally {
+      messagePagesInFlightRef.current.delete(sessionId);
+      setLoadingMessageSessions((current) => {
+        const next = new Set(current);
+        next.delete(sessionId);
+        return next;
+      });
+    }
+  };
+
   const handleCreateNewChat = async () => {
     try {
       setPersistenceError(null);
@@ -331,6 +426,8 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
         }),
       });
       const newSession: ChatSession = { ...data.session, messages: [] };
+      loadedMessageSessionsRef.current.add(newSession.id);
+      setMessageCursors((current) => ({ ...current, [newSession.id]: null }));
       setSessions((current) => [newSession, ...current]);
       setActiveSessionId(newSession.id);
       setShowSessionsDrawer(false);
@@ -400,6 +497,8 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
           }),
         });
         const newSession: ChatSession = { ...created.session, messages: [] };
+        loadedMessageSessionsRef.current.add(newSession.id);
+        setMessageCursors((current) => ({ ...current, [newSession.id]: null }));
         targetSessionId = newSession.id;
         setSessions((current) => [newSession, ...current]);
         setActiveSessionId(newSession.id);
@@ -470,12 +569,13 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
       // provider failure; no client-only error message is treated as canonical.
       try {
         if (!targetSessionId) return;
-        const result = await apiFetch<{ messages: ChatMessage[] }>(
-          `/api/chats/${encodeURIComponent(targetSessionId)}/messages`,
+        const result = await apiFetch<PageResponse<ChatMessage>>(
+          `/api/chats/${encodeURIComponent(targetSessionId)}/messages?limit=50`,
         );
         setSessions((current) => current.map((session) => session.id === targetSessionId
-          ? { ...session, messages: result.messages }
+          ? { ...session, messages: mergeMessages(session.messages, result.items) }
           : session));
+        setMessageCursors((current) => ({ ...current, [targetSessionId]: result.next_cursor }));
       } catch {
         // The visible persistence error remains the single source of truth.
       }
@@ -490,9 +590,11 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
     );
 
     if (isAlreadySaved) {
-      setSavedNotes((prev) =>
-        prev.filter((note) => !(note.query === query && note.response === response))
-      );
+      setSavedNotes((previous) => {
+        const next = previous.filter((note) => !(note.query === query && note.response === response));
+        storeSavedAiNotes(localStorage, authenticatedUserId, next);
+        return next;
+      });
       return;
     }
 
@@ -510,7 +612,19 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
       }),
     };
 
-    setSavedNotes((prev) => [newNote, ...prev]);
+    setSavedNotes((previous) => {
+      const next = [newNote, ...previous];
+      storeSavedAiNotes(localStorage, authenticatedUserId, next);
+      return next;
+    });
+  };
+
+  const handleDeleteSavedNote = (noteId: string) => {
+    setSavedNotes((previous) => {
+      const next = previous.filter((note) => note.id !== noteId);
+      storeSavedAiNotes(localStorage, authenticatedUserId, next);
+      return next;
+    });
   };
 
   const handleCopyText = (text: string, id: string) => {
@@ -863,6 +977,18 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                     );
                   })}
                 </div>
+                {sessionCursor && (
+                  <button
+                    type="button"
+                    disabled={loadingOlderSessions}
+                    onClick={() => void loadOlderSessions()}
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-60"
+                  >
+                    {loadingOlderSessions
+                      ? (lang === 'kk' ? 'Жүктелуде…' : lang === 'en' ? 'Loading…' : 'Загрузка…')
+                      : (lang === 'kk' ? 'Ескі чаттарды жүктеу' : lang === 'en' ? 'Load older chats' : 'Загрузить старые чаты')}
+                  </button>
+                )}
               </div>
             )}
 
@@ -872,6 +998,25 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                 isFullscreen ? 'bg-slate-950/60' : 'bg-slate-50/30'
               }`}
             >
+              {activeSessionId && messageCursors[activeSessionId] && (
+                <div className="flex justify-center">
+                  <button
+                    type="button"
+                    disabled={loadingMessageSessions.has(activeSessionId)}
+                    onClick={() => void loadOlderMessages()}
+                    className="rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 disabled:opacity-60"
+                  >
+                    {loadingMessageSessions.has(activeSessionId)
+                      ? (lang === 'kk' ? 'Жүктелуде…' : lang === 'en' ? 'Loading…' : 'Загрузка…')
+                      : (lang === 'kk' ? 'Ескі хабарларды жүктеу' : lang === 'en' ? 'Load older messages' : 'Загрузить старые сообщения')}
+                  </button>
+                </div>
+              )}
+              {activeSessionId && loadingMessageSessions.has(activeSessionId) && messages.length === 0 && (
+                <div className="text-center text-xs font-bold text-slate-400">
+                  {lang === 'kk' ? 'Хабарлар жүктелуде…' : lang === 'en' ? 'Loading messages…' : 'Загрузка сообщений…'}
+                </div>
+              )}
               {messages.map((msg) => {
                 const isUser = msg.sender === 'user';
                 const modConfig = MODULE_CONFIG[msg.module] || MODULE_CONFIG.tutor;
@@ -1176,9 +1321,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                         </button>
 
                         <button
-                          onClick={() =>
-                            setSavedNotes((prev) => prev.filter((n) => n.id !== note.id))
-                          }
+                          onClick={() => handleDeleteSavedNote(note.id)}
                           className="p-1.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 transition-all"
                           title="Удалить из сохраненных"
                         >

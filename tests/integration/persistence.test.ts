@@ -205,6 +205,80 @@ test("local PostgreSQL persistence and ownership API", async (t) => {
         });
       });
 
+      await t.test("bounded chat cursors remain stable across identical timestamps", async () => {
+        const sessionInsert = await userAClient
+          .from("chat_sessions")
+          .insert(Array.from({ length: 7 }, (_, index) => ({
+            user_id: userA.id,
+            title: `Pagination session ${index}`,
+            module: "tutor",
+          })))
+          .select("id,updated_at");
+        assert.equal(sessionInsert.error, null);
+        const insertedSessionIds = new Set((sessionInsert.data ?? []).map((row) => row.id));
+        assert.equal(new Set((sessionInsert.data ?? []).map((row) => row.updated_at)).size, 1);
+
+        const seenSessionIds: string[] = [];
+        let sessionCursor: string | null = null;
+        do {
+          const suffix: string = sessionCursor ? `&cursor=${encodeURIComponent(sessionCursor)}` : "";
+          const response = await fetch(`${baseUrl}/api/chats?limit=3${suffix}`, {
+            headers: authorization(userA),
+          });
+          assert.equal(response.status, 200);
+          const page = await response.json() as {
+            items: Array<{ id: string; updatedAt: string }>;
+            next_cursor: string | null;
+          };
+          assert.ok(page.items.length <= 3);
+          seenSessionIds.push(...page.items.map((item) => item.id));
+          sessionCursor = page.next_cursor;
+        } while (sessionCursor);
+
+        assert.equal(new Set(seenSessionIds).size, seenSessionIds.length);
+        for (const id of insertedSessionIds) assert.ok(seenSessionIds.includes(id));
+        assert.ok(seenSessionIds.includes(sessionA));
+
+        const messageInsert = await userAClient
+          .from("chat_messages")
+          .insert(Array.from({ length: 7 }, (_, index) => ({
+            session_id: sessionA,
+            user_id: userA.id,
+            role: "user",
+            content: `Pagination message ${index}`,
+            module: "tutor",
+          })))
+          .select("id,created_at");
+        assert.equal(messageInsert.error, null);
+        const insertedMessageIds = new Set((messageInsert.data ?? []).map((row) => row.id));
+        assert.equal(new Set((messageInsert.data ?? []).map((row) => row.created_at)).size, 1);
+
+        const seenMessageIds: string[] = [];
+        let messageCursor: string | null = null;
+        do {
+          const suffix: string = messageCursor ? `&cursor=${encodeURIComponent(messageCursor)}` : "";
+          const response = await fetch(`${baseUrl}/api/chats/${sessionA}/messages?limit=3${suffix}`, {
+            headers: authorization(userA),
+          });
+          assert.equal(response.status, 200);
+          const page = await response.json() as {
+            items: Array<{ id: string; timestamp: string }>;
+            next_cursor: string | null;
+          };
+          assert.ok(page.items.length <= 3);
+          assert.deepEqual(
+            page.items,
+            [...page.items].sort((left, right) =>
+              left.timestamp.localeCompare(right.timestamp) || left.id.localeCompare(right.id)),
+          );
+          seenMessageIds.push(...page.items.map((item) => item.id));
+          messageCursor = page.next_cursor;
+        } while (messageCursor);
+
+        assert.equal(new Set(seenMessageIds).size, seenMessageIds.length);
+        for (const id of insertedMessageIds) assert.ok(seenMessageIds.includes(id));
+      });
+
       await t.test("quest rewards ignore client values and remain atomic/idempotent", async () => {
         const definitions = await fetch(`${baseUrl}/api/quests`, { headers: authorization(userA) });
         const definitionBody = await definitions.json() as { quests: Array<{ id: string; xp_reward: number }> };

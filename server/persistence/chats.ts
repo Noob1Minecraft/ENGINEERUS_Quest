@@ -24,6 +24,10 @@ export type PersistedChatMessage = {
   requestId?: string;
 };
 
+export type ChatSessionCursor = { updatedAt: string; id: string };
+export type ChatMessageCursor = { createdAt: string; id: string };
+export type ChatPage<T, TCursor> = { items: T[]; nextCursor: TCursor | null };
+
 export type CanonicalProgress = {
   xp: number;
   level: number;
@@ -131,15 +135,34 @@ export function createChatRepository(env: ServerEnv) {
   }
 
   return {
-    async list(userId: string, accessToken: string): Promise<PersistedChatSession[]> {
+    async list(
+      userId: string,
+      accessToken: string,
+      limit: number,
+      cursor?: ChatSessionCursor,
+    ): Promise<ChatPage<PersistedChatSession, ChatSessionCursor>> {
       const client = createSupabaseUserClient(env, accessToken);
-      const result = await client
+      let query = client
         .from("chat_sessions")
         .select("id,title,module,created_at,updated_at")
         .eq("user_id", userId)
-        .order("updated_at", { ascending: false });
+        .order("updated_at", { ascending: false })
+        .order("id", { ascending: false })
+        .limit(limit + 1);
+      if (cursor) {
+        query = query.or(
+          `updated_at.lt.${cursor.updatedAt},and(updated_at.eq.${cursor.updatedAt},id.lt.${cursor.id})`,
+        );
+      }
+      const result = await query;
       if (result.error) throw new PersistenceError(503, "chat_unavailable", "Chat storage is temporarily unavailable.");
-      return (result.data as SessionRow[]).map(mapSession);
+      const rows = result.data as SessionRow[];
+      const page = rows.slice(0, limit);
+      const boundary = rows.length > limit ? page.at(-1) : undefined;
+      return {
+        items: page.map(mapSession),
+        nextCursor: boundary ? { updatedAt: boundary.updated_at, id: boundary.id } : null,
+      };
     },
 
     async create(
@@ -162,17 +185,33 @@ export function createChatRepository(env: ServerEnv) {
       userId: string,
       accessToken: string,
       sessionId: string,
-    ): Promise<PersistedChatMessage[]> {
+      limit: number,
+      cursor?: ChatMessageCursor,
+    ): Promise<ChatPage<PersistedChatMessage, ChatMessageCursor>> {
       await requireOwnedSession(userId, accessToken, sessionId);
       const client = createSupabaseUserClient(env, accessToken);
-      const result = await client
+      let query = client
         .from("chat_messages")
         .select("id,role,content,module,xp_awarded,request_id,created_at")
         .eq("session_id", sessionId)
         .eq("user_id", userId)
-        .order("created_at", { ascending: true });
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .limit(limit + 1);
+      if (cursor) {
+        query = query.or(
+          `created_at.lt.${cursor.createdAt},and(created_at.eq.${cursor.createdAt},id.lt.${cursor.id})`,
+        );
+      }
+      const result = await query;
       if (result.error) throw new PersistenceError(503, "messages_unavailable", "Chat messages are temporarily unavailable.");
-      return (result.data as MessageRow[]).map(mapMessage);
+      const rows = result.data as MessageRow[];
+      const page = rows.slice(0, limit);
+      const boundary = rows.length > limit ? page.at(-1) : undefined;
+      return {
+        items: page.map(mapMessage).reverse(),
+        nextCursor: boundary ? { createdAt: boundary.created_at, id: boundary.id } : null,
+      };
     },
 
     async update(
