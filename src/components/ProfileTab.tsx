@@ -15,6 +15,7 @@ import {
 import type {
   CanonicalUser,
   Language,
+  MyProfile,
   ProfileTaxonomies,
   PublicProfile,
   TaxonomyItem,
@@ -36,6 +37,23 @@ type ProfileTabProps = {
   onRequireAuth: () => void;
   onAccountChange: (account: CanonicalUser) => void;
   onSignOut: () => Promise<void>;
+};
+
+type ProfileFormState = {
+  username: string;
+  display_name: string;
+  avatar_url: string;
+  university_name: string;
+  primary_discipline_id: string;
+  bio: string;
+  portfolio_url: string;
+  profile_visibility: MyProfile['profile_visibility'];
+  portfolio_visibility: MyProfile['portfolio_visibility'];
+  available_for_projects: boolean;
+  skills: string[];
+  tools: string[];
+  interests: string[];
+  languages: string[];
 };
 
 type Copy = {
@@ -237,10 +255,10 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
 
   const profile = account?.profile;
   const settings = account?.private_settings;
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<ProfileFormState>({
     username: '', display_name: '', avatar_url: '', university_name: '', primary_discipline_id: '',
-    bio: '', portfolio_url: '', profile_visibility: 'private' as const,
-    portfolio_visibility: 'private' as const, available_for_projects: false,
+    bio: '', portfolio_url: '', profile_visibility: 'private',
+    portfolio_visibility: 'private', available_for_projects: false,
     skills: [] as string[], tools: [] as string[], interests: [] as string[], languages: [] as string[],
   });
 
