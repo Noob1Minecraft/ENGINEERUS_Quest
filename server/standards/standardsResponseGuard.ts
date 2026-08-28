@@ -1,7 +1,7 @@
 import type { SupportedLanguage } from "../ai/languagePolicy";
 import type { StandardsLookupResult, VerifiedStandard } from "./standardsService";
 
-const STANDARD_IDENTIFIER = /(?:ГОСТ(?:\s+(?:РК|ISO(?:\/IEC)?|IEC|EN))?|СТ\s+РК(?:\s+(?:ISO(?:\/IEC)?|IEC|EN))?|ҚР\s+СТ|ЕСКД|СП\s+РК|ТР\s+(?:ЕАЭС|ТС)|GOST(?:\s+(?:RK|ISO(?:\/IEC)?|IEC|EN))?|ST\s+RK(?:\s+(?:ISO(?:\/IEC)?|IEC|EN))?|ESKD|SP\s+RK|TR\s+EAEU|ISO(?:\/IEC)?|IEC)\s+\d+(?:\s*[./:–—-]\s*\d+)*/giu;
+const STANDARD_IDENTIFIER = /(?:ГОСТ(?:\s+(?:РК|ISO(?:\/IEC)?|IEC|EN))?|СТ\s+РК(?:\s+(?:ISO(?:\/IEC)?|IEC|EN))?|ҚР\s+СТ|ЕСКД|СП\s+РК|СНиП(?:\s+РК)?|СН\s+РК|ТР\s+(?:ЕАЭС|ТС)|GOST(?:\s+(?:RK|ISO(?:\/IEC)?|IEC|EN))?|ST\s+RK(?:\s+(?:ISO(?:\/IEC)?|IEC|EN))?|ESKD|SP\s+RK|SNIP(?:\s+RK)?|SN\s+RK|TR\s+EAEU|ISO(?:\/IEC)?|IEC)\s+\d+(?:\s*[./:–—-]\s*\d+)*/giu;
 const CURRENT_CLAIM = /(?:действующ\p{L}*|действует|актуальн\p{L}*|подтвержд[её]н\p{L}*|current|valid|verified|in force|қолданыста|өзекті|расталған)/iu;
 const NEGATED_CURRENT_CLAIM = /(?:не\s+(?:является\s+)?(?:действующ|актуальн|подтвержд)|не\s+удалось\s+подтверд|not\s+(?:current|valid|verified)|cannot\s+be\s+(?:verified|confirmed)|could\s+not\s+(?:verify|confirm)|расталма|емес)/iu;
 const NO_RESULT_DISCLOSURE = /(?:не\s+удалось\s+(?:подтвердить|найти)|не\s+(?:подтвержд[её]н|найден)[^.!?]{0,100}(?:каталог|КазСтандарт)|could\s+not\s+(?:verify|confirm|find)|no\s+(?:specific\s+)?(?:current\s+)?standard\s+was\s+(?:verified|found)|(?:растау|табу)\s+мүмкін\s+болмады|расталмады|табылмады)/iu;

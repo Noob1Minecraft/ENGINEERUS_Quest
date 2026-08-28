@@ -238,6 +238,7 @@ test("keeps lookup eligibility conservative", () => {
   assert.equal(isStandardsLookupWarranted("Какие требования у СТ РК ISO 9001-2016?"), true);
   assert.equal(isStandardsLookupWarranted("Does this drawing comply with mandatory requirements?"), true);
   assert.equal(isStandardsLookupWarranted("Какие нормы применяются к железобетонным конструкциям?"), true);
+  assert.equal(isStandardsLookupWarranted("СНиП РК по сейсмостойкости зданий"), true);
 });
 
 test("preserves structural-steel intent in the first deterministic query", () => {
@@ -267,6 +268,10 @@ test("keeps an exact standard designation unchanged and first", () => {
   assert.deepEqual(
     generateKazStandardQueries("Какие требования содержит ГОСТ 2.102-68?"),
     ["ГОСТ 2.102-68"],
+  );
+  assert.deepEqual(
+    generateKazStandardQueries("Действует ли СНиП РК 2.03-30-2017?"),
+    ["СНиП РК 2.03-30-2017"],
   );
 });
 
@@ -307,6 +312,29 @@ test("expands common engineering standards terminology deterministically", () =>
     assert.deepEqual(queries, expected, prompt);
     assert.ok(queries.length <= 3, prompt);
   }
+});
+
+test("uses concise official-catalog queries for seismic standards questions", () => {
+  assert.deepEqual(
+    generateKazStandardQueries("Какие нормы СНиП РК регламентируют сейсмостойкость зданий в Алматы?"),
+    ["сейсмостойкость", "сейсмические воздействия", "землетрясения"],
+  );
+});
+
+test("does not promote seismic equipment records as building standards", () => {
+  const question = "Какие нормы СНиП РК регламентируют сейсмостойкость зданий в Алматы?";
+  const queries = generateKazStandardQueries(question);
+  const candidates = parseKazStandardSearchResults(searchFixture([
+    { providerId: "71533", designation: "ГОСТ 34611-2019", title: "Арматура трубопроводная. Методика проведения испытаний на сейсмостойкость", status: "Действующий" },
+    { providerId: "67549", designation: "ГОСТ 33963-2016", title: "Котлы стационарные. Расчеты на сейсмическое и ветровое воздействия", status: "Действующий" },
+    { providerId: "15471", designation: "ГОСТ 30546.2-98", title: "Испытания на сейсмостойкость машин, приборов и других технических изделий. Общие положения и методы испытаний", status: "Действующий" },
+    { providerId: "36528", designation: "ISO 24314:2006", title: "Конструкционные стали для строительства с улучшенной сейсмостойкостью. Технические условия поставки", status: "Действующий" },
+  ]));
+
+  const ranked = rankKazStandardCandidates(candidates, question, queries);
+
+  assert.equal(ranked.every(({ topicRelevant }) => topicRelevant === false), true);
+  assert.equal(ranked.some(({ earlyStopEligible }) => earlyStopEligible), false);
 });
 
 test("covers additional engineering domains without exceeding three queries", () => {
@@ -438,6 +466,17 @@ test("standards-related query performs a metadata-only GET with encoded input", 
   assert.ok(requests[0].url.includes("%26+test"));
   assert.doesNotMatch(requests[0].url, /\.pdf/iu);
   await assert.rejects(() => client.getKazStandardDocument("../media/paid.pdf"), /numeric/u);
+});
+
+test("KazStandard client rejects redirects, including redirects to an unapproved host", async () => {
+  const client = createKazStandardClient({
+    fetchImpl: async () => new Response(null, {
+      status: 302,
+      headers: { Location: "https://example.invalid/catalog/document/1/" },
+    }),
+  });
+
+  await assert.rejects(() => client.searchKazStandard("safe"), /redirect was refused/u);
 });
 
 test("KazStandard client accepts an exact-limit streamed HTML response", async () => {
@@ -881,6 +920,21 @@ test("extracts complete Kazakh, regional, slash, multipart, and colon standard i
     "ТР ЕАЭС 014/2011",
     "ТР ТС 032/2013",
   ]);
+});
+
+test("fails closed when a no-result response invents a numbered SNiP or SN RK document", () => {
+  for (const invented of ["СНиП РК 2.03-30-2099", "СН РК 2.03-01-2099"]) {
+    const result = guardStandardsResponse({
+      content: `Для проекта применяется ${invented}.`,
+      userPrompt: "Какие нормы применяются к сейсмостойкости зданий?",
+      lookupResult: { kind: "no_result" },
+      language: "ru",
+    });
+
+    assert.equal(result.rejected, true);
+    assert.deepEqual(result.rejectedDesignations, [invented]);
+    assert.doesNotMatch(result.content, /2\.03/u);
+  }
 });
 
 test("keeps useful generic guidance for no_result and adds the verification limitation", () => {

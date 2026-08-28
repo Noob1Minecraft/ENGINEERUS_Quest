@@ -7,7 +7,7 @@ const EXACT_DESIGNATION_PATTERNS = [
   /(?:СТ\s+РК|ҚР\s+СТ|ST\s+RK)\s+(?:(?:ISO|IEC|ГОСТ|GOST)\s+)?\d[\d.\/-]*/iu,
   /(?:ГОСТ|GOST)(?:\s+РК|\s+RK)?\s+\d[\d.\/-]*/iu,
   /(?:ISO|IEC)\s+\d[\d.\/-]*/iu,
-  /(?:ЕСКД|ESKD|СП\s+РК|SP\s+RK|ТР\s+(?:ТС|ЕАЭС)|TR\s+EAEU)\s+\d[\d.\/-]*/iu,
+  /(?:ЕСКД|ESKD|СП\s+РК|SP\s+RK|СНиП(?:\s+РК)?|SNIP(?:\s+RK)?|СН\s+РК|SN\s+RK|ТР\s+(?:ТС|ЕАЭС)|TR\s+EAEU)\s+\d[\d.\/-]*/iu,
 ];
 
 const DESIGN_DOCUMENTATION = /(?:конструкторск\p{L}*\s+документац\p{L}*|оформлен\p{L}*\s+черт[её]ж\p{L}*|design\s+documentation|engineering\s+drawing|конструкторлық\s+құжат|сызба\p{L}*\s+рәсім)/iu;
@@ -46,6 +46,10 @@ type EngineeringTerminologyRule = {
 };
 
 const ENGINEERING_TERMINOLOGY: readonly EngineeringTerminologyRule[] = [
+  {
+    pattern: /(?:сейсмостойк\p{L}*|сейсмическ\p{L}*\s+(?:воздейств\p{L}*|район\p{L}*)|землетрясен\p{L}*|seismic\p{L}*|earthquake\p{L}*|сейсмик\p{L}*)/iu,
+    queries: ["сейсмостойкость", "сейсмические воздействия", "землетрясения"],
+  },
   {
     pattern: /(?:размер\p{L}*|допуск\p{L}*|посадк\p{L}*|предельн\p{L}*\s+отклонен\p{L}*)/iu,
     queries: ["допуски и посадки", "размеры предельные отклонения"],
@@ -159,6 +163,11 @@ function relevanceKey(token: string): string {
 }
 
 function requiredTopicPattern(originalQuery: string): RegExp | undefined {
+  const asksAboutSeismicBuildings = /(?:сейсмостойк\p{L}*|сейсмическ\p{L}*|землетрясен\p{L}*|seismic\p{L}*|earthquake\p{L}*|сейсмик\p{L}*)/iu.test(originalQuery)
+    && /(?:здани\p{L}*|сооружени\p{L}*|строительств\p{L}*|building\p{L}*|structure\p{L}*|ғимарат\p{L}*|құрылыс\p{L}*)/iu.test(originalQuery);
+  if (asksAboutSeismicBuildings) {
+    return /(?=.*(?:сейсмостойк|сейсмическ|землетрясен|seismic|earthquake|сейсмик))(?=.*(?:здани|сооружени|building|structure|ғимарат))/iu;
+  }
   if (/(?:конструкционн\p{L}*\s+стал\p{L}*|structural\s+steel|конструкциялық\s+болат)/iu.test(originalQuery)) {
     return /(?=.*(?:конструкционн|structural|конструкциялық))(?=.*(?:стал|steel|болат))/iu;
   }
