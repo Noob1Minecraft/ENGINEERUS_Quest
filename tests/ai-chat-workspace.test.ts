@@ -32,6 +32,7 @@ test('Tutor composer reuses owned document and image APIs with explicit removabl
   assert.match(picker, /uploadDocument\(file\)/);
   assert.match(picker, /uploadImage\(file\)/);
   assert.match(picker, /status === 'ready'/);
+  assert.match(picker, /requestAnimationFrame\(\(\) => trigger\.current\?\.focus\(\)\)/);
   assert.match(assistant, /document_id: documentContext\.id/);
   assert.match(assistant, /image_ids: imageContext\.map/);
   assert.match(assistant, /onSelectDocumentContext\?\.\(null\)/);

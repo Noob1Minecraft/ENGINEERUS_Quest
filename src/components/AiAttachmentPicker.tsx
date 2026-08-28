@@ -34,14 +34,21 @@ export const AiAttachmentPicker: React.FC<AiAttachmentPickerProps> = ({
   const documentInput = useRef<HTMLInputElement>(null);
   const imageInput = useRef<HTMLInputElement>(null);
   const panel = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+
+  const closePicker = (restoreFocus = false) => {
+    setOpen(false);
+    setMode(null);
+    if (restoreFocus) window.requestAnimationFrame(() => trigger.current?.focus());
+  };
 
   useEffect(() => {
     if (!open) return;
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') { setOpen(false); setMode(null); }
+      if (event.key === 'Escape') closePicker(true);
     };
     const closeOutside = (event: MouseEvent) => {
-      if (!panel.current?.contains(event.target as Node)) { setOpen(false); setMode(null); }
+      if (!panel.current?.contains(event.target as Node)) closePicker();
     };
     document.addEventListener('keydown', closeOnEscape);
     document.addEventListener('mousedown', closeOutside);
@@ -96,14 +103,14 @@ export const AiAttachmentPicker: React.FC<AiAttachmentPickerProps> = ({
     <div className="relative shrink-0" ref={panel}>
       <input ref={documentInput} className="sr-only" type="file" accept=".pdf,.docx,.txt,.md,text/plain,text/markdown,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={(event) => void upload('document', event.target.files?.[0])} />
       <input ref={imageInput} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => void upload('image', event.target.files?.[0])} />
-      <button type="button" aria-label={labels.attach} aria-expanded={open} aria-haspopup="dialog" disabled={disabled} onClick={() => { setOpen((current) => !current); setMode(null); setError(null); }} className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition hover:border-blue-300 hover:text-blue-700 disabled:opacity-50">
+      <button ref={trigger} type="button" aria-label={labels.attach} aria-expanded={open} aria-haspopup="dialog" disabled={disabled} onClick={() => { setOpen((current) => !current); setMode(null); setError(null); }} className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition hover:border-blue-300 hover:text-blue-700 disabled:opacity-50">
         <Plus aria-hidden="true" className="h-5 w-5" />
       </button>
       {open && (
         <div role="dialog" aria-label={labels.attach} className="absolute bottom-14 left-0 z-30 w-[min(22rem,calc(100vw-2rem))] rounded-2xl border border-slate-200 bg-white p-3 shadow-xl">
           <div className="flex items-center justify-between gap-2">
             <strong className="flex items-center gap-2 text-sm text-slate-900"><Paperclip className="h-4 w-4 text-blue-600" />{labels.attach}</strong>
-            <button type="button" aria-label={labels.close} onClick={() => { setOpen(false); setMode(null); }} className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100"><X className="h-4 w-4" /></button>
+            <button type="button" aria-label={labels.close} onClick={() => closePicker(true)} className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100"><X className="h-4 w-4" /></button>
           </div>
           {!mode ? (
             <div className="mt-3 grid grid-cols-2 gap-2">
@@ -120,7 +127,7 @@ export const AiAttachmentPicker: React.FC<AiAttachmentPickerProps> = ({
                     const selected = mode === 'document' ? selectedDocument?.id === item.id : images.some((image) => image.id === item.id);
                     const atImageLimit = mode === 'image' && !selected && images.length >= 3;
                     return <button type="button" key={item.id} aria-pressed={selected} disabled={atImageLimit} onClick={() => {
-                      if (mode === 'document') { onSelectDocument(selected ? null : { id: item.id, name }); setOpen(false); setMode(null); }
+                      if (mode === 'document') { onSelectDocument(selected ? null : { id: item.id, name }); closePicker(true); }
                       else onSelectImages(selected ? images.filter((image) => image.id !== item.id) : [...images, { id: item.id, name }]);
                     }} className={`flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-40 ${selected ? 'bg-blue-50 text-blue-800' : 'text-slate-700 hover:bg-slate-50'}`}>
                       {mode === 'document' ? <FileText className="h-4 w-4 shrink-0" /> : <Image className="h-4 w-4 shrink-0" />}<span className="min-w-0 truncate">{name}</span>
