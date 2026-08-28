@@ -777,6 +777,10 @@ select {
 }
 
 @media (min-width: 48rem) and (max-width: 63.999rem) {
+  .eq-header__actions {
+    flex: 0 0 auto;
+  }
+
   .eq-brand__beta,
   .eq-profile-button__name {
     display: none;

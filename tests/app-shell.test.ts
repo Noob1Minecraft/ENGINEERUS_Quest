@@ -102,6 +102,7 @@ test('global styles define the Phase I tokens without masking structural horizon
   }
   assert.doesNotMatch(css, /body\s*\{[^}]*overflow-x\s*:\s*hidden/s);
   assert.match(css, /@media \(min-width: 48rem\) and \(max-width: 63\.999rem\)/);
+  assert.match(css, /\.eq-header__actions\s*\{\s*flex:\s*0 0 auto;/s);
   assert.match(css, /\.eq-profile-button__name\s*\{\s*display:\s*none;/s);
   assert.match(css, /prefers-reduced-motion/);
   assert.match(css, /focus-visible/);
