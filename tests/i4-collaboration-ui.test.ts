@@ -38,5 +38,6 @@ test('Messages keep human chat distinct and expose an eligible-only accessible s
 test('I4 responsive rules avoid fixed-width content and preserve visible selected states', () => {
   const css = source('src/index.css');
   for (const required of ['minmax(0, 1fr)', 'aria-pressed="true"', 'overflow-wrap: anywhere', 'eq-project-filters', 'eq-match-row', 'eq-request-row']) assert.match(css, new RegExp(required.replace(/[()]/g, '\\$&')));
+  assert.match(css, /\.eq-project-row \{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/);
   assert.doesNotMatch(css, /body\s*\{[^}]*overflow-x:\s*hidden/is);
 });

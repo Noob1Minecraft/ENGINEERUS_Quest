@@ -1007,7 +1007,7 @@ button.eq-home-link:hover { background: var(--color-surface-subtle); }
 .eq-match-method { margin: 0; color: var(--color-text-muted); font-size: 0.68rem; }
 .eq-match-method span { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .eq-project-list { display: grid; border-top: 1px solid var(--color-border); }
-.eq-project-row { display: grid; min-width: 0; gap: 0.7rem; padding: 1rem 0.25rem; border-bottom: 1px solid var(--color-border); }
+.eq-project-row { display: grid; min-width: 0; gap: 0.7rem; padding: 1rem 0.25rem; border-bottom: 1px solid var(--color-border); grid-template-columns: minmax(0, 1fr); }
 .eq-project-row h3 { overflow: hidden; margin: 0; color: var(--color-text); font-size: 0.95rem; font-weight: 850; text-overflow: ellipsis; white-space: nowrap; }
 .eq-project-row__discipline { margin: 0.25rem 0 0; color: var(--color-primary); font-size: 0.7rem; font-weight: 750; }
 .eq-status-label { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 0.35rem; color: var(--color-text-muted); font-size: 0.66rem; font-weight: 750; }
