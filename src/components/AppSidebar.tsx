@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bot, Sparkles } from 'lucide-react';
+import { Bot } from 'lucide-react';
 import type { Language } from '../types';
 import { APP_NAVIGATION_GROUPS } from './appNavigation';
 
@@ -43,7 +43,7 @@ export function AppSidebar({ activeTab, language, onSelectTab }: AppSidebarProps
           <strong>{language === 'ru' ? 'Инженерный фокус' : language === 'kk' ? 'Инженерлік бағыт' : 'Engineering focus'}</strong>
           <small>{language === 'ru' ? 'ИИ помогает — решение проверяет инженер.' : language === 'kk' ? 'ЖИ көмектеседі — шешімді инженер тексереді.' : 'AI assists; engineers verify.'}</small>
         </span>
-        <Sparkles aria-hidden="true" className="ml-auto h-4 w-4 text-[var(--color-ai)]" />
+        <span aria-hidden="true" className="eq-sidebar__note-index">CHK</span>
       </div>
     </aside>
   );

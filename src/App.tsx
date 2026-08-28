@@ -18,7 +18,7 @@ import { DirectChatTab } from './components/DirectChatTab';
 import { DocumentsTab } from './components/DocumentsTab';
 import type { AiDocument } from './documents/documentApi';
 import type { AiImage } from './images/imageApi';
-import { Sparkles, Zap, ArrowRight, ShieldCheck, Cpu } from 'lucide-react';
+import { DraftingCompass, Zap, ArrowRight, ShieldCheck, Cpu } from 'lucide-react';
 import mascotImg from './assets/images/eq_robot_mascot_1784719916472.jpg';
 import { useAuth } from './auth/AuthContext';
 import { apiFetch } from './utils/api';
@@ -319,113 +319,76 @@ export default function App() {
               title={lang === 'ru' ? 'Не удалось загрузить прогресс' : lang === 'kk' ? 'Прогресті жүктеу мүмкін болмады' : 'Could not load progress'}
               description={lang === 'ru' ? 'Основные разделы доступны. Обновите страницу, чтобы повторить попытку.' : lang === 'kk' ? 'Негізгі бөлімдер қолжетімді. Қайталап көру үшін бетті жаңартыңыз.' : 'Core features remain available. Refresh the page to try again.'}
             />}
-            {auth.user && <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-950">
+            {auth.user && <div className="eq-beta-note">
               <span><strong>Controlled Beta.</strong> {lang === 'ru' ? 'Доступ ограничен, функции могут меняться — ваши отзывы помогают улучшать продукт.' : lang === 'kk' ? 'Қолжетімділік шектеулі, функциялар өзгеруі мүмкін — пікіріңіз өнімді жақсартады.' : 'Access is limited and features may change—your feedback helps improve the product.'}</span>
-              <button type="button" onClick={() => setFeedbackOpen(true)} className="font-black text-blue-700 hover:underline">{lang === 'ru' ? 'Отправить отзыв' : lang === 'kk' ? 'Пікір жіберу' : 'Send feedback'}</button>
+              <button type="button" onClick={() => setFeedbackOpen(true)}>{lang === 'ru' ? 'Отправить отзыв' : lang === 'kk' ? 'Пікір жіберу' : 'Send feedback'}</button>
             </div>}
             {auth.user && betaParticipant && !betaParticipant.onboarding_completed_at && <BetaOnboardingCard
               lang={lang} completing={betaCompleting} onNavigate={setActiveTab} onComplete={completeOnboarding}
             />}
-            {/* Hero Section Banner (Soft, minimalist and elegant) */}
-            {!auth.user && <div className="bg-gradient-to-br from-slate-50 via-slate-100/40 to-blue-50/30 text-slate-800 rounded-2xl p-6 sm:p-8 md:p-10 shadow-xs relative overflow-hidden border border-slate-200/60">
-              {/* Background ambient glow effects */}
-              <div className="absolute top-0 right-0 -mt-10 -mr-10 w-72 h-72 bg-blue-500/5 rounded-full blur-3xl pointer-events-none" />
-              <div className="absolute bottom-0 left-1/3 w-60 h-60 bg-indigo-500/5 rounded-full blur-2xl pointer-events-none" />
-
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center relative z-10">
-                <div className="lg:col-span-7 space-y-3.5 md:space-y-4">
-                  {/* Top Badge Tag */}
-                  <div className="inline-flex items-center gap-1.5 bg-blue-50/80 border border-blue-100/80 text-blue-700 px-3 py-1 rounded-full text-[10px] sm:text-xs font-bold">
-                    <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+            {!auth.user && <section className="eq-home-hero" aria-labelledby="engineerus-intro-title">
+              <div className="eq-home-hero__grid">
+                <div className="eq-home-hero__copy">
+                  <div className="eq-home-hero__tag">
+                    <DraftingCompass aria-hidden="true" />
                     <span>{t.heroTag}</span>
                   </div>
-
-                  {/* Main Display Headline */}
-                  <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-slate-950 leading-tight">
+                  <h1 id="engineerus-intro-title">
                     Engineerus Quest
                   </h1>
-
-                  {/* Description */}
-                  <p className="text-xs sm:text-sm text-slate-500 font-medium leading-relaxed max-w-xl">
-                    {t.heroDesc}
-                  </p>
-
-                  {/* Action CTA Buttons */}
-                  <div className="flex flex-wrap items-center gap-2 sm:gap-3 pt-2">
+                  <p>{t.heroDesc}</p>
+                  <div className="eq-home-hero__actions">
                     <button
+                      type="button"
                       onClick={() => setActiveTab('ai')}
-                      className="bg-blue-600 hover:bg-blue-500 active:scale-98 text-white font-bold px-5 sm:px-6 py-2.5 rounded-xl text-xs shadow-sm hover:shadow-md transition-all flex items-center gap-2"
+                      className="eq-button eq-button--primary"
                     >
                       <span>{t.startLearning}</span>
-                      <ArrowRight className="w-4 h-4" />
+                      <ArrowRight aria-hidden="true" />
                     </button>
                     <button
+                      type="button"
                       onClick={() => setActiveTab('quests')}
-                      className="bg-white hover:bg-slate-50 active:scale-98 border border-slate-200 text-slate-700 font-bold px-5 sm:px-6 py-2.5 rounded-xl text-xs transition-all shadow-xs"
+                      className="eq-button eq-button--secondary"
                     >
                       {t.engineeringQuests}
                     </button>
                   </div>
                 </div>
-
-                {/* Robot Mascot Image Display */}
-                <div className="lg:col-span-5 flex justify-center lg:justify-end relative mt-2 lg:mt-0">
-                  <div className="relative group">
-                    <div className="absolute inset-0 bg-blue-500/5 rounded-full blur-2xl group-hover:scale-102 transition-transform" />
-                    <img
-                      src={mascotImg}
-                      alt="EQ Robot Mascot"
-                      className="w-44 sm:w-52 md:w-56 lg:w-64 h-auto object-contain relative z-10 drop-shadow-md rounded-2xl border border-slate-200/40"
-                    />
-                  </div>
+                <div className="eq-home-hero__figure">
+                  <span aria-hidden="true">01 — STUDY / BUILD / VERIFY</span>
+                  <img src={mascotImg} alt="Engineerus robot assistant" />
                 </div>
               </div>
-            </div>}
+            </section>}
 
-            {/* Quick Access Feature Cards Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+            <div className="eq-home-links" aria-label={lang === 'ru' ? 'Основные возможности' : lang === 'kk' ? 'Негізгі мүмкіндіктер' : 'Core areas'}>
               <button
                 type="button"
                 onClick={() => setActiveTab('ai')}
-                className="bg-white p-5 rounded-2xl border border-slate-200/60 hover:border-blue-200 hover:shadow-xs cursor-pointer transition-all duration-300 group text-left"
+                className="eq-home-link"
               >
-                <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-500 flex items-center justify-center font-bold mb-3 group-hover:translate-y-[-2px] transition-transform duration-300">
-                  <Cpu className="w-4.5 h-4.5" />
-                </div>
-                <h3 className="font-bold text-sm sm:text-base text-slate-900 group-hover:text-blue-600 transition-colors">
-                  {t.tutorModuleTitle}
-                </h3>
-                <p className="text-xs text-slate-400 font-medium mt-1 leading-relaxed">
-                  {t.tutorModuleDesc}
-                </p>
+                <span className="eq-home-link__index">01</span>
+                <span className="eq-home-link__icon"><Cpu aria-hidden="true" /></span>
+                <span className="eq-home-link__copy"><strong>{t.tutorModuleTitle}</strong><small>{t.tutorModuleDesc}</small></span>
+                <ArrowRight aria-hidden="true" className="eq-home-link__arrow" />
               </button>
 
               <button
                 type="button"
                 onClick={() => setActiveTab('quests')}
-                className="bg-white p-5 rounded-2xl border border-slate-200/60 hover:border-blue-200 hover:shadow-xs cursor-pointer transition-all duration-300 group text-left"
+                className="eq-home-link"
               >
-                <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-500 flex items-center justify-center font-bold mb-3 group-hover:translate-y-[-2px] transition-transform duration-300">
-                  <Zap className="w-4.5 h-4.5" />
-                </div>
-                <h3 className="font-bold text-sm sm:text-base text-slate-900 group-hover:text-blue-600 transition-colors">
-                  {t.questsModuleTitle}
-                </h3>
-                <p className="text-xs text-slate-400 font-medium mt-1 leading-relaxed">
-                  {t.questsModuleDesc}
-                </p>
+                <span className="eq-home-link__index">02</span>
+                <span className="eq-home-link__icon is-reward"><Zap aria-hidden="true" /></span>
+                <span className="eq-home-link__copy"><strong>{t.questsModuleTitle}</strong><small>{t.questsModuleDesc}</small></span>
+                <ArrowRight aria-hidden="true" className="eq-home-link__arrow" />
               </button>
 
-              <div className="bg-white p-5 rounded-2xl border border-slate-200/60 sm:col-span-2 lg:col-span-1">
-                <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-500 flex items-center justify-center font-bold mb-3">
-                  <ShieldCheck className="w-4.5 h-4.5" />
-                </div>
-                <h3 className="font-bold text-sm sm:text-base text-slate-900">
-                  {t.progressModuleTitle}
-                </h3>
-                <p className="text-xs text-slate-400 font-medium mt-1 leading-relaxed">
-                  {t.progressModuleDesc}
-                </p>
+              <div className="eq-home-link eq-home-link--static">
+                <span className="eq-home-link__index">03</span>
+                <span className="eq-home-link__icon is-safe"><ShieldCheck aria-hidden="true" /></span>
+                <span className="eq-home-link__copy"><strong>{t.progressModuleTitle}</strong><small>{t.progressModuleDesc}</small></span>
               </div>
             </div>
           </div>

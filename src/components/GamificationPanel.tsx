@@ -5,10 +5,11 @@ import {
   CalendarCheck2,
   Check,
   Circle,
+  DraftingCompass,
   Flame,
+  Gauge,
   LockKeyhole,
   Route,
-  Sparkles,
   Trophy,
 } from "lucide-react";
 import type { Language } from "../types";
@@ -149,7 +150,7 @@ export function GamificationPanel({
     <section aria-labelledby="gamification-dashboard-title" className="eq-dashboard">
       <header className="eq-dashboard__heading">
         <div>
-          <p className="eq-dashboard__eyebrow"><Sparkles aria-hidden="true" /> Engineerus Quest</p>
+          <p className="eq-dashboard__eyebrow"><DraftingCompass aria-hidden="true" /> Engineerus Quest</p>
           <h1 id="gamification-dashboard-title">{copy.title}</h1>
         </div>
         <Badge tone="neutral">{copy.totalXp}: {state.progression.total_xp}</Badge>
@@ -262,7 +263,7 @@ export function GamificationPanel({
       </Surface>
 
       <Surface className="eq-dashboard__skills">
-        <div className="eq-dashboard__section-title"><span><Sparkles aria-hidden="true" /> {copy.skills}</span></div>
+        <div className="eq-dashboard__section-title"><span><Gauge aria-hidden="true" /> {copy.skills}</span></div>
         {state.skills.length > 0 ? (
           <div className="eq-dashboard__skill-list">
             {state.skills.map((skill) => (

@@ -8,7 +8,8 @@ import { loadSavedAiNotes, storeSavedAiNotes } from '../utils/savedAiNotes';
 import { activeChatStorageKey, buildConversationTitle, clearChatDraft, isUntitledConversation, loadChatDraft, storeChatDraft } from '../ai/chatWorkspace';
 import { AiAttachmentPicker } from './AiAttachmentPicker';
 import {
-  Sparkles,
+  DraftingCompass,
+  GraduationCap,
   Send,
   Layers,
   Cpu,
@@ -141,7 +142,7 @@ const PRESET_QUESTIONS: Record<string, Record<Language, string[]>> = {
 };
 
 const MODULE_CONFIG: Record<string, { label: string; icon: React.FC<{ className?: string }>; color: string; badgeBg: string }> = {
-  tutor: { label: 'TUTOR AI', icon: Sparkles, color: 'text-blue-600', badgeBg: 'bg-blue-600' },
+  tutor: { label: 'TUTOR AI', icon: GraduationCap, color: 'text-blue-600', badgeBg: 'bg-blue-600' },
   material: { label: 'MaterialSwap', icon: Layers, color: 'text-emerald-600', badgeBg: 'bg-emerald-600' },
   patent: { label: 'PatentCraft', icon: Cpu, color: 'text-purple-600', badgeBg: 'bg-purple-600' },
   engi_legal: { label: 'EngiLegal', icon: ShieldCheck, color: 'text-amber-600', badgeBg: 'bg-amber-600' },
@@ -724,7 +725,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
 
   return (
     <div
-      className={`space-y-5 md:space-y-6 transition-all ${
+      className={`eq-ai-workspace space-y-5 md:space-y-6 transition-all ${
         isFullscreen
           ? 'fixed inset-0 z-[100] bg-slate-950 text-slate-100 p-3 sm:p-6 overflow-hidden flex flex-col m-0 rounded-none'
           : ''
@@ -740,16 +741,14 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
       <div className={`relative overflow-hidden shrink-0 transition-all ${
         isFullscreen
           ? 'bg-slate-900 border border-slate-800 p-4 sm:p-5 rounded-2xl text-slate-100 shadow-lg'
-          : 'bg-gradient-to-br from-slate-50 via-slate-100/40 to-blue-50/25 text-slate-800 rounded-2xl p-5 sm:p-6 md:p-8 shadow-xs border border-slate-200/50'
+          : 'eq-ai-intro text-slate-800 p-5 sm:p-6 md:p-8'
       }`}>
-        <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 rounded-full blur-3xl pointer-events-none" />
-
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
           <div>
             <div className={`flex items-center gap-1.5 font-bold text-xs uppercase tracking-wider mb-1 ${
               isFullscreen ? 'text-blue-400' : 'text-blue-600'
             }`}>
-              <Sparkles className="w-4 h-4 text-amber-500" /> {t.aiCoreTitle || 'Engineerus AI Core'}
+              <DraftingCompass className="w-4 h-4" aria-hidden="true" /> {t.aiCoreTitle || 'Engineerus AI Core'}
             </div>
             <h2 className={`text-xl sm:text-2xl font-extrabold tracking-tight flex flex-wrap items-center gap-2 sm:gap-3 ${
               isFullscreen ? 'text-white' : 'text-slate-900'
@@ -834,15 +833,17 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
       {activeSubView === 'chat' ? (
         <div className={`flex flex-col gap-4 ${isFullscreen ? 'flex-1 min-h-0' : ''}`}>
           {/* Module Selectors Row */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5 sm:gap-3 shrink-0">
+          <div className="eq-ai-modules grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 shrink-0">
             {Object.entries(MODULE_CONFIG).map(([key, config]) => {
               const IconComp = config.icon;
               const isSelected = selectedModule === key;
               return (
                 <button
                   key={key}
+                  type="button"
+                  aria-pressed={isSelected}
                   onClick={() => setSelectedModule(key)}
-                  className={`p-3 sm:p-3.5 rounded-2xl border text-left transition-all ${
+                  className={`eq-ai-module p-3 sm:p-3.5 border text-left transition-all ${
                     isSelected
                       ? 'border-blue-500 bg-blue-50/90 shadow-md ring-2 ring-blue-500/20 text-slate-900'
                       : isFullscreen
@@ -872,7 +873,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
 
           {/* Quick Preset Questions Bar */}
           {!isFullscreen && (
-            <div className="bg-white rounded-3xl p-3.5 sm:p-4 border border-slate-200/80 shadow-2xs space-y-2 shrink-0">
+            <div className="eq-ai-prompts p-3.5 sm:p-4 space-y-2 shrink-0">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-extrabold text-slate-800 flex items-center gap-1.5">
                   <HelpCircle className="w-4 h-4 text-blue-600" /> {lang === 'kk' ? 'Модульге арналған кеңес' : lang === 'en' ? 'Prompt suggestion for module' : 'Подсказка для модуля'}{' '}
@@ -888,7 +889,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                       setPromptText(preset);
                       handleSendPrompt(preset);
                     }}
-                    className="text-xs font-bold text-slate-700 bg-slate-100/80 hover:bg-blue-50 hover:text-blue-700 border border-slate-200/80 hover:border-blue-300 px-3 py-1 rounded-2xl transition-all text-left shadow-2xs flex items-center gap-1.5"
+                    className="eq-ai-prompt text-xs font-bold text-slate-700 px-3 py-1 transition-all text-left flex items-center gap-1.5"
                   >
                     <span>{preset}</span>
                     <ArrowRight className="w-3 h-3 text-slate-400 shrink-0" />
@@ -900,7 +901,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
 
           {/* Main Chat Interface Window with Multi-Chat Drawer */}
           <div
-            className={`relative bg-white rounded-3xl border border-slate-200/80 shadow-2xs overflow-hidden flex flex-col ${
+            className={`eq-ai-chat-frame relative bg-white border border-slate-200/80 overflow-hidden flex flex-col ${
               isFullscreen ? 'flex-1 min-h-0 bg-slate-900 border-slate-800 text-slate-100' : 'min-h-[420px] max-h-[650px]'
             }`}
           >
@@ -1114,18 +1115,18 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                     className={`flex gap-3 ${isUser ? 'justify-end' : 'justify-start'} animate-fade-in`}
                   >
                     {!isUser && (
-                      <div className="w-8 h-8 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-md">
+                      <div className="eq-ai-avatar">
                         <Bot className="w-4 h-4" />
                       </div>
                     )}
 
                     <div
-                      className={`max-w-[88%] sm:max-w-[80%] rounded-3xl p-4 sm:p-5 shadow-2xs ${
+                      className={`max-w-[88%] sm:max-w-[80%] rounded-xl p-4 sm:p-5 ${
                         isUser
-                          ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-br-xs'
+                          ? 'bg-blue-700 text-white rounded-br-xs'
                           : isFullscreen
                           ? 'bg-slate-900 border border-slate-800 text-slate-100 rounded-bl-xs space-y-3'
-                          : 'bg-white border border-slate-200/90 text-slate-800 rounded-bl-xs space-y-3'
+                          : 'bg-white border border-slate-200/90 border-l-[3px] border-l-teal-600 text-slate-800 rounded-bl-xs space-y-3'
                       }`}
                     >
                       {/* Top AI Message Header Bar */}
@@ -1232,16 +1233,16 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
 
               {loading && (
                 <div className="flex gap-3 justify-start animate-fade-in">
-                  <div className="w-8 h-8 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-md">
+                  <div className="eq-ai-avatar">
                     <Bot className="w-4 h-4" />
                   </div>
                   <div
-                    className={`rounded-3xl p-4 shadow-2xs text-xs font-bold flex items-center gap-2 ${
+                    className={`rounded-xl p-4 text-xs font-bold flex items-center gap-2 ${
                       isFullscreen ? 'bg-slate-900 border border-slate-800 text-slate-300' : 'bg-white border border-slate-200/90 text-slate-600'
                     }`}
                   >
                     <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                    <span>{lang === 'kk' ? 'Engineerus ЖИ есепті шығаруда...' : lang === 'en' ? 'Engineerus AI is solving the problem...' : 'Engineerus AI решает задачу и форматирует ответ...'}</span>
+                    <span>{lang === 'kk' ? 'Шарттарды тексеріп, инженерлік жауап дайындап жатырмын…' : lang === 'en' ? 'Checking the given conditions and preparing an engineering answer…' : 'Проверяю условия и готовлю инженерный ответ…'}</span>
                   </div>
                 </div>
               )}
@@ -1280,7 +1281,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                     }
                   }}
                   rows={1}
-                  placeholder={lang === 'kk' ? 'Инженерлік сұрағыңызды қойыңыз (Markdown қолдайды)...' : lang === 'en' ? 'Ask any engineering question (supports Markdown formulas)...' : 'Задайте любой инженерный вопрос (поддерживает Markdown формулы)...'}
+                  placeholder={lang === 'kk' ? 'Есепті, бастапқы деректерді немесе инженерлік сұрақты сипаттаңыз…' : lang === 'en' ? 'Describe the problem, given data, or engineering question…' : 'Опишите задачу, исходные данные или инженерный вопрос…'}
                   aria-label={lang === 'kk' ? 'ЖИ-ге хабарлама' : lang === 'en' ? 'Message AI Tutor' : 'Сообщение ИИ-тьютору'}
                   className={`min-h-11 min-w-0 flex-1 p-3 rounded-xl border outline-none text-xs sm:text-sm font-medium transition-all resize-none ${
                     isFullscreen
