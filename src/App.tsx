@@ -456,8 +456,10 @@ export default function App() {
             initialModule={selectedAiModule}
             documentContext={aiDocument}
             onClearDocumentContext={() => setAiDocument(null)}
+            onSelectDocumentContext={setAiDocument}
             imageContext={aiImages}
             onClearImageContext={() => setAiImages([])}
+            onSelectImageContext={setAiImages}
           />
         )}
 

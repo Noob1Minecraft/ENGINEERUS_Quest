@@ -5,6 +5,8 @@ import { TRANSLATIONS } from '../data';
 import { verifySystemIntegrity } from '../utils/integrity';
 import { apiFetch } from '../utils/api';
 import { loadSavedAiNotes, storeSavedAiNotes } from '../utils/savedAiNotes';
+import { activeChatStorageKey, buildConversationTitle, clearChatDraft, isUntitledConversation, loadChatDraft, storeChatDraft } from '../ai/chatWorkspace';
+import { AiAttachmentPicker } from './AiAttachmentPicker';
 import {
   Sparkles,
   Send,
@@ -44,8 +46,10 @@ interface AIAssistantTabProps {
   initialModule?: string;
   documentContext?: { id: string; name: string } | null;
   onClearDocumentContext?: () => void;
+  onSelectDocumentContext?: (document: { id: string; name: string } | null) => void;
   imageContext?: Array<{ id: string; name: string }>;
   onClearImageContext?: () => void;
+  onSelectImageContext?: (images: Array<{ id: string; name: string }>) => void;
 }
 
 const PRESET_QUESTIONS: Record<string, Record<Language, string[]>> = {
@@ -162,8 +166,10 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
   initialModule,
   documentContext,
   onClearDocumentContext,
+  onSelectDocumentContext,
   imageContext = [],
   onClearImageContext,
+  onSelectImageContext,
 }) => {
   const t = TRANSLATIONS[lang];
   const [activeSubView, setActiveSubView] = useState<'chat' | 'saved'>('chat');
@@ -203,6 +209,8 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
   const [savedFilterModule, setSavedFilterModule] = useState<string>('all');
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const promptHydrationRef = useRef<string>('');
+  const skipDraftPersistRef = useRef(false);
 
   useEffect(() => {
     // Assert system integrity across modules
@@ -241,7 +249,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
             method: 'POST',
             body: JSON.stringify({
               module: 'tutor',
-              title: 'Инженерный консилиум (Главный)',
+              title: 'New conversation',
             }),
           });
           persistentSessions = [created.session];
@@ -252,7 +260,12 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
         if (active) {
           setSessions(persistentSessions.map((session) => ({ ...session, messages: [] })));
           setSessionCursor(nextCursor);
-          setActiveSessionId(persistentSessions[0]?.id || '');
+          const restoredId = sessionStorage.getItem(activeChatStorageKey(authenticatedUserId));
+          const selectedId = persistentSessions.some((session) => session.id === restoredId)
+            ? restoredId!
+            : persistentSessions[0]?.id || '';
+          setActiveSessionId(selectedId);
+          setSelectedModule(persistentSessions.find((session) => session.id === selectedId)?.module ?? 'tutor');
         }
       } catch {
         if (active) {
@@ -270,6 +283,26 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
     void loadPersistentChats();
     return () => { active = false; };
   }, [authenticatedUserId]);
+
+  useEffect(() => {
+    if (!authenticatedUserId || !activeSessionId) return;
+    sessionStorage.setItem(activeChatStorageKey(authenticatedUserId), activeSessionId);
+    const key = `${authenticatedUserId}:${activeSessionId}`;
+    promptHydrationRef.current = key;
+    skipDraftPersistRef.current = true;
+    setPromptText(loadChatDraft(authenticatedUserId, activeSessionId));
+  }, [activeSessionId, authenticatedUserId]);
+
+  useEffect(() => {
+    if (!authenticatedUserId || !activeSessionId) return;
+    const key = `${authenticatedUserId}:${activeSessionId}`;
+    if (promptHydrationRef.current !== key) return;
+    if (skipDraftPersistRef.current) {
+      skipDraftPersistRef.current = false;
+      return;
+    }
+    storeChatDraft(authenticatedUserId, activeSessionId, promptText);
+  }, [activeSessionId, authenticatedUserId, promptText]);
 
   // Hydrate only the selected chat. Other sessions remain lightweight until opened.
   useEffect(() => {
@@ -315,6 +348,12 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
   const activeSession = sessions.find((s) => s.id === activeSessionId) || sessions[0];
   const messages = activeSession ? activeSession.messages : [];
 
+  const selectSession = (session: ChatSession) => {
+    setActiveSessionId(session.id);
+    setSelectedModule(session.module);
+    setShowSessionsDrawer(false);
+  };
+
   const translateMsgText = (text: string, id: string) => {
     if (id === 'welcome-msg') {
       return lang === 'kk'
@@ -334,6 +373,9 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
   };
 
   const translateSessionTitle = (title: string) => {
+    if (title === 'New conversation') {
+      return lang === 'kk' ? 'Жаңа чат' : lang === 'en' ? 'New chat' : 'Новый чат';
+    }
     if (title === 'Инженерный консилиум (Главный)') {
       return lang === 'kk'
         ? 'Инженерлік консилиум (Басты)'
@@ -430,7 +472,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
         method: 'POST',
         body: JSON.stringify({
           module: selectedModule,
-          title: `Квест ${MODULE_CONFIG[selectedModule]?.label || 'ИИ'} (#${sessions.length + 1})`,
+          title: 'New conversation',
         }),
       });
       const newSession: ChatSession = { ...data.session, messages: [] };
@@ -460,6 +502,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
         setSessions(remaining);
         if (activeSessionId === sessionId) {
           setActiveSessionId(remaining[0]?.id || '');
+          if (remaining[0]?.module) setSelectedModule(remaining[0].module);
         }
       } catch {
         setPersistenceError(lang === 'kk' ? 'Чат жойылмады.' : lang === 'en' ? 'Chat could not be deleted.' : 'Не удалось удалить чат.');
@@ -501,7 +544,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
           method: 'POST',
           body: JSON.stringify({
             module: selectedModule,
-            title: `Квест ${MODULE_CONFIG[selectedModule]?.label || 'ИИ'} (#${sessions.length + 1})`,
+            title: 'New conversation',
           }),
         });
         const newSession: ChatSession = { ...created.session, messages: [] };
@@ -510,6 +553,17 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
         targetSessionId = newSession.id;
         setSessions((current) => [newSession, ...current]);
         setActiveSessionId(newSession.id);
+      }
+
+      if (isUntitledConversation(activeSession?.id === targetSessionId ? activeSession.title : sessions.find((session) => session.id === targetSessionId)?.title ?? 'New conversation')) {
+        const title = buildConversationTitle(query);
+        const renamed = await apiFetch<{ session: Omit<ChatSession, 'messages'> }>(`/api/chats/${encodeURIComponent(targetSessionId)}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ title }),
+        });
+        setSessions((current) => current.map((session) => session.id === targetSessionId
+          ? { ...renamed.session, messages: session.messages }
+          : session));
       }
 
       const data = await apiFetch<{
@@ -550,6 +604,10 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
         });
         return { ...session, messages: Array.from(byId.values()) };
       }));
+
+      clearChatDraft(authenticatedUserId, targetSessionId);
+      onSelectDocumentContext?.(null);
+      onSelectImageContext?.([]);
 
       onUpdateUser({
         xp: data.xp,
@@ -675,20 +733,6 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
       {persistenceError && (
         <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold p-3 rounded-xl">
           {persistenceError}
-        </div>
-      )}
-
-      {documentContext && (
-        <div className="flex items-center justify-between gap-3 rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs font-semibold text-blue-900">
-          <span className="min-w-0 truncate">{lang === 'en' ? 'Document context' : lang === 'kk' ? 'Құжат контексті' : 'Контекст документа'}: {documentContext.name}</span>
-          <button type="button" onClick={onClearDocumentContext} className="shrink-0 rounded-lg bg-white px-2 py-1 font-bold text-blue-700">{lang === 'en' ? 'Clear' : lang === 'kk' ? 'Алып тастау' : 'Убрать'}</button>
-        </div>
-      )}
-
-      {imageContext.length > 0 && (
-        <div className="flex items-center justify-between gap-3 rounded-xl border border-indigo-200 bg-indigo-50 p-3 text-xs font-semibold text-indigo-900">
-          <span className="min-w-0 truncate">{lang === 'en' ? 'Image context' : lang === 'kk' ? 'Сурет контексті' : 'Контекст изображений'}: {imageContext.map(({ name }) => name).join(', ')}</span>
-          <button type="button" onClick={onClearImageContext} className="shrink-0 rounded-lg bg-white px-2 py-1 font-bold text-indigo-700">{lang === 'en' ? 'Clear' : lang === 'kk' ? 'Алып тастау' : 'Убрать'}</button>
         </div>
       )}
 
@@ -856,13 +900,29 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
 
           {/* Main Chat Interface Window with Multi-Chat Drawer */}
           <div
-            className={`bg-white rounded-3xl border border-slate-200/80 shadow-2xs overflow-hidden flex flex-col ${
+            className={`relative bg-white rounded-3xl border border-slate-200/80 shadow-2xs overflow-hidden flex flex-col ${
               isFullscreen ? 'flex-1 min-h-0 bg-slate-900 border-slate-800 text-slate-100' : 'min-h-[420px] max-h-[650px]'
             }`}
           >
+            <aside className={`absolute inset-y-0 left-0 z-10 hidden w-64 flex-col border-r lg:flex ${isFullscreen ? 'border-slate-800 bg-slate-950' : 'border-slate-200 bg-slate-50'}`} aria-label={lang === 'kk' ? 'Сақталған чаттар' : lang === 'en' ? 'Saved conversations' : 'Сохранённые чаты'}>
+              <div className="flex items-center justify-between gap-2 border-b border-inherit p-3">
+                <span className="flex min-w-0 items-center gap-2 text-xs font-black uppercase tracking-wide"><History className="h-4 w-4 text-blue-500" />{lang === 'kk' ? 'Чаттар' : lang === 'en' ? 'Conversations' : 'Диалоги'}</span>
+                <button type="button" onClick={handleCreateNewChat} aria-label={t.newChat} className="rounded-lg bg-blue-600 p-2 text-white transition hover:bg-blue-700"><Plus className="h-4 w-4" /></button>
+              </div>
+              <div className="min-h-0 flex-1 space-y-1 overflow-y-auto p-2">
+                {sessions.map((session) => {
+                  const selected = session.id === activeSessionId;
+                  return <button type="button" key={session.id} aria-current={selected ? 'true' : undefined} onClick={() => selectSession(session)} className={`w-full rounded-xl border px-3 py-2.5 text-left transition ${selected ? 'border-blue-200 bg-blue-50 text-blue-950' : isFullscreen ? 'border-transparent text-slate-300 hover:bg-slate-900' : 'border-transparent text-slate-700 hover:bg-white'}`}>
+                    <span className="block truncate text-xs font-extrabold">{translateSessionTitle(session.title)}</span>
+                    <span className="mt-1 block truncate text-[10px] font-semibold opacity-60">{MODULE_CONFIG[session.module]?.label ?? session.module}</span>
+                  </button>;
+                })}
+                {sessionCursor && <button type="button" disabled={loadingOlderSessions} onClick={() => void loadOlderSessions()} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 disabled:opacity-60">{loadingOlderSessions ? (lang === 'en' ? 'Loading…' : lang === 'kk' ? 'Жүктелуде…' : 'Загрузка…') : (lang === 'en' ? 'Load older' : lang === 'kk' ? 'Ескілерін жүктеу' : 'Загрузить ещё')}</button>}
+              </div>
+            </aside>
             {/* Top Bar with Saved Chats Switcher & New Chat Button */}
             <div
-              className={`border-b px-4 py-2.5 flex items-center justify-between gap-2 shrink-0 ${
+              className={`border-b px-4 py-2.5 flex items-center justify-between gap-2 shrink-0 lg:ml-64 ${
                 isFullscreen ? 'bg-slate-900/90 border-slate-800' : 'bg-slate-50/90 border-slate-200/80'
               }`}
             >
@@ -870,7 +930,8 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
               <div className="flex items-center gap-2 min-w-0">
                 <button
                   onClick={() => setShowSessionsDrawer(!showSessionsDrawer)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition-all ${
+                  aria-expanded={showSessionsDrawer}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition-all lg:hidden ${
                     showSessionsDrawer
                       ? 'bg-blue-600 text-white'
                       : isFullscreen
@@ -902,7 +963,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
             {/* Multi-Chat Drawer Overlay (Slide Down / Expand) */}
             {showSessionsDrawer && (
               <div
-                className={`p-3 border-b space-y-2 animate-fade-in ${
+                className={`p-3 border-b space-y-2 animate-fade-in lg:hidden ${
                   isFullscreen ? 'bg-slate-950 border-slate-800' : 'bg-slate-100/95 border-slate-200'
                 }`}
               >
@@ -928,8 +989,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                       <div
                         key={sess.id}
                         onClick={() => {
-                          setActiveSessionId(sess.id);
-                          setShowSessionsDrawer(false);
+                          selectSession(sess);
                         }}
                         className={`p-2.5 rounded-2xl border cursor-pointer transition-all flex items-center justify-between gap-2 ${
                           isActive
@@ -1018,7 +1078,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
 
             {/* Chat Messages Timeline Scroll Box */}
             <div
-              className={`flex-1 p-4 sm:p-5 overflow-y-auto space-y-4 ${
+              className={`flex-1 p-4 sm:p-5 overflow-y-auto space-y-4 lg:ml-64 ${
                 isFullscreen ? 'bg-slate-950/60' : 'bg-slate-50/30'
               }`}
             >
@@ -1191,11 +1251,25 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
 
             {/* Chat Composer Input Area */}
             <div
-              className={`p-3 sm:p-4 border-t shrink-0 ${
+              className={`p-3 sm:p-4 border-t shrink-0 lg:ml-64 ${
                 isFullscreen ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200/80'
               }`}
             >
-              <div className="flex items-center gap-2">
+              {(documentContext || imageContext.length > 0) && (
+                <div className="mb-2 flex flex-wrap gap-2" aria-label={lang === 'kk' ? 'Таңдалған контекст' : lang === 'en' ? 'Selected context' : 'Выбранный контекст'}>
+                  {documentContext && <span className="flex max-w-full items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs font-bold text-blue-900"><span aria-hidden="true">📄</span><span className="min-w-0 truncate">{documentContext.name}</span><button type="button" onClick={() => { onClearDocumentContext?.(); onSelectDocumentContext?.(null); }} aria-label={`${lang === 'en' ? 'Remove' : lang === 'kk' ? 'Алып тастау' : 'Убрать'} ${documentContext.name}`} className="rounded p-0.5 hover:bg-blue-100"><X className="h-3.5 w-3.5" /></button></span>}
+                  {imageContext.map((image) => <span key={image.id} className="flex max-w-full items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-1.5 text-xs font-bold text-violet-900"><span aria-hidden="true">🖼</span><span className="min-w-0 truncate">{image.name}</span><button type="button" onClick={() => onSelectImageContext?.(imageContext.filter((item) => item.id !== image.id))} aria-label={`${lang === 'en' ? 'Remove' : lang === 'kk' ? 'Алып тастау' : 'Убрать'} ${image.name}`} className="rounded p-0.5 hover:bg-violet-100"><X className="h-3.5 w-3.5" /></button></span>)}
+                </div>
+              )}
+              <div className="flex items-end gap-2">
+                <AiAttachmentPicker
+                  lang={lang}
+                  disabled={loading}
+                  document={documentContext ?? null}
+                  images={imageContext}
+                  onSelectDocument={(value) => onSelectDocumentContext?.(value)}
+                  onSelectImages={(value) => onSelectImageContext?.(value)}
+                />
                 <textarea
                   value={promptText}
                   onChange={(e) => setPromptText(e.target.value)}
@@ -1205,9 +1279,10 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                       handleSendPrompt();
                     }
                   }}
-                  rows={2}
+                  rows={1}
                   placeholder={lang === 'kk' ? 'Инженерлік сұрағыңызды қойыңыз (Markdown қолдайды)...' : lang === 'en' ? 'Ask any engineering question (supports Markdown formulas)...' : 'Задайте любой инженерный вопрос (поддерживает Markdown формулы)...'}
-                  className={`flex-1 p-3 rounded-2xl border outline-none text-xs sm:text-sm font-medium transition-all resize-none ${
+                  aria-label={lang === 'kk' ? 'ЖИ-ге хабарлама' : lang === 'en' ? 'Message AI Tutor' : 'Сообщение ИИ-тьютору'}
+                  className={`min-h-11 min-w-0 flex-1 p-3 rounded-xl border outline-none text-xs sm:text-sm font-medium transition-all resize-none ${
                     isFullscreen
                       ? 'bg-slate-950 border-slate-800 text-slate-100 focus:border-blue-500'
                       : 'bg-white border-slate-200 text-slate-900 focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20'
@@ -1217,10 +1292,10 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                 <button
                   onClick={() => handleSendPrompt()}
                   disabled={loading || !promptText.trim()}
-                  className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 text-white font-black px-4 sm:px-5 py-3.5 rounded-2xl shadow-md shadow-blue-500/20 transition-all flex items-center justify-center gap-2 text-xs shrink-0 h-full min-h-[44px]"
+                  className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-black px-3 sm:px-4 py-3 rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 text-xs shrink-0 min-h-[44px]"
                 >
                   <Send className="w-4 h-4" />
-                  <span className="hidden sm:inline">{lang === 'kk' ? 'Жіберу (+15 XP)' : lang === 'en' ? 'Send (+15 XP)' : 'Отправить (+15 XP)'}</span>
+                  <span className="hidden sm:inline">{lang === 'kk' ? 'Жіберу' : lang === 'en' ? 'Send' : 'Отправить'}</span>
                 </button>
               </div>
             </div>

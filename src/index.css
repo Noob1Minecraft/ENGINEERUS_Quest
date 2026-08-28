@@ -183,18 +183,6 @@ select {
   text-transform: uppercase;
 }
 
-.eq-brand__beta {
-  display: none;
-  border-radius: 0.375rem;
-  background: var(--color-reward-soft);
-  color: #8a5700;
-  padding: 0.2rem 0.4rem;
-  font-size: 0.5625rem;
-  font-weight: 900;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-
 .eq-header__page {
   display: none;
   min-width: 0;
@@ -887,7 +875,6 @@ select {
 
 @media (min-width: 30rem) {
   .eq-brand__copy,
-  .eq-brand__beta,
   .eq-profile-button__name,
   .eq-language__trigger svg:last-child {
     display: block;
@@ -909,7 +896,6 @@ select {
     flex: 0 0 auto;
   }
 
-  .eq-brand__beta,
   .eq-profile-button__name {
     display: none;
   }

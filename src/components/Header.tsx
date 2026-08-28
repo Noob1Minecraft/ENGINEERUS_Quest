@@ -48,7 +48,6 @@ export const Header: React.FC<HeaderProps> = ({ user, lang, onSetLang, activeTab
         <button type="button" className="eq-brand" onClick={() => onSelectTab('home')} aria-label={t.logoTitle}>
           <span className="eq-brand__mark" aria-hidden="true">EQ</span>
           <span className="eq-brand__copy"><strong>ENGINEERUS <em>Quest</em></strong><small>Engineering workspace</small></span>
-          <span className="eq-brand__beta">Beta</span>
         </button>
 
         <div className="eq-header__page" aria-live="polite"><span>{getNavigationLabel(activeTab, lang)}</span></div>
