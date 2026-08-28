@@ -3,6 +3,7 @@ import { UserProfile, Language, Quest, CanonicalUser } from './types';
 import { TRANSLATIONS, QUESTS } from './data';
 import { verifySystemIntegrity } from './utils/integrity';
 import { Header } from './components/Header';
+import { AppSidebar } from './components/AppSidebar';
 import { ProfileStats } from './components/ProfileStats';
 import { QuestsTab } from './components/QuestsTab';
 import { LeaderboardTab } from './components/LeaderboardTab';
@@ -275,7 +276,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50/60 text-slate-900 font-sans flex flex-col selection:bg-blue-500 selection:text-white">
+    <div className="eq-app">
       {/* Top Header */}
       <Header
         user={user}
@@ -288,8 +289,10 @@ export default function App() {
         onOpenFeedback={() => setFeedbackOpen(true)}
       />
 
-      {/* Main Container - Optimized with 390px base width responsiveness (360px min, 430px max, desktop responsive) */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-3.5 sm:px-6 lg:px-8 py-5 md:py-8 space-y-5 md:space-y-8 pb-28 md:pb-8">
+      <div className="eq-app__body">
+        <AppSidebar activeTab={activeTab} language={lang} onSelectTab={setActiveTab} />
+        <div className="eq-app__column">
+      <main className="eq-app__main space-y-5 md:space-y-8">
         {/* User Profile Stats Header Bar (Incorporating exact design from screenshot) */}
         {activeTab !== 'profile' && (
           <ProfileStats user={user} lang={lang} onNavigateToQuest={handleNavigateToQuest} />
@@ -364,9 +367,10 @@ export default function App() {
 
             {/* Quick Access Feature Cards Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
-              <div
+              <button
+                type="button"
                 onClick={() => setActiveTab('ai')}
-                className="bg-white p-5 rounded-2xl border border-slate-200/60 hover:border-blue-200 hover:shadow-xs cursor-pointer transition-all duration-300 group"
+                className="bg-white p-5 rounded-2xl border border-slate-200/60 hover:border-blue-200 hover:shadow-xs cursor-pointer transition-all duration-300 group text-left"
               >
                 <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-500 flex items-center justify-center font-bold mb-3 group-hover:translate-y-[-2px] transition-transform duration-300">
                   <Cpu className="w-4.5 h-4.5" />
@@ -377,11 +381,12 @@ export default function App() {
                 <p className="text-xs text-slate-400 font-medium mt-1 leading-relaxed">
                   {t.tutorModuleDesc}
                 </p>
-              </div>
+              </button>
 
-              <div
+              <button
+                type="button"
                 onClick={() => setActiveTab('quests')}
-                className="bg-white p-5 rounded-2xl border border-slate-200/60 hover:border-blue-200 hover:shadow-xs cursor-pointer transition-all duration-300 group"
+                className="bg-white p-5 rounded-2xl border border-slate-200/60 hover:border-blue-200 hover:shadow-xs cursor-pointer transition-all duration-300 group text-left"
               >
                 <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-500 flex items-center justify-center font-bold mb-3 group-hover:translate-y-[-2px] transition-transform duration-300">
                   <Zap className="w-4.5 h-4.5" />
@@ -392,7 +397,7 @@ export default function App() {
                 <p className="text-xs text-slate-400 font-medium mt-1 leading-relaxed">
                   {t.questsModuleDesc}
                 </p>
-              </div>
+              </button>
 
               <div className="bg-white p-5 rounded-2xl border border-slate-200/60 sm:col-span-2 lg:col-span-1">
                 <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-500 flex items-center justify-center font-bold mb-3">
@@ -491,16 +496,8 @@ export default function App() {
 
       </main>
 
-      {/* Bottom Navigation for Mobile Devices */}
-      <BottomNav
-        activeTab={activeTab}
-        onSelectTab={setActiveTab}
-        lang={lang}
-      />
-
-      {/* Desktop & Mobile Global Footer with Mandatory Caption */}
-      <footer className="border-t border-slate-200/80 bg-white py-6 mt-12 pb-36 md:pb-8">
-        <div className="max-w-7xl mx-auto px-4 text-center text-xs font-semibold text-slate-600 space-y-2">
+      <footer className="mt-auto border-t border-slate-200/80 bg-white px-4 py-6 pb-28 lg:pb-8">
+        <div className="mx-auto max-w-7xl text-center text-xs font-semibold text-slate-600 space-y-2">
           <p>© 2026 Engineerus Quest • AI Learning Platform for Kazakhstan Engineering Students</p>
           <p className="text-[11px] text-slate-500 font-medium">
             Satbayev University • Nazarbayev University • AUES • KazNU • ENU • KBTU
@@ -518,6 +515,10 @@ export default function App() {
           </div>
         </div>
       </footer>
+        </div>
+      </div>
+
+      <BottomNav activeTab={activeTab} onSelectTab={setActiveTab} lang={lang} />
 
       {/* Modals */}
       <AuthModal
