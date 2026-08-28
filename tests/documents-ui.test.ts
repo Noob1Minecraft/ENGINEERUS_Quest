@@ -14,7 +14,7 @@ test("Documents UI has authenticated upload, loading, empty, failure, delete, an
   assert.match(component, /document\.status !== "ready"/u);
   assert.match(component, /deleteDocument/u);
   assert.match(component, /onUseWithTutor/u);
-  assert.match(component, /OCR and images are not supported/u);
+  assert.match(component, /OCR is not supported/u);
 });
 
 test("document selection adds only document_id to the existing AI request and can be cleared", () => {

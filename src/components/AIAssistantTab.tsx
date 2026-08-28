@@ -44,6 +44,8 @@ interface AIAssistantTabProps {
   initialModule?: string;
   documentContext?: { id: string; name: string } | null;
   onClearDocumentContext?: () => void;
+  imageContext?: Array<{ id: string; name: string }>;
+  onClearImageContext?: () => void;
 }
 
 const PRESET_QUESTIONS: Record<string, Record<Language, string[]>> = {
@@ -160,6 +162,8 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
   initialModule,
   documentContext,
   onClearDocumentContext,
+  imageContext = [],
+  onClearImageContext,
 }) => {
   const t = TRANSLATIONS[lang];
   const [activeSubView, setActiveSubView] = useState<'chat' | 'saved'>('chat');
@@ -529,6 +533,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
           text: query,
           lang,
           ...(documentContext ? { document_id: documentContext.id } : {}),
+          ...(imageContext.length > 0 ? { image_ids: imageContext.map(({ id }) => id) } : {}),
         }),
       });
       if (data.status !== 'ok' || !data.assistant_message) {
@@ -677,6 +682,13 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
         <div className="flex items-center justify-between gap-3 rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs font-semibold text-blue-900">
           <span className="min-w-0 truncate">{lang === 'en' ? 'Document context' : lang === 'kk' ? 'Құжат контексті' : 'Контекст документа'}: {documentContext.name}</span>
           <button type="button" onClick={onClearDocumentContext} className="shrink-0 rounded-lg bg-white px-2 py-1 font-bold text-blue-700">{lang === 'en' ? 'Clear' : lang === 'kk' ? 'Алып тастау' : 'Убрать'}</button>
+        </div>
+      )}
+
+      {imageContext.length > 0 && (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-indigo-200 bg-indigo-50 p-3 text-xs font-semibold text-indigo-900">
+          <span className="min-w-0 truncate">{lang === 'en' ? 'Image context' : lang === 'kk' ? 'Сурет контексті' : 'Контекст изображений'}: {imageContext.map(({ name }) => name).join(', ')}</span>
+          <button type="button" onClick={onClearImageContext} className="shrink-0 rounded-lg bg-white px-2 py-1 font-bold text-indigo-700">{lang === 'en' ? 'Clear' : lang === 'kk' ? 'Алып тастау' : 'Убрать'}</button>
         </div>
       )}
 

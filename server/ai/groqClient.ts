@@ -3,10 +3,17 @@ import { sanitizeAssistantContent } from "./responseSafety";
 import { securityLogger } from "../security/structuredLogger";
 
 const FALLBACK_MODELS = ["openai/gpt-oss-120b", "openai/gpt-oss-20b"];
+const VISION_CAPABLE_MODELS = new Set(["qwen/qwen3.6-27b"]);
 const MODEL_FALLBACK_STATUSES = new Set([400, 404]);
 const CREDENTIAL_FALLBACK_STATUSES = new Set([401, 403]);
 
-export type AiProviderFailureCategory = "authentication" | "invalid_response" | "model" | "network" | "provider" | "rate_limit";
+export type AiProviderFailureCategory = "authentication" | "invalid_response" | "model" | "network" | "provider" | "rate_limit" | "vision_unavailable";
+
+export type AiVisionImage = {
+  id: string;
+  mimeType: "image/jpeg" | "image/png" | "image/webp";
+  buffer: Buffer;
+};
 
 export class AiProviderError extends Error {
   constructor(
@@ -55,23 +62,39 @@ export function createGroqResponder(options: GroqResponderOptions) {
     module: AiModule = "tutor",
     language: SupportedLanguage = "ru",
     additionalSystemPolicy?: string,
+    images: readonly AiVisionImage[] = [],
   ): Promise<string> {
     if (apiKeys.length === 0) return fallbackResponse(prompt, language, true);
 
     const systemPrompt = buildSystemPrompt(language, module, additionalSystemPolicy);
+    const hasImages = images.length > 0;
+    if (hasImages && !VISION_CAPABLE_MODELS.has(options.model)) {
+      throw new AiProviderError("vision_unavailable", fallbackResponse(prompt, language, false));
+    }
+    const requestModels = hasImages ? [options.model] : modelCandidates;
+    const userContent = hasImages
+      ? [
+        { type: "text", text: `${prompt}\n\nRespond in ${languageName(language)}. Preserve technical notation and identifiers.` },
+        ...images.map((image) => ({
+          type: "image_url",
+          image_url: { url: `data:${image.mimeType};base64,${image.buffer.toString("base64")}` },
+        })),
+      ]
+      : `${prompt}\n\nRespond in ${languageName(language)}. Preserve technical notation and identifiers.`;
 
     for (let keyAttempt = 0; keyAttempt < apiKeys.length; keyAttempt += 1) {
       const apiKey = apiKeys[keyAttempt];
 
-      for (let modelAttempt = 0; modelAttempt < modelCandidates.length; modelAttempt += 1) {
-        const model = modelCandidates[modelAttempt];
+      for (let modelAttempt = 0; modelAttempt < requestModels.length; modelAttempt += 1) {
+        const model = requestModels[modelAttempt];
         securityLogger.info("ai_provider_request", {
           provider: "groq",
           model,
           language,
           credential_slot: keyAttempt === 0 ? "primary" : "secondary",
           retry_attempt: modelAttempt + 1,
-          retry_limit: modelCandidates.length,
+          retry_limit: requestModels.length,
+          vision_image_count: images.length,
         });
 
         let response: Response;
@@ -88,7 +111,7 @@ export function createGroqResponder(options: GroqResponderOptions) {
                 { role: "system", content: systemPrompt },
                 {
                   role: "user",
-                  content: `${prompt}\n\nRespond in ${languageName(language)}. Preserve technical notation and identifiers.`,
+                  content: userContent,
                 },
               ],
               temperature: 0.2,
@@ -122,7 +145,7 @@ export function createGroqResponder(options: GroqResponderOptions) {
 
           if ((CREDENTIAL_FALLBACK_STATUSES.has(response.status) || response.status === 429)
               && keyAttempt < apiKeys.length - 1) break;
-          if (modelAttempt < modelCandidates.length - 1 && MODEL_FALLBACK_STATUSES.has(response.status)) continue;
+          if (modelAttempt < requestModels.length - 1 && MODEL_FALLBACK_STATUSES.has(response.status)) continue;
           throw new AiProviderError(category, fallbackResponse(prompt, language, false), response.status);
         }
 

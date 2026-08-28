@@ -16,6 +16,7 @@ import { EngiMatchTab } from './components/EngiMatchTab';
 import { DirectChatTab } from './components/DirectChatTab';
 import { DocumentsTab } from './components/DocumentsTab';
 import type { AiDocument } from './documents/documentApi';
+import type { AiImage } from './images/imageApi';
 import { Sparkles, Zap, ArrowRight, ShieldCheck, Cpu } from 'lucide-react';
 import mascotImg from './assets/images/eq_robot_mascot_1784719916472.jpg';
 import { useAuth } from './auth/AuthContext';
@@ -87,6 +88,7 @@ export default function App() {
   const [betaCompleting, setBetaCompleting] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [aiDocument, setAiDocument] = useState<{ id: string; name: string } | null>(null);
+  const [aiImages, setAiImages] = useState<Array<{ id: string; name: string }>>([]);
   const trackedBetaViews = useRef(new Set<string>());
 
   const [user, setUser] = useState<UserProfile>(GUEST_USER);
@@ -111,6 +113,8 @@ export default function App() {
     if (!auth.user) {
       setUser(GUEST_USER);
       setAccount(null);
+      setAiDocument(null);
+      setAiImages([]);
       setAccountLoading(false);
       setQuests(QUESTS);
       setGamification(null);
@@ -430,6 +434,8 @@ export default function App() {
             initialModule={selectedAiModule}
             documentContext={aiDocument}
             onClearDocumentContext={() => setAiDocument(null)}
+            imageContext={aiImages}
+            onClearImageContext={() => setAiImages([])}
           />
         )}
 
@@ -479,7 +485,8 @@ export default function App() {
 
         {activeTab === 'documents' && (
           <DocumentsTab authenticated={Boolean(auth.user)} lang={lang} onRequireAuth={() => setIsAuthOpen(true)}
-            onUseWithTutor={(document: AiDocument) => { setAiDocument({ id: document.id, name: document.original_filename }); setSelectedAiModule('tutor'); setActiveTab('ai'); }} />
+            onUseWithTutor={(document: AiDocument) => { setAiDocument({ id: document.id, name: document.original_filename }); setSelectedAiModule('tutor'); setActiveTab('ai'); }}
+            onUseImagesWithTutor={(images: AiImage[]) => { setAiImages(images.map((image) => ({ id: image.id, name: image.original_filename }))); setSelectedAiModule('tutor'); setActiveTab('ai'); }} />
         )}
 
       </main>

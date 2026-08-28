@@ -3,31 +3,34 @@ import { FileText, Loader2, ShieldCheck, Trash2, Upload } from "lucide-react";
 import type { Language } from "../types";
 import { ApiError } from "../utils/api";
 import { deleteDocument, listDocuments, uploadDocument, type AiDocument } from "../documents/documentApi";
+import type { AiImage } from "../images/imageApi";
+import { ImagesPanel } from "./ImagesPanel";
 
 type Props = {
   authenticated: boolean;
   lang: Language;
   onRequireAuth: () => void;
   onUseWithTutor: (document: AiDocument) => void;
+  onUseImagesWithTutor: (images: AiImage[]) => void;
 };
 
 function copy(lang: Language) {
   if (lang === "kk") return {
     title: "Құжаттар", upload: "Құжат жүктеу", empty: "Әзірге құжат жоқ.",
     use: "ЖИ-Тьютормен пайдалану", remove: "Жою", loading: "Құжаттар жүктелуде…",
-    note: "PDF, DOCX, TXT немесе Markdown, ең көбі 10 МБ. OCR және суреттер H1-де қолдау таппайды.",
+    note: "PDF, DOCX, TXT немесе Markdown, ең көбі 10 МБ. OCR қолдау таппайды.",
     safety: "Инженерлік шешімдер үшін ЖИ жауабын бастапқы құжатпен тексеріңіз.", login: "Құжаттар үшін жүйеге кіріңіз.",
   };
   if (lang === "en") return {
     title: "Documents", upload: "Upload document", empty: "No documents yet.",
     use: "Use with AI Tutor", remove: "Delete", loading: "Loading documents…",
-    note: "PDF, DOCX, TXT, or Markdown up to 10 MB. OCR and images are not supported in H1.",
+    note: "PDF, DOCX, TXT, or Markdown up to 10 MB. OCR is not supported.",
     safety: "Verify AI answers against the source document before engineering decisions.", login: "Sign in to use documents.",
   };
   return {
     title: "Документы", upload: "Загрузить документ", empty: "Документов пока нет.",
     use: "Использовать с ИИ-Тьютором", remove: "Удалить", loading: "Загрузка документов…",
-    note: "PDF, DOCX, TXT или Markdown до 10 МБ. OCR и изображения в H1 не поддерживаются.",
+    note: "PDF, DOCX, TXT или Markdown до 10 МБ. OCR не поддерживается.",
     safety: "Проверяйте ответы ИИ по исходному документу перед инженерными решениями.", login: "Войдите, чтобы использовать документы.",
   };
 }
@@ -41,7 +44,7 @@ function statusLabel(document: AiDocument, lang: Language): string {
   return lang === "en" ? "Processing" : lang === "kk" ? "Өңделуде" : "Обработка";
 }
 
-export const DocumentsTab: React.FC<Props> = ({ authenticated, lang, onRequireAuth, onUseWithTutor }) => {
+export const DocumentsTab: React.FC<Props> = ({ authenticated, lang, onRequireAuth, onUseWithTutor, onUseImagesWithTutor }) => {
   const t = copy(lang);
   const inputRef = useRef<HTMLInputElement>(null);
   const [documents, setDocuments] = useState<AiDocument[]>([]);
@@ -102,5 +105,6 @@ export const DocumentsTab: React.FC<Props> = ({ authenticated, lang, onRequireAu
         <div className="mt-3 flex flex-wrap gap-2"><button disabled={document.status !== "ready"} onClick={() => onUseWithTutor(document)} className="rounded-xl bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 disabled:opacity-40">{t.use}</button><button onClick={() => void remove(document.id)} className="flex items-center gap-1 rounded-xl bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700"><Trash2 className="h-3.5 w-3.5" />{t.remove}</button></div>
       </article>)}
     </div>}
+    <ImagesPanel lang={lang} onUseWithTutor={onUseImagesWithTutor} />
   </div>;
 };

@@ -20,6 +20,8 @@ import { AiProviderError } from "../ai/groqClient";
 import { securityLogger } from "../security/structuredLogger";
 import type { ProductEventRecorder } from "../persistence/beta";
 import { trackProductEvent } from "../beta/trackProductEvent";
+import type { AiVisionImage } from "../ai/groqClient";
+import { MAX_IMAGES_PER_REQUEST, visionSystemPolicy } from "../images/imagePolicy";
 
 const MODULES = ["tutor", "material", "patent", "engi_legal", "engi_match"] as const;
 const baseAiRequestSchema = z.object({
@@ -27,6 +29,7 @@ const baseAiRequestSchema = z.object({
   lang: z.enum(["ru", "kk", "en"]).default("ru"),
   session_id: z.string().uuid(),
   document_id: z.string().uuid().optional(),
+  image_ids: z.array(z.string().uuid()).min(1).max(MAX_IMAGES_PER_REQUEST).refine((ids) => new Set(ids).size === ids.length).optional(),
 }).strip();
 const moduleAiRequestSchema = baseAiRequestSchema.extend({ module: z.enum(MODULES) }).strip();
 
@@ -61,6 +64,7 @@ type AiDependencies = {
     module: ChatModule,
     language: SupportedLanguage,
     additionalSystemPolicy?: string,
+    images?: readonly AiVisionImage[],
   ) => Promise<string>;
   lookupStandards?: StandardsLookup;
   loadDocumentContext?: (
@@ -68,6 +72,7 @@ type AiDependencies = {
     documentId: string,
     question: string,
   ) => Promise<{ promptBlock: string; systemPolicy: string }>;
+  loadImageContext?: (userId: string, imageIds: readonly string[]) => Promise<AiVisionImage[]>;
   concurrencyGuard?: RequestHandler;
   recordEvent?: ProductEventRecorder;
 };
@@ -76,6 +81,7 @@ export function createAiRouter(
   authenticate: RequestHandler,
   rateLimiter: RequestHandler,
   dependencies: AiDependencies,
+  visionRateLimiter: RequestHandler = (_request, _response, next) => next(),
 ): Router {
   const router = Router();
   const concurrencyGuard = dependencies.concurrencyGuard ?? ((_request, _response, next) => next());
@@ -87,7 +93,7 @@ export function createAiRouter(
     xpAmount: 10 | 15,
     input: AiRequest,
   ) {
-    const { text, lang, session_id: sessionId, document_id: documentId } = input;
+    const { text, lang, session_id: sessionId, document_id: documentId, image_ids: imageIds } = input;
 
     let requestId: string;
     try {
@@ -136,8 +142,18 @@ export function createAiRouter(
       if (documentId && !documentContext) {
         throw new PersistenceError(503, "document_context_unavailable", "Document context is temporarily unavailable.");
       }
+      const imageContext = imageIds?.length
+        ? await dependencies.loadImageContext?.(userId, imageIds)
+        : undefined;
+      if (imageIds?.length && !imageContext) {
+        throw new PersistenceError(503, "image_context_unavailable", "Image context is temporarily unavailable.");
+      }
       const providerPrompt = [prepared.prompt, documentContext?.promptBlock].filter(Boolean).join("\n\n");
-      const baseSystemPolicy = [prepared.systemInstructions, documentContext?.systemPolicy].filter(Boolean).join("\n\n");
+      const baseSystemPolicy = [
+        prepared.systemInstructions,
+        documentContext?.systemPolicy,
+        imageContext?.length ? visionSystemPolicy() : undefined,
+      ].filter(Boolean).join("\n\n");
       let providerFailureCategory: string | undefined;
       let providerStatus: number | undefined;
       let generatedResponse: string;
@@ -147,6 +163,7 @@ export function createAiRouter(
           moduleName,
           detectedLanguage,
           baseSystemPolicy,
+          imageContext,
         );
       } catch (error) {
         if (!(error instanceof AiProviderError)) throw error;
@@ -181,6 +198,7 @@ export function createAiRouter(
             moduleName,
             detectedLanguage,
             retrySystemPolicy,
+            imageContext,
           );
           finalGuardResult = guardStandardsResponse({
             content: sanitizeAssistantContent(regeneratedResponse),
@@ -261,7 +279,7 @@ export function createAiRouter(
     }
   }
 
-  router.post("/api/ai", authenticate, rateLimiter, concurrencyGuard, safeAsync(async (request, response) => {
+  router.post("/api/ai", authenticate, rateLimiter, visionRateLimiter, concurrencyGuard, safeAsync(async (request, response) => {
     const parsed = baseAiRequestSchema.safeParse(request.body);
     if (!parsed.success) {
       sendInvalidAiRequest(response);
@@ -270,7 +288,7 @@ export function createAiRouter(
     await handle(request, response, "tutor", 10, parsed.data);
   }));
 
-  router.post("/api/module", authenticate, rateLimiter, concurrencyGuard, safeAsync(async (request, response) => {
+  router.post("/api/module", authenticate, rateLimiter, visionRateLimiter, concurrencyGuard, safeAsync(async (request, response) => {
     const parsed = moduleAiRequestSchema.safeParse(request.body);
     if (!parsed.success) {
       sendInvalidAiRequest(response, true);

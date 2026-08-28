@@ -98,6 +98,31 @@ export function createDocumentUploadRateLimit(factory?: RateLimitStoreFactory, l
   });
 }
 
+export function createImageUploadRateLimit(factory?: RateLimitStoreFactory, limit = 10) {
+  return rateLimit({
+    windowMs: WINDOW_MS,
+    limit,
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+    keyGenerator: (_request, response) => response.locals.auth.userId,
+    handler: handler("image_upload_rate_limit_exceeded", "Too many image uploads. Try again later."),
+    ...storeOptions(factory, "authenticated-image-upload"),
+  });
+}
+
+export function createVisionAiRateLimit(factory?: RateLimitStoreFactory, limit = 10) {
+  return rateLimit({
+    windowMs: WINDOW_MS,
+    limit,
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+    keyGenerator: (_request, response) => response.locals.auth.userId,
+    skip: (request) => !Array.isArray(request.body?.image_ids) || request.body.image_ids.length === 0,
+    handler: handler("vision_rate_limit_exceeded", "Vision request budget exceeded. Try again later."),
+    ...storeOptions(factory, "authenticated-ai-vision"),
+  });
+}
+
 export function createDirectChatReadRateLimit(factory?: RateLimitStoreFactory) {
   return rateLimit({
     windowMs: WINDOW_MS, limit: 180, standardHeaders: "draft-8", legacyHeaders: false,
