@@ -114,10 +114,12 @@ test('Projects UI source includes loading, empty, validation, owner edit, discov
   assert.match(source, /createProject/);
   assert.match(source, /updateProject/);
   assert.match(source, /archiveProject/);
-  assert.match(source, /LoaderCircle/);
+  assert.match(source, /LoadingState/);
   assert.match(source, /emptyMine/);
   assert.match(source, /emptyDiscover/);
   assert.match(source, /ProjectRecruitmentPanel/);
   assert.match(source, /ProjectRequestsPanel/);
+  assert.match(source, /eq-project-detail__identity/);
+  assert.match(source, /aria-pressed/);
   assert.doesNotMatch(source, /direct chat|EngiMatch|Realtime/i);
 });

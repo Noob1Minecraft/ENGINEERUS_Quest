@@ -1,24 +1,71 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { LoaderCircle, MessageCircle, Send } from 'lucide-react';
-import type { Language } from '../types';
+import { ArrowLeft, MessageCircle, Plus, Send, UsersRound, X } from 'lucide-react';
+import type { Language, ProjectApplication, ProjectInvitation } from '../types';
 import { ApiError } from '../utils/api';
 import {
-  listDirectConversations, listDirectMessages, markDirectConversationRead, sendDirectMessage,
-  type DirectConversation, type DirectMessage,
+  createDirectConversation,
+  listDirectConversations,
+  listDirectMessages,
+  markDirectConversationRead,
+  sendDirectMessage,
+  type DirectConversation,
+  type DirectMessage,
 } from '../directChat/directChatApi';
 import { directChatPollDelay } from '../directChat/pollingPolicy';
+import { listMyProjectApplications, listMyProjectInvitations } from '../projects/projectApi';
+import { Button, EmptyState, LoadingState } from './ui';
 
 const TEXT = {
-  ru: { title: 'Сообщения', empty: 'Пока нет личных диалогов.', choose: 'Выберите диалог.', placeholder: 'Написать сообщение…', send: 'Отправить', signIn: 'Войдите, чтобы открыть сообщения.' },
-  kk: { title: 'Хабарламалар', empty: 'Әзірге жеке диалогтар жоқ.', choose: 'Диалогты таңдаңыз.', placeholder: 'Хабарлама жазыңыз…', send: 'Жіберу', signIn: 'Хабарламаларды ашу үшін кіріңіз.' },
-  en: { title: 'Messages', empty: 'No direct conversations yet.', choose: 'Choose a conversation.', placeholder: 'Write a message…', send: 'Send', signIn: 'Sign in to open messages.' },
+  ru: {
+    title: 'Сообщения', subtitle: 'Рабочие диалоги с участниками совместных проектов.', empty: 'Личных диалогов пока нет.',
+    emptyHint: 'Начать разговор можно с участником, доступным по принятой заявке или приглашению.', choose: 'Выберите диалог, чтобы продолжить обсуждение.',
+    placeholder: 'Написать участнику…', send: 'Отправить', signIn: 'Войдите, чтобы открыть сообщения.', start: 'Начать разговор',
+    startTitle: 'Новый разговор', startHint: 'Показаны только участники, доступные по действующим проектным связям.',
+    noEligible: 'Сейчас нет участников, с которыми можно начать новый разговор.', close: 'Закрыть', back: 'К диалогам',
+    owner: 'Владелец проекта', collaborator: 'Участник проекта', loading: 'Загружаем диалоги…', starting: 'Открываем разговор…', unread: 'непрочитанных',
+  },
+  kk: {
+    title: 'Хабарламалар', subtitle: 'Ортақ жобалар қатысушыларымен жұмыс диалогтары.', empty: 'Жеке диалогтар әзірге жоқ.',
+    emptyHint: 'Қабылданған өтінім немесе шақыру арқылы қолжетімді қатысушымен сөйлесуге болады.', choose: 'Талқылауды жалғастыру үшін диалогты таңдаңыз.',
+    placeholder: 'Қатысушыға жазыңыз…', send: 'Жіберу', signIn: 'Хабарламаларды ашу үшін кіріңіз.', start: 'Сөйлесуді бастау',
+    startTitle: 'Жаңа сөйлесу', startHint: 'Тек қолданыстағы жоба байланысы бойынша қолжетімді қатысушылар көрсетіледі.',
+    noEligible: 'Қазір жаңа сөйлесуді бастауға болатын қатысушылар жоқ.', close: 'Жабу', back: 'Диалогтарға',
+    owner: 'Жоба иесі', collaborator: 'Жоба қатысушысы', loading: 'Диалогтар жүктелуде…', starting: 'Сөйлесу ашылуда…', unread: 'оқылмаған',
+  },
+  en: {
+    title: 'Messages', subtitle: 'Working conversations with people from shared projects.', empty: 'No direct conversations yet.',
+    emptyHint: 'You can start with someone made eligible by an accepted application or invitation.', choose: 'Choose a conversation to continue the discussion.',
+    placeholder: 'Message a collaborator…', send: 'Send', signIn: 'Sign in to open messages.', start: 'Start conversation',
+    startTitle: 'New conversation', startHint: 'Only people eligible through an existing project relationship are shown.',
+    noEligible: 'There are no eligible collaborators for a new conversation right now.', close: 'Close', back: 'Back to conversations',
+    owner: 'Project owner', collaborator: 'Project collaborator', loading: 'Loading conversations…', starting: 'Opening conversation…', unread: 'unread',
+  },
 } satisfies Record<Language, Record<string, string>>;
+
+type ConversationCandidate = { key: string; profileId: string; projectId: string; name: string; project: string; context: string };
 
 function name(conversation: DirectConversation) {
   return conversation.other_user?.display_name || conversation.other_user?.username || 'Engineer';
 }
+
 function errorText(error: unknown) {
   return error instanceof ApiError ? error.message : 'Messaging is temporarily unavailable.';
+}
+
+function acceptedCandidates(applications: ProjectApplication[], invitations: ProjectInvitation[], lang: Language): ConversationCandidate[] {
+  const copy = TEXT[lang];
+  const rows: ConversationCandidate[] = [];
+  for (const application of applications) {
+    const project = application.role?.project;
+    if (application.status !== 'accepted' || !project) continue;
+    rows.push({ key: `application-${application.id}`, profileId: project.owner_id, projectId: application.project_id, name: copy.owner, project: project.title, context: application.role?.title ?? copy.collaborator });
+  }
+  for (const invitation of invitations) {
+    const project = invitation.role?.project;
+    if (invitation.status !== 'accepted' || !project || !invitation.inviter) continue;
+    rows.push({ key: `invitation-${invitation.id}`, profileId: invitation.inviter.id, projectId: invitation.project_id, name: invitation.inviter.display_name || invitation.inviter.username || copy.collaborator, project: project.title, context: invitation.role?.title ?? copy.collaborator });
+  }
+  return [...new Map(rows.map((row) => [`${row.profileId}:${row.projectId}`, row])).values()];
 }
 
 export function DirectChatTab({ authenticated, currentUserId, lang, initialConversationId, onRequireAuth }: {
@@ -32,6 +79,11 @@ export function DirectChatTab({ authenticated, currentUserId, lang, initialConve
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
+  const [startOpen, setStartOpen] = useState(false);
+  const [startLoading, setStartLoading] = useState(false);
+  const [candidates, setCandidates] = useState<ConversationCandidate[]>([]);
+  const startTriggerRef = useRef<HTMLButtonElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
   const selectedRef = useRef(selectedId); selectedRef.current = selectedId;
 
   const refreshConversations = useCallback(async () => {
@@ -53,8 +105,7 @@ export function DirectChatTab({ authenticated, currentUserId, lang, initialConve
   useEffect(() => {
     if (!authenticated) { setConversations([]); setMessages([]); return; }
     let active = true; setLoading(true); setError('');
-    refreshConversations().catch((requestError) => { if (active) setError(errorText(requestError)); })
-      .finally(() => { if (active) setLoading(false); });
+    refreshConversations().catch((requestError) => { if (active) setError(errorText(requestError)); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [authenticated, refreshConversations]);
 
@@ -65,10 +116,7 @@ export function DirectChatTab({ authenticated, currentUserId, lang, initialConve
 
   useEffect(() => {
     if (!authenticated) return;
-    let active = true;
-    let timer: number | undefined;
-    let failures = 0;
-    let inFlight = false;
+    let active = true; let timer: number | undefined; let failures = 0; let inFlight = false;
     const schedule = () => {
       if (!active || document.visibilityState !== 'visible') return;
       if (timer !== undefined) window.clearTimeout(timer);
@@ -85,31 +133,42 @@ export function DirectChatTab({ authenticated, currentUserId, lang, initialConve
           await refreshMessages(conversationId, hasUnread);
         }
         failures = 0;
-      } catch {
-        failures += 1;
-      } finally {
-        inFlight = false;
-        schedule();
-      }
+      } catch { failures += 1; }
+      finally { inFlight = false; schedule(); }
     };
-    const pollNow = () => {
-      if (document.visibilityState !== 'visible') return;
-      if (timer !== undefined) window.clearTimeout(timer);
-      void poll();
-    };
+    const pollNow = () => { if (document.visibilityState !== 'visible') return; if (timer !== undefined) window.clearTimeout(timer); void poll(); };
     const onVisibilityChange = () => { if (document.visibilityState === 'visible') pollNow(); };
-    schedule();
-    window.addEventListener('focus', pollNow);
-    document.addEventListener('visibilitychange', onVisibilityChange);
-    return () => {
-      active = false;
-      if (timer !== undefined) window.clearTimeout(timer);
-      window.removeEventListener('focus', pollNow);
-      document.removeEventListener('visibilitychange', onVisibilityChange);
-    };
+    schedule(); window.addEventListener('focus', pollNow); document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => { active = false; if (timer !== undefined) window.clearTimeout(timer); window.removeEventListener('focus', pollNow); document.removeEventListener('visibilitychange', onVisibilityChange); };
   }, [authenticated, refreshConversations, refreshMessages]);
 
+  useEffect(() => {
+    if (!startOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') setStartOpen(false); };
+    document.addEventListener('keydown', onKeyDown); closeRef.current?.focus();
+    return () => { document.removeEventListener('keydown', onKeyDown); startTriggerRef.current?.focus(); };
+  }, [startOpen]);
+
   const selected = useMemo(() => conversations.find(({ id }) => id === selectedId) ?? null, [conversations, selectedId]);
+
+  async function openStartConversation(): Promise<void> {
+    setStartOpen(true); setStartLoading(true); setError('');
+    try {
+      const [applications, invitations] = await Promise.all([listMyProjectApplications(), listMyProjectInvitations()]);
+      setCandidates(acceptedCandidates(applications, invitations, lang));
+    } catch (requestError) { setError(errorText(requestError)); }
+    finally { setStartLoading(false); }
+  }
+
+  async function startConversation(candidate: ConversationCandidate): Promise<void> {
+    setStartLoading(true); setError('');
+    try {
+      const { conversation_id } = await createDirectConversation(candidate.profileId, candidate.projectId);
+      await refreshConversations(); setSelectedId(conversation_id); setStartOpen(false);
+    } catch (requestError) { setError(errorText(requestError)); }
+    finally { setStartLoading(false); }
+  }
+
   async function submit(event: React.FormEvent) {
     event.preventDefault(); const content = draft.trim(); if (!selectedId || !content || sending) return;
     setSending(true); setError('');
@@ -121,24 +180,27 @@ export function DirectChatTab({ authenticated, currentUserId, lang, initialConve
     finally { setSending(false); }
   }
 
-  if (!authenticated) return <section className="rounded-3xl border border-slate-200 bg-white p-8 text-center"><p className="text-sm text-slate-600">{copy.signIn}</p><button onClick={onRequireAuth} className="mt-4 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white">Sign in</button></section>;
-  return <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xs">
-    <header className="border-b border-slate-200 p-4"><h1 className="flex items-center gap-2 text-lg font-black"><MessageCircle className="h-5 w-5 text-blue-600" />{copy.title}</h1></header>
-    {error && <div role="alert" className="m-3 rounded-xl bg-red-50 p-3 text-xs font-semibold text-red-700">{error}</div>}
-    <div className="grid min-h-[32rem] md:grid-cols-[18rem_1fr]">
-      <aside className="border-b border-slate-200 md:border-b-0 md:border-r">
-        {loading ? <LoaderCircle className="m-6 h-5 w-5 animate-spin text-blue-600" /> : conversations.length === 0 ? <p className="p-5 text-xs text-slate-500">{copy.empty}</p> : conversations.map((conversation) => <button key={conversation.id} onClick={() => setSelectedId(conversation.id)} className={`w-full border-b border-slate-100 p-4 text-left ${selectedId === conversation.id ? 'bg-blue-50' : 'hover:bg-slate-50'}`}>
-          <div className="flex items-center justify-between gap-2"><span className="truncate text-sm font-bold">{name(conversation)}</span>{conversation.unread_count > 0 && <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-bold text-white">{conversation.unread_count}</span>}</div>
-          <p className="mt-1 truncate text-xs text-slate-500">{conversation.last_message?.content || '—'}</p>
+  if (!authenticated) return <section className="eq-collab-guest"><MessageCircle aria-hidden="true" /><p>{copy.signIn}</p><Button onClick={onRequireAuth}>Sign in</Button></section>;
+
+  return <section className="eq-direct-chat" aria-labelledby="direct-chat-title">
+    <header className="eq-direct-chat__header"><div><h1 id="direct-chat-title"><MessageCircle aria-hidden="true" />{copy.title}</h1><p>{copy.subtitle}</p></div><button ref={startTriggerRef} type="button" className="eq-button eq-button--secondary" onClick={() => void openStartConversation()}><Plus aria-hidden="true" />{copy.start}</button></header>
+    {error && <div role="alert" className="eq-inline-alert eq-inline-alert--error">{error}</div>}
+    <div className="eq-direct-chat__layout">
+      <aside className={selected ? 'eq-direct-chat__list eq-direct-chat__list--mobile-hidden' : 'eq-direct-chat__list'} aria-label={copy.title}>
+        {loading ? <LoadingState label={copy.loading} /> : conversations.length === 0 ? <EmptyState title={copy.empty} description={copy.emptyHint} action={<Button variant="secondary" onClick={() => void openStartConversation()}>{copy.start}</Button>} /> : conversations.map((conversation) => <button type="button" key={conversation.id} onClick={() => setSelectedId(conversation.id)} aria-pressed={selectedId === conversation.id} className="eq-conversation-row">
+          <span className="eq-conversation-row__avatar" aria-hidden="true">{name(conversation).slice(0, 1).toLocaleUpperCase(lang)}</span>
+          <span className="eq-conversation-row__body"><strong>{name(conversation)}</strong><span>{conversation.last_message?.content || copy.choose}</span></span>
+          <span className="eq-conversation-row__meta">{conversation.last_message && <time dateTime={conversation.last_message.created_at}>{new Date(conversation.last_message.created_at).toLocaleDateString(lang, { day: '2-digit', month: 'short' })}</time>}{conversation.unread_count > 0 && <span className="eq-unread" aria-label={`${conversation.unread_count} ${copy.unread}`}>{conversation.unread_count}</span>}</span>
         </button>)}
       </aside>
-      <div className="flex min-w-0 flex-col">
-        {!selected ? <div className="grid flex-1 place-items-center p-6 text-sm text-slate-500">{copy.choose}</div> : <>
-          <div className="border-b border-slate-200 p-4 text-sm font-black">{name(selected)}</div>
-          <div className="flex-1 space-y-2 overflow-y-auto p-4" aria-label="Direct messages">{messages.map((message) => <div key={message.id} className={`flex ${message.sender_id === currentUserId ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${message.sender_id === currentUserId ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-800'}`}><p className="whitespace-pre-wrap break-words">{message.content}</p><time className="mt-1 block text-[9px] opacity-70">{new Date(message.created_at).toLocaleTimeString(lang, { hour: '2-digit', minute: '2-digit' })}</time></div></div>)}</div>
-          <form onSubmit={submit} className="flex gap-2 border-t border-slate-200 p-3"><input aria-label={copy.placeholder} maxLength={4000} value={draft} onChange={(event) => setDraft(event.target.value)} className="min-w-0 flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm" placeholder={copy.placeholder} /><button disabled={sending || !draft.trim()} className="inline-flex items-center gap-1 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"><Send className="h-4 w-4" />{copy.send}</button></form>
+      <div className={selected ? 'eq-direct-chat__conversation' : 'eq-direct-chat__conversation eq-direct-chat__conversation--mobile-hidden'}>
+        {!selected ? <EmptyState title={copy.choose} description={copy.emptyHint} /> : <>
+          <div className="eq-direct-chat__person"><button type="button" className="eq-chat-back" onClick={() => setSelectedId(null)} aria-label={copy.back}><ArrowLeft aria-hidden="true" /></button><span className="eq-conversation-row__avatar" aria-hidden="true">{name(selected).slice(0, 1).toLocaleUpperCase(lang)}</span><div><strong>{name(selected)}</strong><span>{copy.collaborator}</span></div></div>
+          <div className="eq-direct-chat__messages" aria-label="Direct messages">{messages.length === 0 ? <EmptyState title={copy.choose} /> : messages.map((message) => <div key={message.id} className={message.sender_id === currentUserId ? 'eq-human-message eq-human-message--mine' : 'eq-human-message'}><div><p>{message.content}</p><time dateTime={message.created_at}>{new Date(message.created_at).toLocaleTimeString(lang, { hour: '2-digit', minute: '2-digit' })}</time></div></div>)}</div>
+          <form onSubmit={submit} className="eq-direct-chat__composer"><label className="sr-only" htmlFor="direct-message-input">{copy.placeholder}</label><input id="direct-message-input" maxLength={4000} value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={copy.placeholder} /><Button type="submit" disabled={sending || !draft.trim()} aria-label={copy.send}><Send aria-hidden="true" /><span>{copy.send}</span></Button></form>
         </>}
       </div>
     </div>
+    {startOpen && <div className="eq-dialog-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) setStartOpen(false); }}><section role="dialog" aria-modal="true" aria-labelledby="start-conversation-title" className="eq-start-conversation"><header><div><h2 id="start-conversation-title">{copy.startTitle}</h2><p>{copy.startHint}</p></div><button ref={closeRef} type="button" onClick={() => setStartOpen(false)} aria-label={copy.close}><X aria-hidden="true" /></button></header>{startLoading ? <LoadingState label={copy.starting} /> : candidates.length === 0 ? <EmptyState title={copy.noEligible} description={copy.startHint} /> : <div className="eq-start-conversation__list">{candidates.map((candidate) => <button type="button" key={candidate.key} onClick={() => void startConversation(candidate)}><UsersRound aria-hidden="true" /><span><strong>{candidate.name}</strong><span>{candidate.project} · {candidate.context}</span></span></button>)}</div>}</section></div>}
   </section>;
 }

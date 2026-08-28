@@ -91,9 +91,9 @@ test('invitation helpers expose invite, owner/invitee lists, accept, reject, and
 test('recruitment UI includes required/optional skills and all guarded request states without private fields', () => {
   const source = readFileSync(path.resolve('src/components/ProjectRecruitmentPanel.tsx'), 'utf8');
   assert.match(source, /Required and optional skills/);
-  assert.match(source, /No project roles yet/);
-  assert.match(source, /No applications/);
-  assert.match(source, /No invitations/);
+  assert.match(source, /No team roles have been created yet/);
+  assert.match(source, /You do not have any active applications yet/);
+  assert.match(source, /There are no new invitations/);
   assert.match(source, /filled/);
   assert.match(source, /closed/);
   assert.match(source, /withdrawProjectApplication/);

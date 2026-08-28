@@ -46,13 +46,24 @@ test('Direct Chat polling backs off from 15 to 60 seconds and remains bounded',(
 
 test('Messages navigation and eligible recruitment actions are present without public-profile messaging',()=>{
   const app=readFileSync(path.resolve('src/App.tsx'),'utf8');
-  const header=readFileSync(path.resolve('src/components/Header.tsx'),'utf8');
-  const bottom=readFileSync(path.resolve('src/components/BottomNav.tsx'),'utf8');
+  const navigation=readFileSync(path.resolve('src/components/appNavigation.tsx'),'utf8');
   const recruitment=readFileSync(path.resolve('src/components/ProjectRecruitmentPanel.tsx'),'utf8');
   const profile=readFileSync(path.resolve('src/components/ProfileTab.tsx'),'utf8');
-  assert.match(app,/DirectChatTab/); assert.match(header,/messages/); assert.match(bottom,/messages/);
+  assert.match(app,/DirectChatTab/); assert.match(navigation,/id: 'messages'/); assert.match(navigation,/MessageCircle/);
   assert.match(recruitment,/application\.status === 'accepted'/); assert.match(recruitment,/invitation\.status === 'accepted'/);
   assert.doesNotMatch(profile,/createDirectConversation|direct-chat/i);
+});
+
+test('Start conversation derives candidates only from accepted project relationships',()=>{
+  const source=readFileSync(path.resolve('src/components/DirectChatTab.tsx'),'utf8');
+  assert.match(source,/listMyProjectApplications/);
+  assert.match(source,/listMyProjectInvitations/);
+  assert.match(source,/application\.status !== 'accepted'/);
+  assert.match(source,/invitation\.status !== 'accepted'/);
+  assert.match(source,/createDirectConversation\(candidate\.profileId, candidate\.projectId\)/);
+  assert.match(source,/role="dialog"/);
+  assert.match(source,/event\.key === 'Escape'/);
+  assert.doesNotMatch(source,/searchProfiles|\/api\/profiles|email|telegram_user_id|oauth/i);
 });
 
 test('Direct Chat uses separate bounded create, write, and polling rate limits',()=>{

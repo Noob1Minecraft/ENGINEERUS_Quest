@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Check, LoaderCircle, MessageCircle, Plus, Send, UserPlus, X } from 'lucide-react';
+import { Check, CircleDot, MessageCircle, Plus, Send, UserPlus, X } from 'lucide-react';
 import type {
   Language,
   ProfileTaxonomies,
@@ -7,8 +7,10 @@ import type {
   ProjectDetail,
   ProjectInvitation,
   ProjectRole,
+  ProjectRequestStatus,
   PublicProfile,
   RoleSkillRequirement,
+  TaxonomyItem,
 } from '../types';
 import { searchProfiles } from '../profile/profileApi';
 import {
@@ -33,6 +35,37 @@ import {
 } from '../projects/projectApi';
 import { ApiError } from '../utils/api';
 import { createDirectConversation } from '../directChat/directChatApi';
+import { Button, EmptyState, LoadingState } from './ui';
+
+const COPY = {
+  ru: {
+    roles: 'Роли в проекте', rolesHint: 'Задачи команды и подтверждённое участие.', addRole: 'Добавить роль', noRoles: 'Командные роли пока не созданы.',
+    roleTitle: 'Название роли', description: 'Что предстоит делать', discipline: 'Направление', positions: 'Мест', status: 'Статус', skills: 'Обязательные и дополнительные навыки',
+    required: 'обязательно', optional: 'желательно', open: 'Открыта', filled: 'Команда собрана', closed: 'Закрыта', saveRole: 'Сохранить роль', cancel: 'Отмена', edit: 'Изменить', close: 'Закрыть набор',
+    progress: 'мест занято', selectProfile: 'Выберите доступного участника', inviteNote: 'Коротко опишите контекст приглашения', invite: 'Пригласить',
+    noNote: 'Комментарий не добавлен.', accept: 'Принять', reject: 'Отклонить', message: 'Написать', messageOwner: 'Написать координатору', apply: 'Подать заявку', applicationNote: 'Коротко расскажите, чем можете помочь',
+    application: 'Заявка', sentInvites: 'Отправленные приглашения', withdraw: 'Отозвать', requests: 'Заявки и приглашения', myApplications: 'Мои заявки', myInvitations: 'Мои приглашения',
+    noApplications: 'У вас пока нет активных заявок.', noInvitations: 'Новых приглашений пока нет.', pending: 'Ожидает решения', accepted: 'Принято', rejected: 'Отклонено', withdrawn: 'Отозвано', cancelled: 'Отменено', expired: 'Истекло', loading: 'Загружаем проектные запросы…',
+  },
+  kk: {
+    roles: 'Жобадағы рөлдер', rolesHint: 'Команда міндеттері және расталған қатысу.', addRole: 'Рөл қосу', noRoles: 'Командалық рөлдер әзірге жоқ.',
+    roleTitle: 'Рөл атауы', description: 'Орындалатын жұмыс', discipline: 'Бағыт', positions: 'Орын саны', status: 'Күйі', skills: 'Міндетті және қосымша дағдылар',
+    required: 'міндетті', optional: 'қалаулы', open: 'Ашық', filled: 'Команда жиналды', closed: 'Жабық', saveRole: 'Рөлді сақтау', cancel: 'Бас тарту', edit: 'Өзгерту', close: 'Қабылдауды жабу',
+    progress: 'орын толды', selectProfile: 'Қолжетімді қатысушыны таңдаңыз', inviteNote: 'Шақыру мәнмәтінін қысқаша жазыңыз', invite: 'Шақыру',
+    noNote: 'Түсіндірме қосылмаған.', accept: 'Қабылдау', reject: 'Қабылдамау', message: 'Жазу', messageOwner: 'Үйлестірушіге жазу', apply: 'Өтінім беру', applicationNote: 'Қалай көмектесе алатыныңызды қысқаша жазыңыз',
+    application: 'Өтінім', sentInvites: 'Жіберілген шақырулар', withdraw: 'Қайтарып алу', requests: 'Өтінімдер мен шақырулар', myApplications: 'Менің өтінімдерім', myInvitations: 'Менің шақыруларым',
+    noApplications: 'Белсенді өтінімдеріңіз әзірге жоқ.', noInvitations: 'Жаңа шақырулар әзірге жоқ.', pending: 'Шешім күтілуде', accepted: 'Қабылданды', rejected: 'Қабылданбады', withdrawn: 'Қайтарылды', cancelled: 'Күші жойылды', expired: 'Мерзімі өтті', loading: 'Жоба сұраулары жүктелуде…',
+  },
+  en: {
+    roles: 'Project roles', rolesHint: 'Team responsibilities and verified participation.', addRole: 'Add role', noRoles: 'No team roles have been created yet.',
+    roleTitle: 'Role title', description: 'What the collaborator will work on', discipline: 'Discipline', positions: 'Positions', status: 'Status', skills: 'Required and optional skills',
+    required: 'required', optional: 'optional', open: 'Open', filled: 'Team complete', closed: 'Closed', saveRole: 'Save role', cancel: 'Cancel', edit: 'Edit', close: 'Close recruitment',
+    progress: 'positions filled', selectProfile: 'Select an eligible collaborator', inviteNote: 'Briefly explain the invitation context', invite: 'Invite',
+    noNote: 'No note was added.', accept: 'Accept', reject: 'Reject', message: 'Message', messageOwner: 'Message coordinator', apply: 'Apply', applicationNote: 'Briefly explain how you can contribute',
+    application: 'Application', sentInvites: 'Sent invitations', withdraw: 'Withdraw', requests: 'Applications and invitations', myApplications: 'My applications', myInvitations: 'My invitations',
+    noApplications: 'You do not have any active applications yet.', noInvitations: 'There are no new invitations.', pending: 'Awaiting decision', accepted: 'Accepted', rejected: 'Rejected', withdrawn: 'Withdrawn', cancelled: 'Cancelled', expired: 'Expired', loading: 'Loading project requests…',
+  },
+} satisfies Record<Language, Record<string, string>>;
 
 type RoleForm = {
   title: string;
@@ -55,6 +88,14 @@ function profileName(profile: PublicProfile | ProjectApplication['applicant'] | 
   return profile?.display_name || profile?.username || 'Engineer';
 }
 
+function taxonomyLabel(item: TaxonomyItem, lang: Language): string {
+  return item[`label_${lang}`] || item.label_ru || item.slug;
+}
+
+function requestStatusLabel(status: ProjectRequestStatus, lang: Language): string {
+  return COPY[lang][status];
+}
+
 function rolePayload(form: RoleForm): CreateProjectRoleInput {
   return {
     title: form.title.trim(),
@@ -66,15 +107,17 @@ function rolePayload(form: RoleForm): CreateProjectRoleInput {
 }
 
 function RoleEditor({
-  form, taxonomies, saving, onChange, onSave, onCancel,
+  form, taxonomies, saving, lang, onChange, onSave, onCancel,
 }: {
   form: RoleForm;
   taxonomies: ProfileTaxonomies;
   saving: boolean;
+  lang: Language;
   onChange: (form: RoleForm) => void;
   onSave: () => void;
   onCancel: () => void;
 }) {
+  const copy = COPY[lang];
   const change = (next: Partial<RoleForm>) => onChange({ ...form, ...next });
   function toggleSkill(skillId: string): void {
     const exists = form.skills.some(({ skill_id }) => skill_id === skillId);
@@ -84,53 +127,53 @@ function RoleEditor({
     change({ skills: form.skills.map((skill) => skill.skill_id === skillId ? { ...skill, ...next } : skill) });
   }
   return (
-    <div className="space-y-3 rounded-2xl border border-blue-200 bg-blue-50/40 p-4">
+    <div className="eq-role-editor">
       <div className="grid gap-3 sm:grid-cols-2">
-        <label className="text-xs font-bold text-slate-700 sm:col-span-2">Role title
+        <label className="text-xs font-bold text-slate-700 sm:col-span-2">{copy.roleTitle}
           <input aria-label="Role title" maxLength={120} value={form.title} onChange={(event) => change({ title: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2" />
         </label>
-        <label className="text-xs font-bold text-slate-700 sm:col-span-2">Description
+        <label className="text-xs font-bold text-slate-700 sm:col-span-2">{copy.description}
           <textarea aria-label="Role description" maxLength={2000} value={form.description} onChange={(event) => change({ description: event.target.value })} className="mt-1 min-h-20 w-full rounded-xl border border-slate-200 bg-white px-3 py-2" />
         </label>
-        <label className="text-xs font-bold text-slate-700">Discipline
+        <label className="text-xs font-bold text-slate-700">{copy.discipline}
           <select aria-label="Role discipline" value={form.discipline_id} onChange={(event) => change({ discipline_id: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2">
             <option value="">—</option>
-            {taxonomies.disciplines.map((item) => <option key={item.id} value={item.id}>{item.label_en}</option>)}
+            {taxonomies.disciplines.map((item) => <option key={item.id} value={item.id}>{taxonomyLabel(item, lang)}</option>)}
           </select>
         </label>
-        <label className="text-xs font-bold text-slate-700">Positions
+        <label className="text-xs font-bold text-slate-700">{copy.positions}
           <input aria-label="Role positions" type="number" min={1} max={20} value={form.positions_total} onChange={(event) => change({ positions_total: Number(event.target.value) })} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2" />
         </label>
-        <label className="text-xs font-bold text-slate-700">Status
+        <label className="text-xs font-bold text-slate-700">{copy.status}
           <select aria-label="Role status" value={form.status} onChange={(event) => change({ status: event.target.value as 'open' | 'closed' })} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2">
-            <option value="open">Open</option><option value="filled" disabled>Filled (automatic)</option><option value="closed">Closed</option>
+            <option value="open">{copy.open}</option><option value="filled" disabled>{copy.filled}</option><option value="closed">{copy.closed}</option>
           </select>
         </label>
       </div>
       <fieldset className="space-y-2">
-        <legend className="text-xs font-black text-slate-700">Required and optional skills</legend>
+        <legend className="text-xs font-black text-slate-700">{copy.skills}</legend>
         {taxonomies.skills.map((skill) => {
           const selected = form.skills.find(({ skill_id }) => skill_id === skill.id);
           return <div key={skill.id} className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-2 rounded-xl bg-white px-3 py-2 text-xs">
-            <input aria-label={`Use ${skill.label_en}`} type="checkbox" checked={Boolean(selected)} onChange={() => toggleSkill(skill.id)} />
-            <span className="font-semibold text-slate-700">{skill.label_en}</span>
-            <select aria-label={`${skill.label_en} requirement`} disabled={!selected} value={selected?.requirement ?? 'required'} onChange={(event) => updateSkill(skill.id, { requirement: event.target.value as RoleSkillRequirement })} className="rounded-lg border border-slate-200 px-2 py-1 disabled:opacity-40">
-              <option value="required">Required</option><option value="optional">Optional</option>
+            <input aria-label={`Use ${taxonomyLabel(skill, lang)}`} type="checkbox" checked={Boolean(selected)} onChange={() => toggleSkill(skill.id)} />
+            <span className="font-semibold text-slate-700">{taxonomyLabel(skill, lang)}</span>
+            <select aria-label={`${taxonomyLabel(skill, lang)} requirement`} disabled={!selected} value={selected?.requirement ?? 'required'} onChange={(event) => updateSkill(skill.id, { requirement: event.target.value as RoleSkillRequirement })} className="rounded-lg border border-slate-200 px-2 py-1 disabled:opacity-40">
+              <option value="required">{copy.required}</option><option value="optional">{copy.optional}</option>
             </select>
-            <input aria-label={`${skill.label_en} weight`} disabled={!selected} type="number" min={1} max={100} value={selected?.weight ?? 1} onChange={(event) => updateSkill(skill.id, { weight: Number(event.target.value) })} className="w-16 rounded-lg border border-slate-200 px-2 py-1 disabled:opacity-40" />
+            <input aria-label={`${taxonomyLabel(skill, lang)} weight`} disabled={!selected} type="number" min={1} max={100} value={selected?.weight ?? 1} onChange={(event) => updateSkill(skill.id, { weight: Number(event.target.value) })} className="w-16 rounded-lg border border-slate-200 px-2 py-1 disabled:opacity-40" />
           </div>;
         })}
       </fieldset>
       <div className="flex gap-2">
-        <button type="button" disabled={saving || !form.title.trim()} onClick={onSave} className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50">{saving ? '…' : 'Save role'}</button>
-        <button type="button" onClick={onCancel} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold">Cancel</button>
+        <button type="button" disabled={saving || !form.title.trim()} onClick={onSave} className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50">{saving ? '…' : copy.saveRole}</button>
+        <button type="button" onClick={onCancel} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold">{copy.cancel}</button>
       </div>
     </div>
   );
 }
 
-function RoleStatus({ role }: { role: ProjectRole }) {
-  return <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold uppercase text-slate-600">{role.status}</span>;
+function RoleStatus({ role, lang }: { role: ProjectRole; lang: Language }) {
+  return <span className="eq-status-label"><CircleDot aria-hidden="true" />{COPY[lang][role.status]}</span>;
 }
 
 export function ProjectRecruitmentPanel({
@@ -142,6 +185,7 @@ export function ProjectRecruitmentPanel({
   lang: Language;
   onOpenConversation?: (conversationId: string) => void;
 }) {
+  const copy = COPY[lang];
   const [roles, setRoles] = useState<ProjectRole[]>([]);
   const [applications, setApplications] = useState<ProjectApplication[]>([]);
   const [invitations, setInvitations] = useState<ProjectInvitation[]>([]);
@@ -220,42 +264,43 @@ export function ProjectRecruitmentPanel({
     });
   }
 
-  if (loading) return <div className="flex justify-center p-6"><LoaderCircle className="h-6 w-6 animate-spin text-blue-600" /></div>;
+  if (loading) return <LoadingState label={copy.loading} />;
   return (
-    <section className="mt-5 space-y-4 border-t border-slate-200 pt-5">
+    <section className="eq-recruitment" aria-labelledby="project-roles-title">
       <div className="flex items-center justify-between gap-3">
-        <div><h3 className="text-base font-black">Project roles</h3><p className="text-xs text-slate-500">Real roles and verified membership only.</p></div>
-        {owner && ['draft', 'open', 'in_progress'].includes(project.status) && <button type="button" onClick={() => { setCreating(true); setEditingId(null); setForm(EMPTY_ROLE); }} className="inline-flex items-center gap-1 rounded-xl bg-blue-600 px-3 py-2 text-xs font-bold text-white"><Plus className="h-3.5 w-3.5" />Add role</button>}
+        <div><h3 id="project-roles-title" className="text-base font-black">{copy.roles}</h3><p className="text-xs text-slate-500">{copy.rolesHint}</p></div>
+        {owner && ['draft', 'open', 'in_progress'].includes(project.status) && <Button onClick={() => { setCreating(true); setEditingId(null); setForm(EMPTY_ROLE); }}><Plus aria-hidden="true" />{copy.addRole}</Button>}
       </div>
       {error && <div role="alert" className="rounded-xl bg-red-50 p-3 text-xs font-semibold text-red-700">{error}</div>}
       {notice && <div role="status" className="rounded-xl bg-emerald-50 p-3 text-xs font-semibold text-emerald-700">{notice}</div>}
-      {(creating || editingId) && owner && <RoleEditor form={form} taxonomies={taxonomies} saving={saving} onChange={setForm} onSave={() => void saveRole()} onCancel={() => { setCreating(false); setEditingId(null); }} />}
-      {roles.length === 0 && !creating ? <div className="rounded-2xl border border-dashed border-slate-300 p-5 text-center text-xs text-slate-500">No project roles yet.</div> : roles.map((role) => {
+      {(creating || editingId) && owner && <RoleEditor form={form} taxonomies={taxonomies} saving={saving} lang={lang} onChange={setForm} onSave={() => void saveRole()} onCancel={() => { setCreating(false); setEditingId(null); }} />}
+      {roles.length === 0 && !creating ? <EmptyState title={copy.noRoles} /> : <div className="eq-role-list">{roles.map((role) => {
         const myApplication = owner ? undefined : applicationsByRole.get(role.id)?.[0];
-        return <article key={role.id} className="rounded-2xl border border-slate-200 p-4">
-          <div className="flex items-start justify-between gap-3"><div><h4 className="font-black text-slate-900">{role.title}</h4><p className="text-xs font-semibold text-blue-700">{role.discipline?.[`label_${lang}`] ?? '—'}</p></div><RoleStatus role={role} /></div>
+        return <article key={role.id} className="eq-role-row">
+          <div className="flex items-start justify-between gap-3"><div><h4 className="font-black text-slate-900">{role.title}</h4><p className="text-xs font-semibold text-blue-700">{role.discipline?.[`label_${lang}`] ?? '—'}</p></div><RoleStatus role={role} lang={lang} /></div>
           <p className="mt-2 text-xs leading-relaxed text-slate-600">{role.description || '—'}</p>
-          <p className="mt-2 text-xs font-bold text-slate-600">{role.positions_filled}/{role.positions_total} positions filled</p>
-          <div className="mt-2 flex flex-wrap gap-1">{role.skills.map(({ skill, requirement, weight }) => <span key={skill.id} className="rounded-lg bg-slate-100 px-2 py-1 text-[10px] font-semibold">{skill[`label_${lang}`]} · {requirement} · {weight}</span>)}</div>
+          <p className="mt-2 text-xs font-bold text-slate-600">{role.positions_filled}/{role.positions_total} {copy.progress}</p>
+          <div className="eq-role-skills">{role.skills.map(({ skill, requirement }) => <span key={skill.id}><strong>{requirement === 'required' ? copy.required : copy.optional}</strong>{skill[`label_${lang}`]}</span>)}</div>
           {owner ? <div className="mt-3 space-y-3">
-            <div className="flex gap-2"><button type="button" onClick={() => editRole(role)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold">Edit</button><button type="button" disabled={saving || role.status === 'closed'} onClick={() => void action(() => closeProjectRole(role.id), 'Role closed.')} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold disabled:opacity-50">Close</button></div>
+            <div className="flex gap-2"><Button variant="secondary" onClick={() => editRole(role)}>{copy.edit}</Button><Button variant="ghost" disabled={saving || role.status === 'closed'} onClick={() => void action(() => closeProjectRole(role.id), 'Role closed.')}>{copy.close}</Button></div>
             {role.status === 'open' && <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
-              <select aria-label={`Invite candidate for ${role.title}`} value={invitees[role.id] ?? ''} onChange={(event) => setInvitees((current) => ({ ...current, [role.id]: event.target.value }))} className="rounded-xl border border-slate-200 px-3 py-2 text-xs"><option value="">Select real profile</option>{candidates.map((profile) => <option key={profile.id} value={profile.id}>{profileName(profile)}</option>)}</select>
-              <input aria-label={`Invitation note for ${role.title}`} maxLength={1000} value={notes[`invite-${role.id}`] ?? ''} onChange={(event) => setNotes((current) => ({ ...current, [`invite-${role.id}`]: event.target.value }))} placeholder="Optional invitation note" className="rounded-xl border border-slate-200 px-3 py-2 text-xs" />
-              <button type="button" disabled={saving || !invitees[role.id]} onClick={() => void action(() => inviteToProjectRole(role.id, invitees[role.id], notes[`invite-${role.id}`] ?? ''), 'Invitation sent.')} className="inline-flex items-center justify-center gap-1 rounded-xl bg-blue-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50"><UserPlus className="h-3.5 w-3.5" />Invite</button>
+              <select aria-label={`${copy.invite}: ${role.title}`} value={invitees[role.id] ?? ''} onChange={(event) => setInvitees((current) => ({ ...current, [role.id]: event.target.value }))} className="rounded-xl border border-slate-200 px-3 py-2 text-xs"><option value="">{copy.selectProfile}</option>{candidates.map((profile) => <option key={profile.id} value={profile.id}>{profileName(profile)}</option>)}</select>
+              <input aria-label={`${copy.inviteNote}: ${role.title}`} maxLength={1000} value={notes[`invite-${role.id}`] ?? ''} onChange={(event) => setNotes((current) => ({ ...current, [`invite-${role.id}`]: event.target.value }))} placeholder={copy.inviteNote} className="rounded-xl border border-slate-200 px-3 py-2 text-xs" />
+              <Button disabled={saving || !invitees[role.id]} onClick={() => void action(() => inviteToProjectRole(role.id, invitees[role.id], notes[`invite-${role.id}`] ?? ''), 'Invitation sent.')}><UserPlus aria-hidden="true" />{copy.invite}</Button>
             </div>}
-            {(applicationsByRole.get(role.id) ?? []).map((application) => <div key={application.id} className="rounded-xl bg-slate-50 p-3 text-xs"><div className="font-bold">{profileName(application.applicant)} · {application.status}</div><p className="mt-1 text-slate-600">{application.note || 'No note.'}</p>{application.status === 'pending' && <div className="mt-2 flex gap-2"><button type="button" disabled={saving} onClick={() => void action(() => acceptProjectApplication(application.id), 'Application accepted.')} className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2 py-1 text-white"><Check className="h-3 w-3" />Accept</button><button type="button" disabled={saving} onClick={() => void action(() => rejectProjectApplication(application.id), 'Application rejected.')} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1"><X className="h-3 w-3" />Reject</button></div>}{application.status === 'accepted' && application.applicant && <button type="button" disabled={saving} onClick={() => void openConversation(application.applicant!.id)} className="mt-2 inline-flex items-center gap-1 rounded-lg border border-blue-200 px-2 py-1 font-bold text-blue-700"><MessageCircle className="h-3 w-3" />Message</button>}</div>)}
+            {(applicationsByRole.get(role.id) ?? []).map((application) => <div key={application.id} className="eq-request-row"><div><strong>{profileName(application.applicant)}</strong><span className="eq-status-label"><CircleDot aria-hidden="true" />{requestStatusLabel(application.status, lang)}</span></div><p>{application.note || copy.noNote}</p>{application.status === 'pending' && <div className="eq-request-row__actions"><Button disabled={saving} onClick={() => void action(() => acceptProjectApplication(application.id), 'Application accepted.')}><Check aria-hidden="true" />{copy.accept}</Button><Button variant="secondary" disabled={saving} onClick={() => void action(() => rejectProjectApplication(application.id), 'Application rejected.')}><X aria-hidden="true" />{copy.reject}</Button></div>}{application.status === 'accepted' && application.applicant && <Button variant="secondary" disabled={saving} onClick={() => void openConversation(application.applicant!.id)}><MessageCircle aria-hidden="true" />{copy.message}</Button>}</div>)}
           </div> : <div className="mt-3">
-            {myApplication ? <div className="flex items-center gap-3 text-xs font-bold text-slate-600"><span>Application: {myApplication.status}</span>{myApplication.status === 'accepted' && project.owner && <button type="button" disabled={saving} onClick={() => void openConversation(project.owner!.id)} className="inline-flex items-center gap-1 text-blue-700"><MessageCircle className="h-3 w-3" />Message owner</button>}</div> : role.status === 'open' && project.status === 'open' ? <div className="flex gap-2"><input aria-label={`Application note for ${role.title}`} maxLength={1000} value={notes[role.id] ?? ''} onChange={(event) => setNotes((current) => ({ ...current, [role.id]: event.target.value }))} placeholder="Optional application note" className="min-w-0 flex-1 rounded-xl border border-slate-200 px-3 py-2 text-xs" /><button type="button" disabled={saving} onClick={() => void action(() => applyToProjectRole(role.id, notes[role.id] ?? ''), 'Application sent.')} className="inline-flex items-center gap-1 rounded-xl bg-blue-600 px-3 py-2 text-xs font-bold text-white"><Send className="h-3.5 w-3.5" />Apply</button></div> : <div className="text-xs font-bold text-slate-500">This role is {role.status}.</div>}
+            {myApplication ? <div className="eq-role-application"><span>{copy.application}: <strong>{requestStatusLabel(myApplication.status, lang)}</strong></span>{myApplication.status === 'accepted' && project.owner && <Button variant="secondary" disabled={saving} onClick={() => void openConversation(project.owner!.id)}><MessageCircle aria-hidden="true" />{copy.messageOwner}</Button>}</div> : role.status === 'open' && project.status === 'open' ? <div className="eq-application-compose"><input aria-label={`${copy.applicationNote}: ${role.title}`} maxLength={1000} value={notes[role.id] ?? ''} onChange={(event) => setNotes((current) => ({ ...current, [role.id]: event.target.value }))} placeholder={copy.applicationNote} /><Button disabled={saving} onClick={() => void action(() => applyToProjectRole(role.id, notes[role.id] ?? ''), 'Application sent.')}><Send aria-hidden="true" />{copy.apply}</Button></div> : <div className="text-xs font-bold text-slate-500">{copy.status}: {COPY[lang][role.status]}</div>}
           </div>}
         </article>;
-      })}
-      {owner && invitations.length > 0 && <div><h4 className="mb-2 text-sm font-black">Sent invitations</h4>{invitations.map((invitation) => <div key={invitation.id} className="mb-2 flex items-center justify-between rounded-xl bg-slate-50 p-3 text-xs"><span>{profileName(invitation.invitee)} · {invitation.status}</span>{invitation.status === 'pending' && <button type="button" disabled={saving} onClick={() => void action(() => cancelProjectInvitation(invitation.id), 'Invitation cancelled.')} className="font-bold text-red-600">Cancel</button>}{invitation.status === 'accepted' && invitation.invitee && <button type="button" disabled={saving} onClick={() => void openConversation(invitation.invitee!.id)} className="inline-flex items-center gap-1 font-bold text-blue-700"><MessageCircle className="h-3 w-3" />Message</button>}</div>)}</div>}
+      })}</div>}
+      {owner && invitations.length > 0 && <div className="eq-sent-invitations"><h4>{copy.sentInvites}</h4>{invitations.map((invitation) => <div key={invitation.id} className="eq-request-row"><div><strong>{profileName(invitation.invitee)}</strong><span className="eq-status-label"><CircleDot aria-hidden="true" />{requestStatusLabel(invitation.status, lang)}</span></div>{invitation.status === 'pending' && <Button variant="ghost" disabled={saving} onClick={() => void action(() => cancelProjectInvitation(invitation.id), 'Invitation cancelled.')}>{copy.cancel}</Button>}{invitation.status === 'accepted' && invitation.invitee && <Button variant="secondary" disabled={saving} onClick={() => void openConversation(invitation.invitee!.id)}><MessageCircle aria-hidden="true" />{copy.message}</Button>}</div>)}</div>}
     </section>
   );
 }
 
-export function ProjectRequestsPanel({ onOpenConversation }: { onOpenConversation?: (conversationId: string) => void }) {
+export function ProjectRequestsPanel({ lang, onOpenConversation }: { lang: Language; onOpenConversation?: (conversationId: string) => void }) {
+  const copy = COPY[lang];
   const [applications, setApplications] = useState<ProjectApplication[]>([]);
   const [invitations, setInvitations] = useState<ProjectInvitation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -275,11 +320,11 @@ export function ProjectRequestsPanel({ onOpenConversation }: { onOpenConversatio
     try { const { conversation_id } = await createDirectConversation(profileId, projectId); onOpenConversation?.(conversation_id); }
     catch (requestError) { setError(errorMessage(requestError)); }
   }
-  if (loading) return <div className="flex justify-center p-8"><LoaderCircle className="h-6 w-6 animate-spin text-blue-600" /></div>;
-  return <section className="space-y-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-xs">
-    <h2 className="text-lg font-black">Applications and invitations</h2>
+  if (loading) return <LoadingState label={copy.loading} />;
+  return <section className="eq-requests" aria-labelledby="project-requests-title">
+    <h2 id="project-requests-title">{copy.requests}</h2>
     {error && <div role="alert" className="rounded-xl bg-red-50 p-3 text-xs font-semibold text-red-700">{error}</div>}
-    <div><h3 className="mb-2 text-sm font-black">My applications</h3>{applications.length === 0 ? <p className="text-xs text-slate-500">No applications.</p> : applications.map((application) => <div key={application.id} className="mb-2 flex items-center justify-between rounded-xl bg-slate-50 p-3 text-xs"><span>{application.role?.project?.title ?? 'Project'} · {application.role?.title ?? 'Role'} · {application.status}</span>{application.status === 'pending' && <button type="button" onClick={() => void action(() => withdrawProjectApplication(application.id))} className="font-bold text-red-600">Withdraw</button>}{application.status === 'accepted' && application.role?.project && <button type="button" onClick={() => void openConversation(application.role!.project!.owner_id, application.project_id)} className="inline-flex items-center gap-1 font-bold text-blue-700"><MessageCircle className="h-3 w-3" />Message owner</button>}</div>)}</div>
-    <div><h3 className="mb-2 text-sm font-black">My invitations</h3>{invitations.length === 0 ? <p className="text-xs text-slate-500">No invitations.</p> : invitations.map((invitation) => { const expired = invitation.status === 'pending' && Date.parse(invitation.expires_at) <= Date.now(); return <div key={invitation.id} className="mb-2 rounded-xl bg-slate-50 p-3 text-xs"><div className="font-bold">{invitation.role?.project?.title ?? 'Project'} · {invitation.role?.title ?? 'Role'} · {expired ? 'expired' : invitation.status}</div>{invitation.status === 'pending' && <div className="mt-2 flex gap-2">{!expired && <button type="button" onClick={() => void action(() => acceptProjectInvitation(invitation.id))} className="rounded-lg bg-emerald-600 px-2 py-1 font-bold text-white">Accept</button>}<button type="button" onClick={() => void action(() => rejectProjectInvitation(invitation.id))} className="rounded-lg border border-slate-200 px-2 py-1 font-bold">Reject</button></div>}{invitation.status === 'accepted' && invitation.inviter && <button type="button" onClick={() => void openConversation(invitation.inviter!.id, invitation.project_id)} className="mt-2 inline-flex items-center gap-1 font-bold text-blue-700"><MessageCircle className="h-3 w-3" />Message</button>}</div>; })}</div>
+    <section className="eq-requests__group" aria-labelledby="my-applications-title"><h3 id="my-applications-title">{copy.myApplications}</h3>{applications.length === 0 ? <EmptyState title={copy.noApplications} /> : applications.map((application) => <article key={application.id} className="eq-request-row"><div><strong>{application.role?.project?.title ?? 'Project'}</strong><span>{application.role?.title ?? 'Role'}</span><span className="eq-status-label"><CircleDot aria-hidden="true" />{requestStatusLabel(application.status, lang)}</span></div><div className="eq-request-row__actions">{application.status === 'pending' && <Button variant="ghost" onClick={() => void action(() => withdrawProjectApplication(application.id))}>{copy.withdraw}</Button>}{application.status === 'accepted' && application.role?.project && <Button variant="secondary" onClick={() => void openConversation(application.role!.project!.owner_id, application.project_id)}><MessageCircle aria-hidden="true" />{copy.messageOwner}</Button>}</div></article>)}</section>
+    <section className="eq-requests__group" aria-labelledby="my-invitations-title"><h3 id="my-invitations-title">{copy.myInvitations}</h3>{invitations.length === 0 ? <EmptyState title={copy.noInvitations} /> : invitations.map((invitation) => { const expired = invitation.status === 'pending' && Date.parse(invitation.expires_at) <= Date.now(); return <article key={invitation.id} className="eq-request-row"><div><strong>{invitation.role?.project?.title ?? 'Project'}</strong><span>{invitation.role?.title ?? 'Role'}</span><span className="eq-status-label"><CircleDot aria-hidden="true" />{expired ? copy.expired : requestStatusLabel(invitation.status, lang)}</span></div><div className="eq-request-row__actions">{invitation.status === 'pending' && <>{!expired && <Button onClick={() => void action(() => acceptProjectInvitation(invitation.id))}>{copy.accept}</Button>}<Button variant="secondary" onClick={() => void action(() => rejectProjectInvitation(invitation.id))}>{copy.reject}</Button></>}{invitation.status === 'accepted' && invitation.inviter && <Button variant="secondary" onClick={() => void openConversation(invitation.inviter!.id, invitation.project_id)}><MessageCircle aria-hidden="true" />{copy.message}</Button>}</div></article>; })}</section>
   </section>;
 }
