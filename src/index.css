@@ -776,6 +776,13 @@ select {
   .eq-mobile-menu__sheet { right: 1rem; left: auto; width: min(28rem, calc(100vw - 2rem)); }
 }
 
+@media (min-width: 48rem) and (max-width: 63.999rem) {
+  .eq-brand__beta,
+  .eq-profile-button__name {
+    display: none;
+  }
+}
+
 @media (min-width: 64rem) {
   .eq-sidebar { display: flex; }
   .eq-bottom-nav,
