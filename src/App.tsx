@@ -26,6 +26,7 @@ import { BetaOnboardingCard } from './components/BetaOnboardingCard';
 import { BetaFeedbackModal } from './components/BetaFeedbackModal';
 import { GamificationPanel } from './components/GamificationPanel';
 import { loadGamification, type GamificationState } from './gamification/gamificationApi';
+import { ErrorState, LoadingState } from './components/ui';
 import {
   completeBetaOnboarding,
   loadBetaState,
@@ -97,6 +98,7 @@ export default function App() {
   const [accountLoading, setAccountLoading] = useState(false);
   const [quests, setQuests] = useState<Record<string, Quest>>(QUESTS);
   const [gamification, setGamification] = useState<GamificationState | null>(null);
+  const [gamificationStatus, setGamificationStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
 
   const t = TRANSLATIONS[lang];
 
@@ -119,22 +121,28 @@ export default function App() {
       setAccountLoading(false);
       setQuests(QUESTS);
       setGamification(null);
+      setGamificationStatus('idle');
       return;
     }
 
     let active = true;
     setAccountLoading(true);
+    setGamificationStatus('loading');
     setQuests({});
     apiFetch('/api/me/daily-activity', { method: 'POST' })
-      .then(() => loadGamification())
-      .then((gamificationState) => {
-        if (active) setGamification(gamificationState);
-        return Promise.all([
+      .then(() => Promise.all([
+        loadGamification()
+          .then((gamificationState) => {
+            if (active) {
+              setGamification(gamificationState);
+              setGamificationStatus('ready');
+            }
+          })
+          .catch(() => { if (active) setGamificationStatus('error'); }),
         apiFetch<CanonicalUser>('/api/me'),
         apiFetch<QuestStateResponse>('/api/quests'),
-        ]);
-      })
-      .then(([{ profile, private_settings, progress, completed_quests }, questState]) => {
+      ]))
+      .then(([, { profile, private_settings, progress, completed_quests }, questState]) => {
         if (!active) return;
         const canonical = { profile, private_settings, progress, completed_quests };
         setAccount(canonical);
@@ -158,7 +166,10 @@ export default function App() {
         });
       })
       .catch(() => {
-        if (active) setAccountLoading(false);
+        if (active) {
+          setAccountLoading(false);
+          setGamificationStatus((status) => status === 'loading' ? 'error' : status);
+        }
       });
 
     return () => { active = false; };
@@ -216,13 +227,14 @@ export default function App() {
     const timeout = window.setTimeout(() => {
       loadGamification().then((state) => {
         setGamification(state);
+        setGamificationStatus('ready');
         setUser((previous) => ({
           ...previous,
           xp: state.progression.total_xp,
           level: state.progression.level,
           streak: state.streak.current,
         }));
-      }).catch(() => undefined);
+      }).catch(() => setGamificationStatus('error'));
     }, 300);
     return () => window.clearTimeout(timeout);
   }, [activeTab, accountLoading, auth.user]);
@@ -294,13 +306,19 @@ export default function App() {
         <div className="eq-app__column">
       <main className="eq-app__main space-y-5 md:space-y-8">
         {/* User Profile Stats Header Bar (Incorporating exact design from screenshot) */}
-        {activeTab !== 'profile' && (
+        {activeTab !== 'profile' && activeTab !== 'home' && (
           <ProfileStats user={user} lang={lang} onNavigateToQuest={handleNavigateToQuest} />
         )}
 
         {/* Tab Content Routing */}
         {activeTab === 'home' && (
           <div className="space-y-4 sm:space-y-6 animate-fade-in">
+            {auth.user && gamification && <GamificationPanel state={gamification} language={lang} onNavigate={setActiveTab} />}
+            {auth.user && !gamification && gamificationStatus === 'loading' && <LoadingState label={lang === 'ru' ? 'Загружаем инженерный прогресс…' : lang === 'kk' ? 'Инженерлік прогресс жүктелуде…' : 'Loading engineering progress…'} />}
+            {auth.user && !gamification && gamificationStatus === 'error' && <ErrorState
+              title={lang === 'ru' ? 'Не удалось загрузить прогресс' : lang === 'kk' ? 'Прогресті жүктеу мүмкін болмады' : 'Could not load progress'}
+              description={lang === 'ru' ? 'Основные разделы доступны. Обновите страницу, чтобы повторить попытку.' : lang === 'kk' ? 'Негізгі бөлімдер қолжетімді. Қайталап көру үшін бетті жаңартыңыз.' : 'Core features remain available. Refresh the page to try again.'}
+            />}
             {auth.user && <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-950">
               <span><strong>Controlled Beta.</strong> {lang === 'ru' ? 'Доступ ограничен, функции могут меняться — ваши отзывы помогают улучшать продукт.' : lang === 'kk' ? 'Қолжетімділік шектеулі, функциялар өзгеруі мүмкін — пікіріңіз өнімді жақсартады.' : 'Access is limited and features may change—your feedback helps improve the product.'}</span>
               <button type="button" onClick={() => setFeedbackOpen(true)} className="font-black text-blue-700 hover:underline">{lang === 'ru' ? 'Отправить отзыв' : lang === 'kk' ? 'Пікір жіберу' : 'Send feedback'}</button>
@@ -308,9 +326,8 @@ export default function App() {
             {auth.user && betaParticipant && !betaParticipant.onboarding_completed_at && <BetaOnboardingCard
               lang={lang} completing={betaCompleting} onNavigate={setActiveTab} onComplete={completeOnboarding}
             />}
-            {auth.user && gamification && <GamificationPanel state={gamification} language={lang} />}
             {/* Hero Section Banner (Soft, minimalist and elegant) */}
-            <div className="bg-gradient-to-br from-slate-50 via-slate-100/40 to-blue-50/30 text-slate-800 rounded-2xl p-6 sm:p-8 md:p-10 shadow-xs relative overflow-hidden border border-slate-200/60">
+            {!auth.user && <div className="bg-gradient-to-br from-slate-50 via-slate-100/40 to-blue-50/30 text-slate-800 rounded-2xl p-6 sm:p-8 md:p-10 shadow-xs relative overflow-hidden border border-slate-200/60">
               {/* Background ambient glow effects */}
               <div className="absolute top-0 right-0 -mt-10 -mr-10 w-72 h-72 bg-blue-500/5 rounded-full blur-3xl pointer-events-none" />
               <div className="absolute bottom-0 left-1/3 w-60 h-60 bg-indigo-500/5 rounded-full blur-2xl pointer-events-none" />
@@ -363,7 +380,7 @@ export default function App() {
                   </div>
                 </div>
               </div>
-            </div>
+            </div>}
 
             {/* Quick Access Feature Cards Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
