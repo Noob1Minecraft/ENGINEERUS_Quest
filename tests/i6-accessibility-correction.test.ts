@@ -12,8 +12,8 @@ test('AI rename and delete dialogs restore their exact conversation management o
   const ai = source('src/components/AIAssistantTab.tsx');
   const focusHook = source('src/hooks/useDialogFocus.ts');
 
-  assert.match(ai, /dialogReturnFocusRef\.current = sessionMenuTriggersRef\.current\.get\(session\.id\) \?\? null;/u);
-  assert.equal((ai.match(/dialogReturnFocusRef\.current = sessionMenuTriggersRef\.current\.get\(session\.id\) \?\? null;/gu) ?? []).length, 2);
+  assert.match(ai, /dialogReturnFocusRef\.current = event\.currentTarget;/u);
+  assert.doesNotMatch(ai, /dialogReturnFocusRef\.current = sessionMenuTriggersRef/u);
   assert.match(ai, /returnFocusRef: dialogReturnFocusRef/u);
   assert.match(focusHook, /const returnTarget = returnFocusRef\?\.current;/u);
   assert.match(focusHook, /returnTarget\?\.isConnected/u);

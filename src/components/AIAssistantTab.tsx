@@ -773,14 +773,12 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
       : { manage: 'Управление чатом', rename: 'Переименовать', delete: 'Удалить чат', renameTitle: 'Переименовать чат', deleteTitle: 'Удалить этот чат?', deleteBody: 'Чат и его сообщения будут удалены безвозвратно. Прикреплённые документы и изображения останутся в библиотеке.', titleLabel: 'Название чата', confirmDelete: 'Удалить', cancel: 'Отмена' };
 
   const openRenameDialog = (session: ChatSession) => {
-    dialogReturnFocusRef.current = sessionMenuTriggersRef.current.get(session.id) ?? null;
     setSessionMenuId(null);
     setNewTitleInput(session.title);
     setRenameTarget(session);
   };
 
   const openDeleteDialog = (session: ChatSession) => {
-    dialogReturnFocusRef.current = sessionMenuTriggersRef.current.get(session.id) ?? null;
     setSessionMenuId(null);
     setDeleteTarget(session);
   };
@@ -806,7 +804,10 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
         aria-label={`${managementCopy.manage}: ${translateSessionTitle(session.title)}`}
         aria-haspopup="menu"
         aria-expanded={sessionMenuId === session.id}
-        onClick={() => setSessionMenuId((current) => current === session.id ? null : session.id)}
+        onClick={(event) => {
+          dialogReturnFocusRef.current = event.currentTarget;
+          setSessionMenuId((current) => current === session.id ? null : session.id);
+        }}
         className={`rounded-lg p-1.5 transition ${inverted ? 'text-white hover:bg-blue-500' : selected ? 'text-blue-700 hover:bg-blue-100' : 'text-slate-500 hover:bg-slate-200'}`}
       >
         <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
