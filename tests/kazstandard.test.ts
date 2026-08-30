@@ -904,8 +904,12 @@ test("disabled lookup regenerates once and persists only a response without inve
 
 test("extracts complete Kazakh, regional, slash, multipart, and colon standard identifiers", () => {
   const identifiers = extractStandardIdentifiers([
+    "ГОСТ Р 7.0.5-2008",
     "ГОСТ EN 1234-5:2020",
     "СП РК 2.03-01-2006",
+    "ННД 1.04.08-2018",
+    "NND 1.03.01-2018",
+    "EN 1998-1:2004",
     "СТ РК ISO/IEC 17025-2019",
     "ҚР СТ 1234-2020",
     "ТР ЕАЭС 014/2011",
@@ -913,13 +917,60 @@ test("extracts complete Kazakh, regional, slash, multipart, and colon standard i
   ].join("; ")).map(({ normalized }) => normalized);
 
   assert.deepEqual(identifiers, [
+    "ГОСТ Р 7.0.5-2008",
     "ГОСТ EN 1234-5:2020",
     "СП РК 2.03-01-2006",
+    "ННД 1.04.08-2018",
+    "NND 1.03.01-2018",
+    "EN 1998-1:2004",
     "СТ РК ISO/IEC 17025-2019",
     "ҚР СТ 1234-2020",
     "ТР ЕАЭС 014/2011",
     "ТР ТС 032/2013",
   ]);
+});
+
+test("no_result blocks every guarded normative family while leaving ordinary engineering numbers alone", () => {
+  const invented = [
+    "ННД 1.04.08-2018",
+    "СНиП РК 2.03-30-2099",
+    "СП РК 2.03-01-2099",
+    "СТ РК 9999-2099",
+    "ГОСТ Р 7.0.5-2099",
+    "ISO 9999-2099",
+    "EN 1998-1:2099",
+  ];
+  for (const designation of invented) {
+    const result = guardStandardsResponse({
+      content: `Для проекта применяется ${designation}.`,
+      userPrompt: "Какие нормы регламентируют сейсмостойкость здания?",
+      lookupResult: { kind: "no_result" },
+      language: "ru",
+    });
+    assert.equal(result.rejected, true, designation);
+    assert.deepEqual(result.rejectedDesignations, [designation]);
+  }
+
+  const ordinary = guardStandardsResponse({
+    content: "Расчётная нагрузка составляет 20 кН, момент — 42 Н·м, ускорение — 0.3g, а обследование выполнено в 2018 году.",
+    userPrompt: "Дайте общее инженерное пояснение без ссылки на стандарт.",
+    lookupResult: { kind: "no_result" },
+    language: "ru",
+  });
+  assert.equal(ordinary.rejected, false);
+});
+
+test("no_result identifier enforcement is language-independent", () => {
+  for (const language of ["ru", "kk", "en"] as const) {
+    const result = guardStandardsResponse({
+      content: "NND 1.04.08-2018 is mandatory.",
+      userPrompt: language === "kk" ? "Қандай нормалар қолданылады?" : language === "en" ? "Which rules apply?" : "Какие нормы применяются?",
+      lookupResult: { kind: "no_result" },
+      language,
+    });
+    assert.equal(result.rejected, true);
+    assert.doesNotMatch(result.content, /1\.04\.08-2018/u);
+  }
 });
 
 test("fails closed when a no-result response invents a numbered SNiP or SN RK document", () => {

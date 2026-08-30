@@ -62,7 +62,8 @@ export function buildStandardsSystemInstructions(result: StandardsLookupResult):
 - Never invent clauses, requirements, missing identifiers, or regulatory conclusions.
 - Distinguish verified metadata from general engineering knowledge.
 - Never claim compliance based only on catalog metadata.
-- If lookup status is no_result or unavailable, introduce no specific standard identifier unless the user explicitly supplied it.
+- If lookup status is no_result or unavailable, introduce no specific standard identifier unless the user explicitly supplied it. This includes numbered ГОСТ, ГОСТ Р, СТ РК, СН РК, СНиП, СНиП РК, СП РК, ННД, ISO, IEC, EN, and equivalent Latin or Kazakh forms.
+- With no_result, do not invent a replacement or successor document, clause number, mandatory requirement, or treat model memory as KazStandard evidence.
 - If lookup status is no_result, clearly state that no specific current standard was verified, then still provide useful general engineering guidance. Generic, non-numbered standard families such as ESKD may be discussed when relevant.
 - If candidates are present, use only their exact verified designations or identifiers explicitly supplied by the user.
 - A user-supplied but unverified identifier must not be described as current, valid, or verified.
