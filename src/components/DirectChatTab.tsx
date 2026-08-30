@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, MessageCircle, Plus, Send, UsersRound, X } from 'lucide-react';
 import type { Language, ProjectApplication, ProjectInvitation } from '../types';
-import { ApiError } from '../utils/api';
 import {
   createDirectConversation,
   listDirectConversations,
@@ -14,6 +13,7 @@ import {
 import { directChatPollDelay } from '../directChat/pollingPolicy';
 import { listMyProjectApplications, listMyProjectInvitations } from '../projects/projectApi';
 import { Button, EmptyState, LoadingState } from './ui';
+import { useDialogFocus } from '../hooks/useDialogFocus';
 
 const TEXT = {
   ru: {
@@ -22,7 +22,7 @@ const TEXT = {
     placeholder: 'Написать участнику…', send: 'Отправить', signIn: 'Войдите, чтобы открыть сообщения.', start: 'Начать разговор',
     startTitle: 'Новый разговор', startHint: 'Показаны только участники, доступные по действующим проектным связям.',
     noEligible: 'Сейчас нет участников, с которыми можно начать новый разговор.', close: 'Закрыть', back: 'К диалогам',
-    owner: 'Владелец проекта', collaborator: 'Участник проекта', loading: 'Загружаем диалоги…', starting: 'Открываем разговор…', unread: 'непрочитанных',
+    owner: 'Владелец проекта', collaborator: 'Участник проекта', loading: 'Загружаем диалоги…', starting: 'Открываем разговор…', unread: 'непрочитанных', error: 'Не удалось выполнить действие с сообщениями. Повторите позже.',
   },
   kk: {
     title: 'Хабарламалар', subtitle: 'Ортақ жобалар қатысушыларымен жұмыс диалогтары.', empty: 'Жеке диалогтар әзірге жоқ.',
@@ -30,7 +30,7 @@ const TEXT = {
     placeholder: 'Қатысушыға жазыңыз…', send: 'Жіберу', signIn: 'Хабарламаларды ашу үшін кіріңіз.', start: 'Сөйлесуді бастау',
     startTitle: 'Жаңа сөйлесу', startHint: 'Тек қолданыстағы жоба байланысы бойынша қолжетімді қатысушылар көрсетіледі.',
     noEligible: 'Қазір жаңа сөйлесуді бастауға болатын қатысушылар жоқ.', close: 'Жабу', back: 'Диалогтарға',
-    owner: 'Жоба иесі', collaborator: 'Жоба қатысушысы', loading: 'Диалогтар жүктелуде…', starting: 'Сөйлесу ашылуда…', unread: 'оқылмаған',
+    owner: 'Жоба иесі', collaborator: 'Жоба қатысушысы', loading: 'Диалогтар жүктелуде…', starting: 'Сөйлесу ашылуда…', unread: 'оқылмаған', error: 'Хабарламалармен әрекетті орындау мүмкін болмады. Кейінірек қайталап көріңіз.',
   },
   en: {
     title: 'Messages', subtitle: 'Working conversations with people from shared projects.', empty: 'No direct conversations yet.',
@@ -38,7 +38,7 @@ const TEXT = {
     placeholder: 'Message a collaborator…', send: 'Send', signIn: 'Sign in to open messages.', start: 'Start conversation',
     startTitle: 'New conversation', startHint: 'Only people eligible through an existing project relationship are shown.',
     noEligible: 'There are no eligible collaborators for a new conversation right now.', close: 'Close', back: 'Back to conversations',
-    owner: 'Project owner', collaborator: 'Project collaborator', loading: 'Loading conversations…', starting: 'Opening conversation…', unread: 'unread',
+    owner: 'Project owner', collaborator: 'Project collaborator', loading: 'Loading conversations…', starting: 'Opening conversation…', unread: 'unread', error: 'The messaging action could not be completed. Please try again.',
   },
 } satisfies Record<Language, Record<string, string>>;
 
@@ -48,8 +48,8 @@ function name(conversation: DirectConversation) {
   return conversation.other_user?.display_name || conversation.other_user?.username || 'Engineer';
 }
 
-function errorText(error: unknown) {
-  return error instanceof ApiError ? error.message : 'Messaging is temporarily unavailable.';
+function errorText(_error: unknown, lang: Language) {
+  return TEXT[lang].error;
 }
 
 function acceptedCandidates(applications: ProjectApplication[], invitations: ProjectInvitation[], lang: Language): ConversationCandidate[] {
@@ -84,7 +84,9 @@ export function DirectChatTab({ authenticated, currentUserId, lang, initialConve
   const [candidates, setCandidates] = useState<ConversationCandidate[]>([]);
   const startTriggerRef = useRef<HTMLButtonElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const startDialogRef = useRef<HTMLElement>(null);
   const selectedRef = useRef(selectedId); selectedRef.current = selectedId;
+  useDialogFocus({ open: startOpen, onClose: () => setStartOpen(false), dialogRef: startDialogRef, initialFocusRef: closeRef });
 
   const refreshConversations = useCallback(async () => {
     const result = await listDirectConversations();
@@ -95,6 +97,7 @@ export function DirectChatTab({ authenticated, currentUserId, lang, initialConve
 
   const refreshMessages = useCallback(async (conversationId: string, markRead: boolean) => {
     const result = await listDirectMessages(conversationId);
+    if (selectedRef.current !== conversationId) return;
     setMessages((current) => {
       const merged = new Map([...current, ...result.messages].map((message) => [message.id, message]));
       return [...merged.values()].sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id));
@@ -105,14 +108,14 @@ export function DirectChatTab({ authenticated, currentUserId, lang, initialConve
   useEffect(() => {
     if (!authenticated) { setConversations([]); setMessages([]); return; }
     let active = true; setLoading(true); setError('');
-    refreshConversations().catch((requestError) => { if (active) setError(errorText(requestError)); }).finally(() => { if (active) setLoading(false); });
+    refreshConversations().catch((requestError) => { if (active) setError(errorText(requestError, lang)); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [authenticated, refreshConversations]);
+  }, [authenticated, lang, refreshConversations]);
 
   useEffect(() => {
     if (!selectedId || !authenticated) { setMessages([]); return; }
-    setMessages([]); void refreshMessages(selectedId, true).catch((requestError) => setError(errorText(requestError)));
-  }, [authenticated, selectedId, refreshMessages]);
+    setMessages([]); void refreshMessages(selectedId, true).catch((requestError) => setError(errorText(requestError, lang)));
+  }, [authenticated, lang, selectedId, refreshMessages]);
 
   useEffect(() => {
     if (!authenticated) return;
@@ -142,13 +145,6 @@ export function DirectChatTab({ authenticated, currentUserId, lang, initialConve
     return () => { active = false; if (timer !== undefined) window.clearTimeout(timer); window.removeEventListener('focus', pollNow); document.removeEventListener('visibilitychange', onVisibilityChange); };
   }, [authenticated, refreshConversations, refreshMessages]);
 
-  useEffect(() => {
-    if (!startOpen) return;
-    const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') setStartOpen(false); };
-    document.addEventListener('keydown', onKeyDown); closeRef.current?.focus();
-    return () => { document.removeEventListener('keydown', onKeyDown); startTriggerRef.current?.focus(); };
-  }, [startOpen]);
-
   const selected = useMemo(() => conversations.find(({ id }) => id === selectedId) ?? null, [conversations, selectedId]);
 
   async function openStartConversation(): Promise<void> {
@@ -156,7 +152,7 @@ export function DirectChatTab({ authenticated, currentUserId, lang, initialConve
     try {
       const [applications, invitations] = await Promise.all([listMyProjectApplications(), listMyProjectInvitations()]);
       setCandidates(acceptedCandidates(applications, invitations, lang));
-    } catch (requestError) { setError(errorText(requestError)); }
+    } catch (requestError) { setError(errorText(requestError, lang)); }
     finally { setStartLoading(false); }
   }
 
@@ -165,7 +161,7 @@ export function DirectChatTab({ authenticated, currentUserId, lang, initialConve
     try {
       const { conversation_id } = await createDirectConversation(candidate.profileId, candidate.projectId);
       await refreshConversations(); setSelectedId(conversation_id); setStartOpen(false);
-    } catch (requestError) { setError(errorText(requestError)); }
+    } catch (requestError) { setError(errorText(requestError, lang)); }
     finally { setStartLoading(false); }
   }
 
@@ -176,7 +172,7 @@ export function DirectChatTab({ authenticated, currentUserId, lang, initialConve
       const { message } = await sendDirectMessage(selectedId, content);
       setMessages((current) => current.some(({ id }) => id === message.id) ? current : [...current, message]);
       setDraft(''); await refreshConversations();
-    } catch (requestError) { setError(errorText(requestError)); }
+    } catch (requestError) { setError(errorText(requestError, lang)); }
     finally { setSending(false); }
   }
 
@@ -201,6 +197,6 @@ export function DirectChatTab({ authenticated, currentUserId, lang, initialConve
         </>}
       </div>
     </div>
-    {startOpen && <div className="eq-dialog-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) setStartOpen(false); }}><section role="dialog" aria-modal="true" aria-labelledby="start-conversation-title" className="eq-start-conversation"><header><div><h2 id="start-conversation-title">{copy.startTitle}</h2><p>{copy.startHint}</p></div><button ref={closeRef} type="button" onClick={() => setStartOpen(false)} aria-label={copy.close}><X aria-hidden="true" /></button></header>{startLoading ? <LoadingState label={copy.starting} /> : candidates.length === 0 ? <EmptyState title={copy.noEligible} description={copy.startHint} /> : <div className="eq-start-conversation__list">{candidates.map((candidate) => <button type="button" key={candidate.key} onClick={() => void startConversation(candidate)}><UsersRound aria-hidden="true" /><span><strong>{candidate.name}</strong><span>{candidate.project} · {candidate.context}</span></span></button>)}</div>}</section></div>}
+    {startOpen && <div className="eq-dialog-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) setStartOpen(false); }}><section ref={startDialogRef} role="dialog" aria-modal="true" aria-labelledby="start-conversation-title" className="eq-start-conversation"><header><div><h2 id="start-conversation-title">{copy.startTitle}</h2><p>{copy.startHint}</p></div><button ref={closeRef} type="button" onClick={() => setStartOpen(false)} aria-label={copy.close}><X aria-hidden="true" /></button></header>{startLoading ? <LoadingState label={copy.starting} /> : candidates.length === 0 ? <EmptyState title={copy.noEligible} description={copy.startHint} /> : <div className="eq-start-conversation__list">{candidates.map((candidate) => <button type="button" key={candidate.key} onClick={() => void startConversation(candidate)}><UsersRound aria-hidden="true" /><span><strong>{candidate.name}</strong><span>{candidate.project} · {candidate.context}</span></span></button>)}</div>}</section></div>}
   </section>;
 }

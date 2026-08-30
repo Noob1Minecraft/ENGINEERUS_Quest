@@ -62,7 +62,10 @@ test('Start conversation derives candidates only from accepted project relations
   assert.match(source,/invitation\.status !== 'accepted'/);
   assert.match(source,/createDirectConversation\(candidate\.profileId, candidate\.projectId\)/);
   assert.match(source,/role="dialog"/);
-  assert.match(source,/event\.key === 'Escape'/);
+  assert.match(source,/useDialogFocus\(\{ open: startOpen/);
+  const focusHook=readFileSync(path.resolve('src/hooks/useDialogFocus.ts'),'utf8');
+  assert.match(focusHook,/event\.key === 'Escape'/);
+  assert.match(focusHook,/event\.key !== 'Tab'/);
   assert.doesNotMatch(source,/searchProfiles|\/api\/profiles|email|telegram_user_id|oauth/i);
 });
 

@@ -8,6 +8,7 @@ import { loadSavedAiNotes, storeSavedAiNotes } from '../utils/savedAiNotes';
 import { activeChatStorageKey, buildConversationTitle, clearChatDraft, isUntitledConversation, loadChatDraft, storeChatDraft } from '../ai/chatWorkspace';
 import { AiAttachmentPicker } from './AiAttachmentPicker';
 import { Button } from './ui';
+import { useDialogFocus } from '../hooks/useDialogFocus';
 import {
   DraftingCompass,
   GraduationCap,
@@ -206,6 +207,8 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
   const messagePagesInFlightRef = useRef<Set<string>>(new Set());
   const sessionMenuTriggersRef = useRef<Map<string, HTMLButtonElement>>(new Map());
   const dialogReturnFocusRef = useRef<HTMLButtonElement | null>(null);
+  const managementDialogRef = useRef<HTMLElement>(null);
+  const managementInitialFocusRef = useRef<HTMLElement>(null);
   const newChatButtonRef = useRef<HTMLButtonElement | null>(null);
 
   // Saved Notes Library
@@ -314,18 +317,11 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
   }, [activeSessionId, authenticatedUserId, promptText]);
 
   useEffect(() => {
-    if (!sessionMenuId && !renameTarget && !deleteTarget) return;
+    if (!sessionMenuId) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       event.preventDefault();
-      if (renameTarget) {
-        setRenameTarget(null);
-        queueMicrotask(() => dialogReturnFocusRef.current?.focus());
-      } else if (deleteTarget) {
-        setDeleteTarget(null);
-        queueMicrotask(() => dialogReturnFocusRef.current?.focus());
-      }
-      else if (sessionMenuId) {
+      if (sessionMenuId) {
         const trigger = sessionMenuTriggersRef.current.get(sessionMenuId);
         setSessionMenuId(null);
         queueMicrotask(() => trigger?.focus());
@@ -333,7 +329,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [deleteTarget, renameTarget, sessionMenuId]);
+  }, [sessionMenuId]);
 
   // Hydrate only the selected chat. Other sessions remain lightweight until opened.
   useEffect(() => {
@@ -793,8 +789,14 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
   const closeManagementDialog = () => {
     setRenameTarget(null);
     setDeleteTarget(null);
-    queueMicrotask(() => dialogReturnFocusRef.current?.focus());
   };
+
+  useDialogFocus({
+    open: Boolean(renameTarget || deleteTarget),
+    onClose: closeManagementDialog,
+    dialogRef: managementDialogRef,
+    initialFocusRef: managementInitialFocusRef,
+  });
 
   const sessionActions = (session: ChatSession, selected: boolean, inverted = false) => (
     <div className="relative shrink-0" onClick={(event) => event.stopPropagation()}>
@@ -1505,10 +1507,10 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
       )}
       {renameTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) closeManagementDialog(); }}>
-          <form onSubmit={(event) => { event.preventDefault(); void handleRenameChat(renameTarget.id, newTitleInput); }} role="dialog" aria-modal="true" aria-labelledby="rename-chat-title" className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl">
+          <form ref={managementDialogRef as React.RefObject<HTMLFormElement>} onSubmit={(event) => { event.preventDefault(); void handleRenameChat(renameTarget.id, newTitleInput); }} role="dialog" aria-modal="true" aria-labelledby="rename-chat-title" className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl">
             <h2 id="rename-chat-title" className="text-lg font-black text-slate-950">{managementCopy.renameTitle}</h2>
             <label className="mt-4 block text-xs font-bold text-slate-700">{managementCopy.titleLabel}
-              <input autoFocus required maxLength={200} value={newTitleInput} onChange={(event) => setNewTitleInput(event.target.value)} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+              <input ref={managementInitialFocusRef as React.RefObject<HTMLInputElement>} required maxLength={200} value={newTitleInput} onChange={(event) => setNewTitleInput(event.target.value)} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
             </label>
             <div className="mt-5 flex justify-end gap-2"><Button type="button" variant="secondary" disabled={sessionMutationPending} onClick={closeManagementDialog}>{managementCopy.cancel}</Button><Button type="submit" disabled={sessionMutationPending || !newTitleInput.trim()}>{managementCopy.rename}</Button></div>
           </form>
@@ -1516,11 +1518,11 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
       )}
       {deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) closeManagementDialog(); }}>
-          <div role="dialog" aria-modal="true" aria-labelledby="delete-chat-title" aria-describedby="delete-chat-description" className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl">
+          <div ref={managementDialogRef as React.RefObject<HTMLDivElement>} role="dialog" aria-modal="true" aria-labelledby="delete-chat-title" aria-describedby="delete-chat-description" className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl">
             <h2 id="delete-chat-title" className="text-lg font-black text-slate-950">{managementCopy.deleteTitle}</h2>
             <p className="mt-2 text-sm font-semibold text-slate-800">{translateSessionTitle(deleteTarget.title)}</p>
             <p id="delete-chat-description" className="mt-2 text-sm leading-6 text-slate-600">{managementCopy.deleteBody}</p>
-            <div className="mt-5 flex justify-end gap-2"><Button type="button" variant="secondary" disabled={sessionMutationPending} onClick={closeManagementDialog}>{managementCopy.cancel}</Button><Button type="button" variant="danger" disabled={sessionMutationPending} onClick={() => void handleDeleteChat(deleteTarget.id)}>{managementCopy.confirmDelete}</Button></div>
+            <div className="mt-5 flex justify-end gap-2"><button ref={managementInitialFocusRef as React.RefObject<HTMLButtonElement>} type="button" className="eq-button eq-button--secondary" disabled={sessionMutationPending} onClick={closeManagementDialog}>{managementCopy.cancel}</button><Button type="button" variant="danger" disabled={sessionMutationPending} onClick={() => void handleDeleteChat(deleteTarget.id)}>{managementCopy.confirmDelete}</Button></div>
           </div>
         </div>
       )}

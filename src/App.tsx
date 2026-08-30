@@ -1,21 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { lazy, Suspense, useState, useEffect, useRef } from 'react';
 import { UserProfile, Language, Quest, CanonicalUser } from './types';
 import { TRANSLATIONS, QUESTS } from './data';
 import { verifySystemIntegrity } from './utils/integrity';
 import { Header } from './components/Header';
 import { AppSidebar } from './components/AppSidebar';
-import { ProfileStats } from './components/ProfileStats';
-import { QuestsTab } from './components/QuestsTab';
-import { LeaderboardTab } from './components/LeaderboardTab';
-import { AIAssistantTab } from './components/AIAssistantTab';
-import { RoadmapBooksTab } from './components/RoadmapBooksTab';
 import { BottomNav } from './components/BottomNav';
 import { AuthModal } from './components/AuthModal';
-import { ProfileTab } from './components/ProfileTab';
-import { ProjectsTab } from './components/ProjectsTab';
-import { EngiMatchTab } from './components/EngiMatchTab';
-import { DirectChatTab } from './components/DirectChatTab';
-import { DocumentsTab } from './components/DocumentsTab';
 import type { AiDocument } from './documents/documentApi';
 import type { AiImage } from './images/imageApi';
 import { DraftingCompass, Zap, ArrowRight, ShieldCheck, Cpu } from 'lucide-react';
@@ -35,6 +25,17 @@ import {
   type BetaFeedbackInput,
   type BetaParticipant,
 } from './beta/betaApi';
+
+const ProfileStats = lazy(() => import('./components/ProfileStats').then(({ ProfileStats: component }) => ({ default: component })));
+const QuestsTab = lazy(() => import('./components/QuestsTab').then(({ QuestsTab: component }) => ({ default: component })));
+const LeaderboardTab = lazy(() => import('./components/LeaderboardTab').then(({ LeaderboardTab: component }) => ({ default: component })));
+const AIAssistantTab = lazy(() => import('./components/AIAssistantTab').then(({ AIAssistantTab: component }) => ({ default: component })));
+const RoadmapBooksTab = lazy(() => import('./components/RoadmapBooksTab').then(({ RoadmapBooksTab: component }) => ({ default: component })));
+const ProfileTab = lazy(() => import('./components/ProfileTab').then(({ ProfileTab: component }) => ({ default: component })));
+const ProjectsTab = lazy(() => import('./components/ProjectsTab').then(({ ProjectsTab: component }) => ({ default: component })));
+const EngiMatchTab = lazy(() => import('./components/EngiMatchTab').then(({ EngiMatchTab: component }) => ({ default: component })));
+const DirectChatTab = lazy(() => import('./components/DirectChatTab').then(({ DirectChatTab: component }) => ({ default: component })));
+const DocumentsTab = lazy(() => import('./components/DocumentsTab').then(({ DocumentsTab: component }) => ({ default: component })));
 
 const GUEST_USER: UserProfile = {
   id: 'guest',
@@ -101,6 +102,11 @@ export default function App() {
   const [gamificationStatus, setGamificationStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
 
   const t = TRANSLATIONS[lang];
+  const featureLoadingLabel = lang === 'ru'
+    ? 'Открываем раздел…'
+    : lang === 'kk'
+      ? 'Бөлім ашылуда…'
+      : 'Opening workspace…';
 
   useEffect(() => {
     localStorage.setItem('lang', lang);
@@ -307,7 +313,9 @@ export default function App() {
       <main className="eq-app__main space-y-5 md:space-y-8">
         {/* User Profile Stats Header Bar (Incorporating exact design from screenshot) */}
         {activeTab !== 'profile' && activeTab !== 'home' && activeTab !== 'messages' && (
-          <ProfileStats user={user} lang={lang} onNavigateToQuest={handleNavigateToQuest} />
+          <Suspense fallback={<LoadingState label={featureLoadingLabel} />}>
+            <ProfileStats user={user} lang={lang} onNavigateToQuest={handleNavigateToQuest} />
+          </Suspense>
         )}
 
         {/* Tab Content Routing */}
@@ -394,6 +402,7 @@ export default function App() {
           </div>
         )}
 
+        <Suspense fallback={<LoadingState label={featureLoadingLabel} />}>
         {activeTab === 'quests' && (
           <QuestsTab
             user={user}
@@ -475,6 +484,7 @@ export default function App() {
             onUseWithTutor={(document: AiDocument) => { setAiDocument({ id: document.id, name: document.original_filename }); setSelectedAiModule('tutor'); setActiveTab('ai'); }}
             onUseImagesWithTutor={(images: AiImage[]) => { setAiImages(images.map((image) => ({ id: image.id, name: image.original_filename }))); setSelectedAiModule('tutor'); setActiveTab('ai'); }} />
         )}
+        </Suspense>
 
       </main>
 

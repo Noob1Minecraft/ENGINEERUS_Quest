@@ -27,7 +27,10 @@ test('EngiMatch presents deterministic engineering evidence without social match
 test('Messages keep human chat distinct and expose an eligible-only accessible start flow', () => {
   const messages = source('src/components/DirectChatTab.tsx');
   const css = source('src/index.css');
-  for (const required of ['eq-human-message', 'eq-conversation-row', 'eq-start-conversation', 'aria-modal="true"', "event.key === 'Escape'", 'startTriggerRef.current?.focus']) assert.match(messages, new RegExp(required.replace(/[?.]/g, '\\$&')));
+  for (const required of ['eq-human-message', 'eq-conversation-row', 'eq-start-conversation', 'aria-modal="true"', 'useDialogFocus', 'startDialogRef']) assert.match(messages, new RegExp(required.replace(/[?.]/g, '\\$&')));
+  const focusHook = source('src/hooks/useDialogFocus.ts');
+  assert.match(focusHook, /event\.key === 'Escape'/);
+  assert.match(focusHook, /previousFocus\.current\?\.focus/);
   assert.match(messages, /acceptedCandidates/);
   assert.match(messages, /new Map/);
   assert.match(css, /@media \(max-width: 767px\)/);

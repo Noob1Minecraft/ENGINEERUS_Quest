@@ -33,7 +33,6 @@ import {
   type CreateProjectRoleInput,
   type RoleSkillInput,
 } from '../projects/projectApi';
-import { ApiError } from '../utils/api';
 import { createDirectConversation } from '../directChat/directChatApi';
 import { Button, EmptyState, LoadingState } from './ui';
 
@@ -80,8 +79,12 @@ const EMPTY_ROLE: RoleForm = {
   title: '', description: '', discipline_id: '', positions_total: 1, status: 'open', skills: [],
 };
 
-function errorMessage(error: unknown): string {
-  return error instanceof ApiError ? error.message : 'The project request could not be completed.';
+function errorMessage(lang: Language): string {
+  return lang === 'ru'
+    ? 'Не удалось обновить заявки и роли. Повторите позже.'
+    : lang === 'kk'
+      ? 'Өтінімдер мен рөлдерді жаңарту мүмкін болмады. Кейінірек қайталап көріңіз.'
+      : 'Project requests and roles could not be refreshed. Please try again.';
 }
 
 function profileName(profile: PublicProfile | ProjectApplication['applicant'] | ProjectInvitation['invitee']): string {
@@ -216,10 +219,10 @@ export function ProjectRecruitmentPanel({
   useEffect(() => {
     let active = true;
     setLoading(true);
-    refresh().catch((requestError) => { if (active) setError(errorMessage(requestError)); })
+    refresh().catch(() => { if (active) setError(errorMessage(lang)); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [project.id, owner]);
+  }, [lang, project.id, owner]);
 
   const applicationsByRole = useMemo(() => new Map(roles.map((role) => [
     role.id, applications.filter(({ role_id }) => role_id === role.id),
@@ -228,7 +231,7 @@ export function ProjectRecruitmentPanel({
   async function action(run: () => Promise<unknown>, success: string): Promise<void> {
     setSaving(true); setError(''); setNotice('');
     try { await run(); await refresh(); setNotice(success); }
-    catch (requestError) { setError(errorMessage(requestError)); }
+    catch { setError(errorMessage(lang)); }
     finally { setSaving(false); }
   }
 
@@ -237,7 +240,7 @@ export function ProjectRecruitmentPanel({
     try {
       const { conversation_id } = await createDirectConversation(profileId, project.id);
       onOpenConversation?.(conversation_id);
-    } catch (requestError) { setError(errorMessage(requestError)); }
+    } catch { setError(errorMessage(lang)); }
     finally { setSaving(false); }
   }
 
@@ -310,15 +313,15 @@ export function ProjectRequestsPanel({ lang, onOpenConversation }: { lang: Langu
     const [applicationRows, invitationRows] = await Promise.all([listMyProjectApplications(), listMyProjectInvitations()]);
     setApplications(applicationRows); setInvitations(invitationRows);
   }
-  useEffect(() => { refresh().catch((requestError) => setError(errorMessage(requestError))).finally(() => setLoading(false)); }, []);
+  useEffect(() => { refresh().catch(() => setError(errorMessage(lang))).finally(() => setLoading(false)); }, [lang]);
   async function action(run: () => Promise<unknown>): Promise<void> {
     setError('');
-    try { await run(); await refresh(); } catch (requestError) { setError(errorMessage(requestError)); }
+    try { await run(); await refresh(); } catch { setError(errorMessage(lang)); }
   }
   async function openConversation(profileId: string, projectId: string): Promise<void> {
     setError('');
     try { const { conversation_id } = await createDirectConversation(profileId, projectId); onOpenConversation?.(conversation_id); }
-    catch (requestError) { setError(errorMessage(requestError)); }
+    catch { setError(errorMessage(lang)); }
   }
   if (loading) return <LoadingState label={copy.loading} />;
   return <section className="eq-requests" aria-labelledby="project-requests-title">

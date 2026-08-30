@@ -20,7 +20,7 @@ import type {
   ProjectVisibility,
   TaxonomyItem,
 } from '../types';
-import { ApiError, apiFetch } from '../utils/api';
+import { apiFetch } from '../utils/api';
 import {
   archiveProject,
   createProject,
@@ -92,8 +92,12 @@ function label(item: TaxonomyItem, lang: Language): string {
   return item[`label_${lang}`] || item.label_ru || item.slug;
 }
 
-function message(error: unknown): string {
-  return error instanceof ApiError ? error.message : 'The request could not be completed. Please try again.';
+function message(lang: Language): string {
+  return lang === 'ru'
+    ? 'Не удалось выполнить действие с проектом. Повторите позже.'
+    : lang === 'kk'
+      ? 'Жобамен әрекетті орындау мүмкін болмады. Кейінірек қайталап көріңіз.'
+      : 'The project action could not be completed. Please try again.';
 }
 
 function ownerName(project: ProjectSummary): string {
@@ -216,12 +220,12 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({ authenticated, lang, o
       setDiscovered(discoveryResult.projects);
       setDiscoverCursor(discoveryResult.next_cursor);
     }).catch((requestError) => {
-      if (active) setError(message(requestError));
+      if (active) setError(message(lang));
     }).finally(() => {
       if (active) setLoading(false);
     });
     return () => { active = false; };
-  }, [authenticated]);
+  }, [authenticated, lang]);
 
   async function refreshMine(): Promise<void> {
     const result = await listMyProjects();
@@ -242,7 +246,7 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({ authenticated, lang, o
       setDiscovered((current) => cursor ? [...current, ...result.projects] : result.projects);
       setDiscoverCursor(result.next_cursor);
     } catch (requestError) {
-      setError(message(requestError));
+      setError(message(lang));
     } finally {
       setLoading(false);
     }
@@ -257,7 +261,7 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({ authenticated, lang, o
       setMine((current) => [...current, ...result.projects]);
       setMyCursor(result.next_cursor);
     } catch (requestError) {
-      setError(message(requestError));
+      setError(message(lang));
     } finally {
       setLoading(false);
     }
@@ -271,7 +275,7 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({ authenticated, lang, o
       setSelected(result.project);
       setEditing(false);
     } catch (requestError) {
-      setError(message(requestError));
+      setError(message(lang));
     } finally {
       setLoading(false);
     }
@@ -293,7 +297,7 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({ authenticated, lang, o
       setForm(EMPTY_FORM);
       setNotice(lang === 'ru' ? 'Проект создан.' : lang === 'kk' ? 'Жоба құрылды.' : 'Project created.');
     } catch (requestError) {
-      setError(message(requestError));
+      setError(message(lang));
     } finally {
       setSaving(false);
     }
@@ -326,7 +330,7 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({ authenticated, lang, o
       await refreshMine();
       setNotice(lang === 'ru' ? 'Изменения сохранены.' : lang === 'kk' ? 'Өзгерістер сақталды.' : 'Changes saved.');
     } catch (requestError) {
-      setError(message(requestError));
+      setError(message(lang));
     } finally {
       setSaving(false);
     }
@@ -342,7 +346,7 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({ authenticated, lang, o
       await refreshMine();
       setNotice(lang === 'ru' ? 'Проект архивирован.' : lang === 'kk' ? 'Жоба мұрағатталды.' : 'Project archived.');
     } catch (requestError) {
-      setError(message(requestError));
+      setError(message(lang));
     } finally {
       setSaving(false);
     }

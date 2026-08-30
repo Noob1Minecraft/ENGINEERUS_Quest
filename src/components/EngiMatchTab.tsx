@@ -1,7 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ArrowRight, BriefcaseBusiness, CheckCircle2, Send, UserPlus, UsersRound, Wrench } from 'lucide-react';
 import type { EngiMatchProject, EngiMatchTeammate, Language, MyProject, ProjectRole } from '../types';
-import { ApiError } from '../utils/api';
 import { findProjectMatches, findTeammates } from '../engimatch/engimatchApi';
 import { applyToProjectRole, inviteToProjectRole, listMyProjects, listProjectRoles } from '../projects/projectApi';
 import { Button, EmptyState, LoadingState } from './ui';
@@ -31,7 +30,13 @@ const COPY = {
   },
 } satisfies Record<Language, Record<string, string>>;
 
-function errorText(error: unknown): string { return error instanceof ApiError ? error.message : 'EngiMatch is temporarily unavailable.'; }
+function errorText(lang: Language): string {
+  return lang === 'ru'
+    ? 'Не удалось обновить подбор. Повторите позже.'
+    : lang === 'kk'
+      ? 'Іріктеуді жаңарту мүмкін болмады. Кейінірек қайталап көріңіз.'
+      : 'Matching could not be refreshed. Please try again.';
+}
 
 export function EngiMatchTab({ authenticated, lang, onRequireAuth }: Props) {
   const copy = COPY[lang];
@@ -46,22 +51,28 @@ export function EngiMatchTab({ authenticated, lang, onRequireAuth }: Props) {
   const [searched, setSearched] = useState(false);
   const [error, setError] = useState('');
   const [acted, setActed] = useState<Set<string>>(new Set());
+  const [acting, setActing] = useState<Set<string>>(new Set());
+  const actingRef = useRef(new Set<string>());
 
   useEffect(() => {
     if (!authenticated) return;
-    listMyProjects({ limit: 25 }).then(({ projects: rows }) => setProjects(rows.filter(({ status }) => status === 'open'))).catch((reason) => setError(errorText(reason)));
-  }, [authenticated]);
+    let active = true;
+    listMyProjects({ limit: 25 }).then(({ projects: rows }) => { if (active) setProjects(rows.filter(({ status }) => status === 'open')); }).catch(() => { if (active) setError(errorText(lang)); });
+    return () => { active = false; };
+  }, [authenticated, lang]);
   useEffect(() => {
     setRoleId(''); setRoles([]); setTeammates([]); setSearched(false);
     if (!projectId) return;
-    listProjectRoles(projectId).then((rows) => setRoles(rows.filter((role) => role.status === 'open' && role.positions_available > 0))).catch((reason) => setError(errorText(reason)));
-  }, [projectId]);
+    let active = true;
+    listProjectRoles(projectId).then((rows) => { if (active) setRoles(rows.filter((role) => role.status === 'open' && role.positions_available > 0)); }).catch(() => { if (active) setError(errorText(lang)); });
+    return () => { active = false; };
+  }, [lang, projectId]);
 
-  async function loadTeammates(): Promise<void> { if (!roleId) return; setLoading(true); setSearched(true); setError(''); try { setTeammates((await findTeammates(roleId)).matches); } catch (reason) { setError(errorText(reason)); } finally { setLoading(false); } }
-  async function loadProjects(): Promise<void> { setLoading(true); setSearched(true); setError(''); try { setProjectMatches((await findProjectMatches()).matches); } catch (reason) { setError(errorText(reason)); } finally { setLoading(false); } }
+  async function loadTeammates(): Promise<void> { if (!roleId) return; setLoading(true); setSearched(true); setError(''); try { setTeammates((await findTeammates(roleId)).matches); } catch { setError(errorText(lang)); } finally { setLoading(false); } }
+  async function loadProjects(): Promise<void> { setLoading(true); setSearched(true); setError(''); try { setProjectMatches((await findProjectMatches()).matches); } catch { setError(errorText(lang)); } finally { setLoading(false); } }
   useEffect(() => { setSearched(false); if (authenticated && mode === 'project') void loadProjects(); }, [authenticated, mode]);
-  async function invite(match: EngiMatchTeammate): Promise<void> { setError(''); try { await inviteToProjectRole(roleId, match.profile.id, 'EngiMatch verified match'); setActed((current) => new Set(current).add(match.profile.id)); await loadTeammates(); } catch (reason) { setError(errorText(reason)); } }
-  async function apply(match: EngiMatchProject): Promise<void> { setError(''); try { await applyToProjectRole(match.role.id, 'EngiMatch verified match'); setActed((current) => new Set(current).add(match.role.id)); await loadProjects(); } catch (reason) { setError(errorText(reason)); } }
+  async function invite(match: EngiMatchTeammate): Promise<void> { const id = match.profile.id; if (actingRef.current.has(id) || acted.has(id)) return; actingRef.current.add(id); setActing((current) => new Set(current).add(id)); setError(''); try { await inviteToProjectRole(roleId, id, 'EngiMatch verified match'); setActed((current) => new Set(current).add(id)); await loadTeammates(); } catch { setError(errorText(lang)); } finally { actingRef.current.delete(id); setActing((current) => { const next = new Set(current); next.delete(id); return next; }); } }
+  async function apply(match: EngiMatchProject): Promise<void> { const id = match.role.id; if (actingRef.current.has(id) || acted.has(id)) return; actingRef.current.add(id); setActing((current) => new Set(current).add(id)); setError(''); try { await applyToProjectRole(id, 'EngiMatch verified match'); setActed((current) => new Set(current).add(id)); await loadProjects(); } catch { setError(errorText(lang)); } finally { actingRef.current.delete(id); setActing((current) => { const next = new Set(current); next.delete(id); return next; }); } }
 
   if (!authenticated) return <section className="eq-collab-guest"><UsersRound aria-hidden="true" /><p>{copy.signIn}</p><Button onClick={onRequireAuth}>Sign in</Button></section>;
   const rows = mode === 'teammate' ? teammates : projectMatches;
