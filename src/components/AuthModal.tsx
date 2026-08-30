@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Language } from '../types';
 import { TRANSLATIONS } from '../data';
 import { User, Lock, Mail, ArrowRight, X, LogOut } from 'lucide-react';
@@ -24,6 +24,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [infoMsg, setInfoMsg] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState<boolean>(false);
+  const previousFocus = useRef<HTMLElement | null>(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+
+  useEffect(() => {
+    if (!isOpen) return;
+    previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const handleKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') closeRef.current(); };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      previousFocus.current?.focus();
+    };
+  }, [isOpen]);
 
   // Keep every hook above this conditional return so opening and closing the
   // modal cannot change React's hook order.
@@ -90,14 +104,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   if (auth.user) {
     return (
-      <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
-        <div className="bg-white rounded-3xl p-6 md:p-8 max-w-md w-full border border-slate-200 shadow-2xl relative text-center space-y-5">
-          <button onClick={onClose} className="absolute top-5 right-5 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center">
+      <div className="eq-dialog-backdrop">
+        <div className="eq-dialog eq-auth-dialog" role="dialog" aria-modal="true" aria-labelledby="auth-account-title">
+          <button type="button" onClick={onClose} aria-label="Close account" className="eq-dialog__close eq-auth-dialog__close">
             <X className="w-4 h-4" />
           </button>
-          <div className="w-12 h-12 rounded-2xl bg-blue-600 text-white font-black text-xl flex items-center justify-center mx-auto">EQ</div>
+          <div className="eq-dialog__mark">EQ</div>
           <div>
-            <h2 className="text-xl font-black text-slate-900">Engineerus Quest</h2>
+            <h2 id="auth-account-title" className="eq-auth-dialog__title">Engineerus Quest</h2>
             <p className="text-xs text-slate-500 mt-2">{auth.user.email}</p>
           </div>
           {errorMsg && <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold p-3 rounded-xl">{errorMsg}</div>}
@@ -105,7 +119,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             type="button"
             onClick={handleLogout}
             disabled={submitting}
-            className="w-full bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white font-extrabold py-3 rounded-xl flex items-center justify-center gap-2 text-xs"
+            className="eq-button eq-button--secondary eq-dialog__submit"
           >
             <LogOut className="w-4 h-4" />
             {lang === 'kk' ? 'Шығу' : lang === 'en' ? 'Sign out' : 'Выйти'}
@@ -116,20 +130,22 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
-      <div className="bg-white rounded-3xl p-6 md:p-8 max-w-md w-full border border-slate-200 shadow-2xl relative">
+    <div className="eq-dialog-backdrop">
+      <div className="eq-dialog eq-auth-dialog" role="dialog" aria-modal="true" aria-labelledby="auth-dialog-title">
         <button
+          type="button"
           onClick={onClose}
-          className="absolute top-5 right-5 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors"
+          aria-label="Close authentication"
+          className="eq-dialog__close eq-auth-dialog__close"
         >
           <X className="w-4 h-4" />
         </button>
 
         <div className="text-center space-y-2 mb-6">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-black text-xl flex items-center justify-center mx-auto shadow-md shadow-blue-500/20">
+          <div className="eq-dialog__mark">
             EQ
           </div>
-          <h2 className="text-xl font-black text-slate-900 tracking-tight">
+          <h2 id="auth-dialog-title" className="eq-auth-dialog__title">
             Engineerus Quest
           </h2>
           <p className="text-xs text-slate-500 font-medium">
@@ -148,20 +164,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         </div>
 
         {/* Tab switcher */}
-        <div className="grid grid-cols-2 gap-1 bg-slate-100 p-1 rounded-xl mb-6">
+        <div className="eq-auth-tabs">
           <button
+            type="button"
             onClick={() => setIsRegister(false)}
-            className={`py-2 rounded-lg text-xs font-bold transition-all ${
-              !isRegister ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-600'
-            }`}
+            aria-pressed={!isRegister}
           >
             {t.loginBtn}
           </button>
           <button
+            type="button"
             onClick={() => setIsRegister(true)}
-            className={`py-2 rounded-lg text-xs font-bold transition-all ${
-              isRegister ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-600'
-            }`}
+            aria-pressed={isRegister}
           >
             {t.registerBtn}
           </button>
@@ -199,7 +213,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   placeholder="Инженер_Алматы"
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20 outline-none text-xs font-medium text-slate-900"
+                  className="eq-auth-input"
                 />
               </div>
             </div>
@@ -217,7 +231,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="student@satbayev.kz"
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20 outline-none text-xs font-medium text-slate-900"
+                className="eq-auth-input"
               />
             </div>
           </div>
@@ -234,7 +248,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20 outline-none text-xs font-medium text-slate-900"
+                className="eq-auth-input"
               />
             </div>
           </div>
@@ -242,7 +256,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <button
             type="submit"
             disabled={submitting || !auth.configured}
-            className="w-full bg-linear-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 text-white font-extrabold py-3 rounded-xl shadow-md shadow-blue-500/20 transition-all flex items-center justify-center gap-2 text-xs mt-2"
+            className="eq-button eq-button--primary eq-dialog__submit"
           >
             <span>{isRegister ? t.registerBtn : t.loginBtn}</span>
             <ArrowRight className="w-3.5 h-3.5" />
@@ -259,7 +273,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           type="button"
           onClick={handleGoogleSignIn}
           disabled={submitting || !auth.configured}
-          className="w-full border border-slate-200 hover:bg-slate-50 disabled:opacity-50 text-slate-700 font-extrabold py-3 rounded-xl text-xs"
+          className="eq-button eq-button--secondary eq-dialog__submit"
         >
           {lang === 'kk' ? 'Google арқылы кіру' : lang === 'en' ? 'Continue with Google' : 'Продолжить с Google'}
         </button>

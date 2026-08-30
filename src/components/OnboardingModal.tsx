@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Language } from '../types';
 import { TRANSLATIONS } from '../data';
-import { Sparkles, Trophy, Layers, CheckCircle2, ArrowRight, X } from 'lucide-react';
+import { DraftingCompass, Trophy, Layers, CheckCircle2, ArrowRight, X } from 'lucide-react';
 
 interface OnboardingModalProps {
   isOpen: boolean;
@@ -14,18 +14,30 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
   onClose,
   lang,
 }) => {
-  if (!isOpen) return null;
-
   const [step, setStep] = useState<number>(0);
+  const previousFocus = useRef<HTMLElement | null>(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  useEffect(() => {
+    if (!isOpen) return;
+    previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const handleKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') closeRef.current(); };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      previousFocus.current?.focus();
+    };
+  }, [isOpen]);
+  if (!isOpen) return null;
 
   const steps = [
     {
       title: lang === 'kk' 
-        ? 'Engineerus Quest-ке қош келдіңіз! 🚀' 
+        ? 'Engineerus Quest-ке қош келдіңіз!'
         : lang === 'en' 
-        ? 'Welcome to Engineerus Quest! 🚀' 
-        : 'Добро пожаловать в Engineerus Quest! 🚀',
-      icon: <Sparkles className="w-8 h-8 text-blue-600" />,
+        ? 'Welcome to Engineerus Quest!'
+        : 'Добро пожаловать в Engineerus Quest!',
+      icon: <DraftingCompass />,
       desc: lang === 'kk'
         ? 'Қазақстанның жоғары оқу орындарының студенттеріне арналған геймификацияланған ЖИ платформасы. Квесттерді орындаңыз, XP жинаңыз және үздік инженер болыңыз.'
         : lang === 'en'
@@ -34,11 +46,11 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
     },
     {
       title: lang === 'kk'
-        ? 'Инженерлік ЖИ-Көмекші 🤖'
+        ? 'Инженерлік ЖИ-Көмекші'
         : lang === 'en'
-        ? 'Engineering AI Assistant 🤖'
-        : 'Инженерный ИИ-Помощник 🤖',
-      icon: <Layers className="w-8 h-8 text-emerald-600" />,
+        ? 'Engineering AI Assistant'
+        : 'Инженерный ИИ-Помощник',
+      icon: <Layers />,
       desc: lang === 'kk'
         ? 'TUTOR AI сопромат пен термех есептерін шығарады, MaterialSwap ҚР МЕМСТ бойынша материалдарды таңдайды, PatentCraft патент формулаларын ресімдейді.'
         : lang === 'en'
@@ -47,11 +59,11 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
     },
     {
       title: lang === 'kk'
-        ? 'Квесттер мен Марапаттар 🏆'
+        ? 'Квесттер мен Марапаттар'
         : lang === 'en'
-        ? 'Quests & Rewards 🏆'
-        : 'Квесты & Награды 🏆',
-      icon: <Trophy className="w-8 h-8 text-amber-500" />,
+        ? 'Quests & Rewards'
+        : 'Квесты & Награды',
+      icon: <Trophy />,
       desc: lang === 'kk'
         ? 'Тапсырмаларды орындаңыз, стрик жоғалтпау үшін күнделікті кіріп тұрыңыз, бірегей бейдждер мен көшбасшылар тізімінен орын алыңыз!'
         : lang === 'en'
@@ -63,21 +75,23 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
   const currentStep = steps[step];
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
-      <div className="bg-white rounded-3xl p-6 md:p-8 max-w-lg w-full border border-slate-200 shadow-2xl relative text-center space-y-6">
+    <div className="eq-dialog-backdrop">
+      <div className="eq-dialog eq-onboarding-dialog" role="dialog" aria-modal="true" aria-labelledby="onboarding-title">
         <button
+          type="button"
           onClick={onClose}
-          className="absolute top-5 right-5 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors"
+          aria-label="Close onboarding"
+          className="eq-dialog__close eq-auth-dialog__close"
         >
           <X className="w-4 h-4" />
         </button>
         
-        <div className="w-16 h-16 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center mx-auto">
+        <div className="eq-onboarding-dialog__icon">
           {currentStep.icon}
         </div>
 
         <div className="space-y-2">
-          <h2 className="text-xl font-black text-slate-900 tracking-tight">
+          <h2 id="onboarding-title" className="eq-auth-dialog__title">
             {currentStep.title}
           </h2>
           <p className="text-xs text-slate-600 font-medium leading-relaxed max-w-md mx-auto">
@@ -90,18 +104,16 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
           {steps.map((_, idx) => (
             <div
               key={idx}
-              className={`h-1.5 rounded-full transition-all ${
-                idx === step ? 'w-6 bg-blue-600' : 'w-2 bg-slate-200'
-              }`}
+              className={idx === step ? 'is-active' : ''}
             />
           ))}
         </div>
 
-        <div className="flex items-center justify-between gap-3 pt-2">
+        <div className="eq-onboarding-dialog__actions">
           {step > 0 ? (
             <button
               onClick={() => setStep(step - 1)}
-              className="px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors"
+              className="eq-button eq-button--secondary"
             >
               {lang === 'kk' ? 'Артқа' : lang === 'en' ? 'Back' : 'Назад'}
             </button>
@@ -112,7 +124,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
           {step < steps.length - 1 ? (
             <button
               onClick={() => setStep(step + 1)}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-bold text-xs shadow-md shadow-blue-500/20 transition-all flex items-center gap-1.5"
+              className="eq-button eq-button--primary"
             >
               <span>{lang === 'kk' ? 'Келесі' : lang === 'en' ? 'Next' : 'Далее'}</span>
               <ArrowRight className="w-3.5 h-3.5" />
@@ -120,7 +132,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
           ) : (
             <button
               onClick={onClose}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl font-bold text-xs shadow-md shadow-emerald-500/20 transition-all flex items-center gap-1.5"
+              className="eq-button eq-button--primary"
             >
               <CheckCircle2 className="w-4 h-4" />
               <span>{lang === 'kk' ? 'Оқуды бастау!' : lang === 'en' ? 'Start Learning!' : 'Начать обучение!'}</span>
