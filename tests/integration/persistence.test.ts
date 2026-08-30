@@ -133,6 +133,23 @@ test("local PostgreSQL persistence and ownership API", async (t) => {
         const crossRead = await fetch(`${baseUrl}/api/chats/${sessionB}/messages`, { headers: authorization(userA) });
         assert.equal(crossRead.status, 404);
 
+        const crossRename = await fetch(`${baseUrl}/api/chats/${sessionB}`, {
+          method: "PATCH",
+          headers: authorization(userA),
+          body: JSON.stringify({ title: "Forged rename" }),
+        });
+        assert.equal(crossRename.status, 404);
+
+        const crossDelete = await fetch(`${baseUrl}/api/chats/${sessionB}`, {
+          method: "DELETE",
+          headers: authorization(userA),
+        });
+        assert.equal(crossDelete.status, 404);
+
+        const ownerList = await fetch(`${baseUrl}/api/chats`, { headers: authorization(userB) });
+        const ownerListBody = await ownerList.json() as { sessions: Array<{ id: string; title: string }> };
+        assert.ok(ownerListBody.sessions.some((session) => session.id === sessionB && session.title === "Persistent B"));
+
         const crossAppend = await fetch(`${baseUrl}/api/module`, {
           method: "POST",
           headers: { ...authorization(userA), "Idempotency-Key": crypto.randomUUID() },

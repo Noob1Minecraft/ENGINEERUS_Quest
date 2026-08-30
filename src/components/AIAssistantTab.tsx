@@ -7,6 +7,7 @@ import { apiFetch } from '../utils/api';
 import { loadSavedAiNotes, storeSavedAiNotes } from '../utils/savedAiNotes';
 import { activeChatStorageKey, buildConversationTitle, clearChatDraft, isUntitledConversation, loadChatDraft, storeChatDraft } from '../ai/chatWorkspace';
 import { AiAttachmentPicker } from './AiAttachmentPicker';
+import { Button } from './ui';
 import {
   DraftingCompass,
   GraduationCap,
@@ -33,6 +34,7 @@ import {
   Maximize2,
   Minimize2,
   Edit2,
+  MoreHorizontal,
   X,
   History,
   FolderKanban
@@ -194,11 +196,17 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
   const [messageCursors, setMessageCursors] = useState<Record<string, string | null>>({});
   const [loadingOlderSessions, setLoadingOlderSessions] = useState(false);
   const [loadingMessageSessions, setLoadingMessageSessions] = useState<Set<string>>(new Set());
-  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [sessionMenuId, setSessionMenuId] = useState<string | null>(null);
+  const [renameTarget, setRenameTarget] = useState<ChatSession | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ChatSession | null>(null);
   const [newTitleInput, setNewTitleInput] = useState<string>('');
+  const [sessionMutationPending, setSessionMutationPending] = useState(false);
   const loadedMessageSessionsRef = useRef<Set<string>>(new Set());
   const sessionPageInFlightRef = useRef(false);
   const messagePagesInFlightRef = useRef<Set<string>>(new Set());
+  const sessionMenuTriggersRef = useRef<Map<string, HTMLButtonElement>>(new Map());
+  const dialogReturnFocusRef = useRef<HTMLButtonElement | null>(null);
+  const newChatButtonRef = useRef<HTMLButtonElement | null>(null);
 
   // Saved Notes Library
   const [savedNotes, setSavedNotes] = useState<SavedNote[]>(() =>
@@ -304,6 +312,28 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
     }
     storeChatDraft(authenticatedUserId, activeSessionId, promptText);
   }, [activeSessionId, authenticatedUserId, promptText]);
+
+  useEffect(() => {
+    if (!sessionMenuId && !renameTarget && !deleteTarget) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      if (renameTarget) {
+        setRenameTarget(null);
+        queueMicrotask(() => dialogReturnFocusRef.current?.focus());
+      } else if (deleteTarget) {
+        setDeleteTarget(null);
+        queueMicrotask(() => dialogReturnFocusRef.current?.focus());
+      }
+      else if (sessionMenuId) {
+        const trigger = sessionMenuTriggersRef.current.get(sessionMenuId);
+        setSessionMenuId(null);
+        queueMicrotask(() => trigger?.focus());
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [deleteTarget, renameTarget, sessionMenuId]);
 
   // Hydrate only the selected chat. Other sessions remain lightweight until opened.
   useEffect(() => {
@@ -487,46 +517,64 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
     }
   };
 
-  const handleDeleteChat = async (sessionId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    const confirmMsg = lang === 'kk'
-      ? 'Таңдалған чатты жою керек пе?'
-      : lang === 'en'
-      ? 'Are you sure you want to delete the selected chat?'
-      : 'Удалить выбранный чат?';
-    if (confirm(confirmMsg)) {
-      try {
-        await apiFetch<void>(`/api/chats/${encodeURIComponent(sessionId)}`, {
-          method: 'DELETE',
-        });
-        const remaining = sessions.filter((session) => session.id !== sessionId);
-        setSessions(remaining);
-        if (activeSessionId === sessionId) {
-          setActiveSessionId(remaining[0]?.id || '');
-          if (remaining[0]?.module) setSelectedModule(remaining[0].module);
+  const handleDeleteChat = async (sessionId: string) => {
+    if (sessionMutationPending) return;
+    setSessionMutationPending(true);
+    try {
+      await apiFetch<void>(`/api/chats/${encodeURIComponent(sessionId)}`, { method: 'DELETE' });
+      const remaining = sessions.filter((session) => session.id !== sessionId);
+      const next = activeSessionId === sessionId ? remaining[0] : undefined;
+      setSessions(remaining);
+      loadedMessageSessionsRef.current.delete(sessionId);
+      setMessageCursors((current) => {
+        const nextCursors = { ...current };
+        delete nextCursors[sessionId];
+        return nextCursors;
+      });
+      if (authenticatedUserId) {
+        clearChatDraft(authenticatedUserId, sessionId);
+        if (sessionStorage.getItem(activeChatStorageKey(authenticatedUserId)) === sessionId) {
+          if (next) sessionStorage.setItem(activeChatStorageKey(authenticatedUserId), next.id);
+          else sessionStorage.removeItem(activeChatStorageKey(authenticatedUserId));
         }
-      } catch {
-        setPersistenceError(lang === 'kk' ? 'Чат жойылмады.' : lang === 'en' ? 'Chat could not be deleted.' : 'Не удалось удалить чат.');
       }
+      if (activeSessionId === sessionId) {
+        setActiveSessionId(next?.id ?? '');
+        setSelectedModule(next?.module ?? 'tutor');
+      }
+      setDeleteTarget(null);
+      queueMicrotask(() => (next ? sessionMenuTriggersRef.current.get(next.id) : newChatButtonRef.current)?.focus());
+    } catch {
+      setPersistenceError(lang === 'kk' ? 'Чат жойылмады.' : lang === 'en' ? 'Chat could not be deleted.' : 'Не удалось удалить чат.');
+    } finally {
+      setSessionMutationPending(false);
     }
   };
 
   const handleRenameChat = async (sessionId: string, title: string) => {
-    if (!title.trim()) return;
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle || trimmedTitle.length > 200) {
+      setPersistenceError(lang === 'kk' ? 'Чат атауы 1–200 таңбадан тұруы керек.' : lang === 'en' ? 'Chat title must contain 1–200 characters.' : 'Название чата должно содержать от 1 до 200 символов.');
+      return;
+    }
+    if (sessionMutationPending) return;
+    setSessionMutationPending(true);
     try {
       const data = await apiFetch<{ session: Omit<ChatSession, 'messages'> }>(`/api/chats/${encodeURIComponent(sessionId)}`, {
         method: 'PATCH',
-        body: JSON.stringify({ title }),
+        body: JSON.stringify({ title: trimmedTitle }),
       });
       setSessions((current) =>
         current.map((session) => session.id === sessionId
           ? { ...data.session, messages: session.messages }
           : session)
       );
+      setRenameTarget(null);
+      queueMicrotask(() => dialogReturnFocusRef.current?.focus());
     } catch {
       setPersistenceError(lang === 'kk' ? 'Чат атауы өзгертілмеді.' : lang === 'en' ? 'Chat could not be renamed.' : 'Не удалось переименовать чат.');
     } finally {
-      setEditingSessionId(null);
+      setSessionMutationPending(false);
     }
   };
 
@@ -723,6 +771,53 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
     return matchesModule && matchesSearch;
   });
 
+  const managementCopy = lang === 'kk'
+    ? { manage: 'Чатты басқару', rename: 'Атын өзгерту', delete: 'Чатты жою', renameTitle: 'Чат атауын өзгерту', deleteTitle: 'Чатты жою керек пе?', deleteBody: 'Чат және оның хабарлары біржола жойылады. Тіркелген құжаттар мен суреттер кітапханада қалады.', titleLabel: 'Чат атауы', confirmDelete: 'Жою', cancel: 'Бас тарту' }
+    : lang === 'en'
+      ? { manage: 'Manage chat', rename: 'Rename', delete: 'Delete chat', renameTitle: 'Rename chat', deleteTitle: 'Delete this chat?', deleteBody: 'The chat and its messages will be permanently removed. Attached documents and images will remain in your library.', titleLabel: 'Chat title', confirmDelete: 'Delete', cancel: 'Cancel' }
+      : { manage: 'Управление чатом', rename: 'Переименовать', delete: 'Удалить чат', renameTitle: 'Переименовать чат', deleteTitle: 'Удалить этот чат?', deleteBody: 'Чат и его сообщения будут удалены безвозвратно. Прикреплённые документы и изображения останутся в библиотеке.', titleLabel: 'Название чата', confirmDelete: 'Удалить', cancel: 'Отмена' };
+
+  const openRenameDialog = (session: ChatSession) => {
+    dialogReturnFocusRef.current = sessionMenuTriggersRef.current.get(session.id) ?? null;
+    setSessionMenuId(null);
+    setNewTitleInput(session.title);
+    setRenameTarget(session);
+  };
+
+  const openDeleteDialog = (session: ChatSession) => {
+    dialogReturnFocusRef.current = sessionMenuTriggersRef.current.get(session.id) ?? null;
+    setSessionMenuId(null);
+    setDeleteTarget(session);
+  };
+
+  const closeManagementDialog = () => {
+    setRenameTarget(null);
+    setDeleteTarget(null);
+    queueMicrotask(() => dialogReturnFocusRef.current?.focus());
+  };
+
+  const sessionActions = (session: ChatSession, selected: boolean, inverted = false) => (
+    <div className="relative shrink-0" onClick={(event) => event.stopPropagation()}>
+      <button
+        type="button"
+        ref={(node) => { if (node) sessionMenuTriggersRef.current.set(session.id, node); else sessionMenuTriggersRef.current.delete(session.id); }}
+        aria-label={`${managementCopy.manage}: ${translateSessionTitle(session.title)}`}
+        aria-haspopup="menu"
+        aria-expanded={sessionMenuId === session.id}
+        onClick={() => setSessionMenuId((current) => current === session.id ? null : session.id)}
+        className={`rounded-lg p-1.5 transition ${inverted ? 'text-white hover:bg-blue-500' : selected ? 'text-blue-700 hover:bg-blue-100' : 'text-slate-500 hover:bg-slate-200'}`}
+      >
+        <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+      </button>
+      {sessionMenuId === session.id && (
+        <div role="menu" aria-label={managementCopy.manage} className="absolute right-0 top-full z-30 mt-1 min-w-40 rounded-xl border border-slate-200 bg-white p-1 shadow-lg">
+          <button type="button" role="menuitem" onClick={() => openRenameDialog(session)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-bold text-slate-700 hover:bg-slate-100"><Edit2 className="h-3.5 w-3.5" aria-hidden="true" />{managementCopy.rename}</button>
+          <button type="button" role="menuitem" onClick={() => openDeleteDialog(session)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-bold text-red-700 hover:bg-red-50"><Trash2 className="h-3.5 w-3.5" aria-hidden="true" />{managementCopy.delete}</button>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div
       className={`eq-ai-workspace space-y-5 md:space-y-6 transition-all ${
@@ -913,10 +1008,13 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
               <div className="min-h-0 flex-1 space-y-1 overflow-y-auto p-2">
                 {sessions.map((session) => {
                   const selected = session.id === activeSessionId;
-                  return <button type="button" key={session.id} aria-current={selected ? 'true' : undefined} onClick={() => selectSession(session)} className={`w-full rounded-xl border px-3 py-2.5 text-left transition ${selected ? 'border-blue-200 bg-blue-50 text-blue-950' : isFullscreen ? 'border-transparent text-slate-300 hover:bg-slate-900' : 'border-transparent text-slate-700 hover:bg-white'}`}>
-                    <span className="block truncate text-xs font-extrabold">{translateSessionTitle(session.title)}</span>
-                    <span className="mt-1 block truncate text-[10px] font-semibold opacity-60">{MODULE_CONFIG[session.module]?.label ?? session.module}</span>
-                  </button>;
+                  return <div key={session.id} className={`flex w-full items-center rounded-xl border pr-1 transition ${selected ? 'border-blue-200 bg-blue-50 text-blue-950' : isFullscreen ? 'border-transparent text-slate-300 hover:bg-slate-900' : 'border-transparent text-slate-700 hover:bg-white'}`}>
+                    <button type="button" aria-current={selected ? 'true' : undefined} onClick={() => selectSession(session)} className="min-w-0 flex-1 px-3 py-2.5 text-left">
+                      <span className="block truncate text-xs font-extrabold">{translateSessionTitle(session.title)}</span>
+                      <span className="mt-1 block truncate text-[10px] font-semibold opacity-60">{MODULE_CONFIG[session.module]?.label ?? session.module}</span>
+                    </button>
+                    {sessionActions(session, selected)}
+                  </div>;
                 })}
                 {sessionCursor && <button type="button" disabled={loadingOlderSessions} onClick={() => void loadOlderSessions()} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 disabled:opacity-60">{loadingOlderSessions ? (lang === 'en' ? 'Loading…' : lang === 'kk' ? 'Жүктелуде…' : 'Загрузка…') : (lang === 'en' ? 'Load older' : lang === 'kk' ? 'Ескілерін жүктеу' : 'Загрузить ещё')}</button>}
               </div>
@@ -952,6 +1050,8 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
               {/* Right: New Chat Button & Clear */}
               <div className="flex items-center gap-2 shrink-0">
                 <button
+                  ref={newChatButtonRef}
+                  type="button"
                   onClick={handleCreateNewChat}
                   className="bg-blue-600 hover:bg-blue-500 active:scale-95 text-white px-3 py-1.5 rounded-xl text-xs font-black shadow-md shadow-blue-500/20 transition-all flex items-center gap-1.5"
                 >
@@ -983,7 +1083,6 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-48 overflow-y-auto">
                   {sessions.map((sess) => {
                     const isActive = sess.id === activeSessionId;
-                    const isEditing = editingSessionId === sess.id;
                     const modConfig = MODULE_CONFIG[sess.module] || MODULE_CONFIG.tutor;
 
                     return (
@@ -1001,21 +1100,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                         }`}
                       >
                         <div className="min-w-0 flex-1">
-                          {isEditing ? (
-                            <input
-                              type="text"
-                              value={newTitleInput}
-                              onChange={(e) => setNewTitleInput(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') handleRenameChat(sess.id, newTitleInput);
-                              }}
-                              onClick={(e) => e.stopPropagation()}
-                              className="w-full text-xs font-bold bg-white text-slate-900 px-2 py-1 rounded-md border border-blue-500 outline-none"
-                              autoFocus
-                            />
-                          ) : (
-                            <div className="font-extrabold text-xs truncate">{translateSessionTitle(sess.title)}</div>
-                          )}
+                          <div className="font-extrabold text-xs truncate">{translateSessionTitle(sess.title)}</div>
                           <div
                             className={`text-[10px] font-medium mt-0.5 flex items-center gap-1.5 ${
                               isActive ? 'text-blue-100' : 'text-slate-400'
@@ -1026,38 +1111,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                           </div>
                         </div>
 
-                        {/* Actions */}
-                        <div className="flex items-center gap-1 shrink-0">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (isEditing) {
-                                handleRenameChat(sess.id, newTitleInput);
-                              } else {
-                                setEditingSessionId(sess.id);
-                                setNewTitleInput(sess.title);
-                              }
-                            }}
-                            className={`p-1 rounded-lg transition-all ${
-                              isActive ? 'hover:bg-blue-500 text-white' : 'hover:bg-slate-200 text-slate-500'
-                            }`}
-                            title={lang === 'kk' ? 'Атын ауыстыру' : lang === 'en' ? 'Rename' : 'Переименовать'}
-                          >
-                            <Edit2 className="w-3 h-3" />
-                          </button>
-
-                          {sessions.length > 1 && (
-                            <button
-                              onClick={(e) => handleDeleteChat(sess.id, e)}
-                              className={`p-1 rounded-lg transition-all ${
-                                isActive ? 'hover:bg-blue-500 text-red-200' : 'hover:bg-red-50 text-red-500'
-                              }`}
-                              title={lang === 'kk' ? 'Чатты жою' : lang === 'en' ? 'Delete chat' : 'Удалить чат'}
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </button>
-                          )}
-                        </div>
+                        {sessionActions(sess, isActive, isActive)}
                       </div>
                     );
                   })}
@@ -1447,6 +1501,27 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
               })}
             </div>
           )}
+        </div>
+      )}
+      {renameTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) closeManagementDialog(); }}>
+          <form onSubmit={(event) => { event.preventDefault(); void handleRenameChat(renameTarget.id, newTitleInput); }} role="dialog" aria-modal="true" aria-labelledby="rename-chat-title" className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl">
+            <h2 id="rename-chat-title" className="text-lg font-black text-slate-950">{managementCopy.renameTitle}</h2>
+            <label className="mt-4 block text-xs font-bold text-slate-700">{managementCopy.titleLabel}
+              <input autoFocus required maxLength={200} value={newTitleInput} onChange={(event) => setNewTitleInput(event.target.value)} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+            </label>
+            <div className="mt-5 flex justify-end gap-2"><Button type="button" variant="secondary" disabled={sessionMutationPending} onClick={closeManagementDialog}>{managementCopy.cancel}</Button><Button type="submit" disabled={sessionMutationPending || !newTitleInput.trim()}>{managementCopy.rename}</Button></div>
+          </form>
+        </div>
+      )}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) closeManagementDialog(); }}>
+          <div role="dialog" aria-modal="true" aria-labelledby="delete-chat-title" aria-describedby="delete-chat-description" className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl">
+            <h2 id="delete-chat-title" className="text-lg font-black text-slate-950">{managementCopy.deleteTitle}</h2>
+            <p className="mt-2 text-sm font-semibold text-slate-800">{translateSessionTitle(deleteTarget.title)}</p>
+            <p id="delete-chat-description" className="mt-2 text-sm leading-6 text-slate-600">{managementCopy.deleteBody}</p>
+            <div className="mt-5 flex justify-end gap-2"><Button type="button" variant="secondary" disabled={sessionMutationPending} onClick={closeManagementDialog}>{managementCopy.cancel}</Button><Button type="button" variant="danger" disabled={sessionMutationPending} onClick={() => void handleDeleteChat(deleteTarget.id)}>{managementCopy.confirmDelete}</Button></div>
+          </div>
         </div>
       )}
     </div>
