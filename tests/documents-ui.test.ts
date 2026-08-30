@@ -10,11 +10,13 @@ const route = readFileSync(new URL("../server/routes/documents.ts", import.meta.
 test("Documents UI has authenticated upload, loading, empty, failure, delete, and Tutor actions", () => {
   assert.match(component, /type="file"/u);
   assert.match(component, /loading|Загрузка документов/iu);
-  assert.match(component, /No documents yet|Документов пока нет/u);
-  assert.match(component, /document\.status !== "ready"/u);
+  assert.match(component, /Your engineering documents will appear here|Здесь будут ваши инженерные документы/u);
+  assert.match(component, /document\.status !== ['"]ready['"]/u);
   assert.match(component, /deleteDocument/u);
   assert.match(component, /onUseWithTutor/u);
-  assert.match(component, /OCR is not supported/u);
+  assert.match(component, /PDF, DOCX, TXT, or Markdown up to 10 MB/u);
+  assert.match(component, /LibraryDeleteDialog/u);
+  assert.match(component, /private library/u);
 });
 
 test("document selection adds only document_id to the existing AI request and can be cleared", () => {

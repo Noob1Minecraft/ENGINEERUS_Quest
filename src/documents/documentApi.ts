@@ -1,4 +1,15 @@
+import type { Language } from '../types';
 import { apiFetch } from "../utils/api";
+
+const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
+const ALLOWED_DOCUMENT_EXTENSIONS = new Set(['pdf', 'docx', 'txt', 'md', 'markdown']);
+
+export function validateDocumentSelection(file: Pick<File, 'name' | 'size'>, lang: Language): string | null {
+  const extension = file.name.split('.').pop()?.toLowerCase() ?? '';
+  if (!ALLOWED_DOCUMENT_EXTENSIONS.has(extension)) return lang === 'ru' ? 'Выберите PDF, DOCX, TXT или Markdown.' : lang === 'kk' ? 'PDF, DOCX, TXT немесе Markdown таңдаңыз.' : 'Choose a PDF, DOCX, TXT, or Markdown file.';
+  if (file.size > MAX_DOCUMENT_BYTES) return lang === 'ru' ? 'Файл больше 10 МБ. Выберите документ меньшего размера.' : lang === 'kk' ? 'Файл 10 МБ-тан үлкен. Кішірек құжат таңдаңыз.' : 'The file is larger than 10 MB. Choose a smaller document.';
+  return null;
+}
 
 export type AiDocument = {
   id: string;

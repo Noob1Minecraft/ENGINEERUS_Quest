@@ -9,10 +9,12 @@ const route = readFileSync(new URL("../server/routes/images.ts", import.meta.url
 
 test("minimal Images UI supports private upload, selection, deletion, error, and pagination states", () => {
   assert.match(panel, /accept="image\/jpeg,image\/png,image\/webp"/u);
-  assert.match(panel, /current\.length < 3/u);
+  assert.match(panel, /current\.length >= 3/u);
   assert.match(panel, /deleteImage/u);
   assert.match(panel, /next_cursor|loadMore/u);
   assert.match(panel, /Visual analysis does not certify/u);
+  assert.match(panel, /LibraryDeleteDialog/u);
+  assert.match(panel, /aria-pressed/u);
   assert.doesNotMatch(panel, /publicUrl|signedUrl|storage_path/u);
 });
 

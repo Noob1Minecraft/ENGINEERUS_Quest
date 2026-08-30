@@ -9,6 +9,25 @@ import { apiFetch } from '../utils/api';
 
 export type ProfileFetcher = <T>(endpoint: string, options?: RequestInit) => Promise<T>;
 
+export type ProfileCompletionStep = { id: string; label: string; complete: boolean };
+
+const PROFILE_COMPLETION_COPY = {
+  ru: { name: 'Добавьте отображаемое имя', discipline: 'Выберите инженерное направление', bio: 'Кратко опишите инженерные интересы', skills: 'Добавьте навыки или интересы', university: 'Укажите учебный контекст' },
+  kk: { name: 'Көрсетілетін атыңызды қосыңыз', discipline: 'Инженерлік бағытты таңдаңыз', bio: 'Инженерлік қызығушылықтарыңызды қысқаша жазыңыз', skills: 'Дағдылар немесе қызығушылықтар қосыңыз', university: 'Оқу контекстін көрсетіңіз' },
+  en: { name: 'Add a display name', discipline: 'Choose an engineering discipline', bio: 'Describe your engineering interests', skills: 'Add skills or interests', university: 'Add your education context' },
+} satisfies Record<Language, Record<string, string>>;
+
+export function getProfileCompletionSteps(profile: PublicProfile, lang: Language): ProfileCompletionStep[] {
+  const steps = PROFILE_COMPLETION_COPY[lang];
+  return [
+    { id: 'name', label: steps.name, complete: Boolean(profile.display_name?.trim()) },
+    { id: 'discipline', label: steps.discipline, complete: Boolean(profile.primary_discipline) },
+    { id: 'bio', label: steps.bio, complete: Boolean(profile.bio?.trim()) },
+    { id: 'skills', label: steps.skills, complete: profile.skills.length > 0 || profile.interests.length > 0 },
+    { id: 'university', label: steps.university, complete: Boolean(profile.university_name?.trim()) },
+  ];
+}
+
 export type ProfileUpdateInput = {
   username?: string;
   display_name?: string | null;
