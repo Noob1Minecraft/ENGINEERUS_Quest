@@ -1,7 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Language } from '../types';
 import { TRANSLATIONS } from '../data';
 import { DraftingCompass, Trophy, Layers, CheckCircle2, ArrowRight, X } from 'lucide-react';
+import { useDialogFocus } from '../hooks/useDialogFocus';
 
 interface OnboardingModalProps {
   isOpen: boolean;
@@ -15,19 +16,9 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
   lang,
 }) => {
   const [step, setStep] = useState<number>(0);
-  const previousFocus = useRef<HTMLElement | null>(null);
-  const closeRef = useRef(onClose);
-  closeRef.current = onClose;
-  useEffect(() => {
-    if (!isOpen) return;
-    previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const handleKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') closeRef.current(); };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      previousFocus.current?.focus();
-    };
-  }, [isOpen]);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  useDialogFocus({ open: isOpen, onClose, dialogRef, initialFocusRef: closeButtonRef });
   if (!isOpen) return null;
 
   const steps = [
@@ -76,8 +67,9 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
 
   return (
     <div className="eq-dialog-backdrop">
-      <div className="eq-dialog eq-onboarding-dialog" role="dialog" aria-modal="true" aria-labelledby="onboarding-title">
+      <div ref={dialogRef} tabIndex={-1} className="eq-dialog eq-onboarding-dialog" role="dialog" aria-modal="true" aria-labelledby="onboarding-title">
         <button
+          ref={closeButtonRef}
           type="button"
           onClick={onClose}
           aria-label="Close onboarding"

@@ -1,8 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { MessageSquareText, X } from 'lucide-react';
 import type { BetaFeedbackInput } from '../beta/betaApi';
 import { submitBetaFeedback } from '../beta/betaApi';
 import type { Language } from '../types';
+import { useDialogFocus } from '../hooks/useDialogFocus';
 
 type Props = { open: boolean; lang: Language; productArea: BetaFeedbackInput['product_area']; onClose: () => void };
 
@@ -11,19 +12,9 @@ export const BetaFeedbackModal: React.FC<Props> = ({ open, lang, productArea, on
   const [rating, setRating] = useState(4);
   const [message, setMessage] = useState('');
   const [state, setState] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
-  const previousFocus = useRef<HTMLElement | null>(null);
-  const closeRef = useRef(onClose);
-  closeRef.current = onClose;
-  useEffect(() => {
-    if (!open) return;
-    previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const handleKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') closeRef.current(); };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      previousFocus.current?.focus();
-    };
-  }, [open]);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const categoryRef = useRef<HTMLSelectElement>(null);
+  useDialogFocus({ open, onClose, dialogRef, initialFocusRef: categoryRef });
   if (!open) return null;
 
   const isEn = lang === 'en';
@@ -50,7 +41,7 @@ export const BetaFeedbackModal: React.FC<Props> = ({ open, lang, productArea, on
   };
 
   return <div className="eq-dialog-backdrop">
-    <div className="eq-dialog" role="dialog" aria-modal="true" aria-labelledby="beta-feedback-title">
+    <div ref={dialogRef} tabIndex={-1} className="eq-dialog" role="dialog" aria-modal="true" aria-labelledby="beta-feedback-title">
       <div className="eq-dialog__header">
         <div><h2 id="beta-feedback-title"><MessageSquareText aria-hidden="true" />{title}</h2>
           <p>{warning}</p></div>
@@ -61,7 +52,7 @@ export const BetaFeedbackModal: React.FC<Props> = ({ open, lang, productArea, on
       </div> : <form onSubmit={submit} className="eq-dialog__form">
         <div className="eq-dialog__form-grid">
           <label className="eq-form-field">{isKk ? 'Санат' : isEn ? 'Category' : 'Категория'}
-            <select value={category} onChange={(e) => setCategory(e.target.value as BetaFeedbackInput['category'])}>
+            <select ref={categoryRef} value={category} onChange={(e) => setCategory(e.target.value as BetaFeedbackInput['category'])}>
               <option value="bug">Bug</option><option value="confusing_ux">Confusing UX</option><option value="feature_request">Feature request</option>
               <option value="ai_answer_quality">AI answer quality</option><option value="project_engimatch">Projects / EngiMatch</option><option value="other">Other</option>
             </select>

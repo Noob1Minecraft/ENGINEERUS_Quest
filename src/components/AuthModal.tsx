@@ -1,8 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Language } from '../types';
 import { TRANSLATIONS } from '../data';
 import { User, Lock, Mail, ArrowRight, X, LogOut } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
+import { useDialogFocus } from '../hooks/useDialogFocus';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -24,20 +25,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [infoMsg, setInfoMsg] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState<boolean>(false);
-  const previousFocus = useRef<HTMLElement | null>(null);
-  const closeRef = useRef(onClose);
-  closeRef.current = onClose;
-
-  useEffect(() => {
-    if (!isOpen) return;
-    previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const handleKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') closeRef.current(); };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      previousFocus.current?.focus();
-    };
-  }, [isOpen]);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const emailInputRef = useRef<HTMLInputElement>(null);
+  useDialogFocus({ open: isOpen, onClose, dialogRef, initialFocusRef: emailInputRef });
 
   // Keep every hook above this conditional return so opening and closing the
   // modal cannot change React's hook order.
@@ -105,7 +95,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   if (auth.user) {
     return (
       <div className="eq-dialog-backdrop">
-        <div className="eq-dialog eq-auth-dialog" role="dialog" aria-modal="true" aria-labelledby="auth-account-title">
+        <div ref={dialogRef} tabIndex={-1} className="eq-dialog eq-auth-dialog" role="dialog" aria-modal="true" aria-labelledby="auth-account-title">
           <button type="button" onClick={onClose} aria-label="Close account" className="eq-dialog__close eq-auth-dialog__close">
             <X className="w-4 h-4" />
           </button>
@@ -131,7 +121,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   return (
     <div className="eq-dialog-backdrop">
-      <div className="eq-dialog eq-auth-dialog" role="dialog" aria-modal="true" aria-labelledby="auth-dialog-title">
+      <div ref={dialogRef} tabIndex={-1} className="eq-dialog eq-auth-dialog" role="dialog" aria-modal="true" aria-labelledby="auth-dialog-title">
         <button
           type="button"
           onClick={onClose}
@@ -209,6 +199,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
                 <input
                   type="text"
+                  aria-label={lang === 'kk' ? 'Аты / Никнейм' : lang === 'en' ? 'Name / Username' : 'Имя / Никнейм'}
                   required={isRegister}
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
@@ -226,7 +217,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <div className="relative">
               <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
               <input
+                ref={emailInputRef}
                 type="email"
+                aria-label="Email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -244,6 +237,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
               <input
                 type="password"
+                aria-label={lang === 'kk' ? 'Құпия сөз' : lang === 'en' ? 'Password' : 'Пароль'}
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}

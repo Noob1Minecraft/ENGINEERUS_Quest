@@ -43,11 +43,31 @@ test('leaderboard removes glow and nested summary cards while retaining explicit
 
 test('legacy dialogs share the current modal and form treatment', () => {
   const sources = ['src/components/AuthModal.tsx', 'src/components/OnboardingModal.tsx', 'src/components/BetaFeedbackModal.tsx'].map(source).join('\n');
+  const focusHook = source('src/hooks/useDialogFocus.ts');
   assert.match(sources, /eq-dialog-backdrop/u);
   assert.match(sources, /aria-modal="true"/u);
-  assert.equal((sources.match(/event\.key === 'Escape'/gu) ?? []).length, 3);
-  assert.equal((sources.match(/previousFocus\.current\?\.focus/gu) ?? []).length, 3);
+  assert.equal((sources.match(/useDialogFocus\(/gu) ?? []).length, 3);
+  assert.equal((sources.match(/tabIndex=\{-1\}/gu) ?? []).length, 4);
+  assert.match(focusHook, /requestAnimationFrame/u);
+  assert.match(focusHook, /event\.key === 'Escape'/u);
+  assert.match(focusHook, /event\.key !== 'Tab'/u);
+  assert.match(focusHook, /previousFocus\.current\?\.focus/u);
+  assert.match(focusHook, /first\.focus\(\)/u);
+  assert.match(focusHook, /last\.focus\(\)/u);
   assert.doesNotMatch(sources, /backdrop-blur|shadow-2xl|bg-gradient-to|bg-linear-to/u);
+});
+
+test('affected dialogs choose visible meaningful initial focus targets', () => {
+  const feedback = source('src/components/BetaFeedbackModal.tsx');
+  const auth = source('src/components/AuthModal.tsx');
+  const onboarding = source('src/components/OnboardingModal.tsx');
+  assert.match(feedback, /initialFocusRef: categoryRef/u);
+  assert.match(feedback, /<select ref=\{categoryRef\}/u);
+  assert.match(auth, /initialFocusRef: emailInputRef/u);
+  assert.match(auth, /ref=\{emailInputRef\}[\s\S]*type="email"/u);
+  assert.match(auth, /type="email"[\s\S]*aria-label="Email"/u);
+  assert.match(onboarding, /initialFocusRef: closeButtonRef/u);
+  assert.match(onboarding, /ref=\{closeButtonRef\}/u);
 });
 
 test('consistency CSS keeps content bounded without masking structural overflow', () => {
