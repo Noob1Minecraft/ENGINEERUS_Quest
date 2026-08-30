@@ -256,6 +256,7 @@ export interface Book {
   author: string;
   pages: number;
   description: string;
+  sourceUrl: string;
 }
 
 export interface SavedNote {

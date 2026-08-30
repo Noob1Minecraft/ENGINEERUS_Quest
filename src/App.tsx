@@ -306,7 +306,7 @@ export default function App() {
         <div className="eq-app__column">
       <main className="eq-app__main space-y-5 md:space-y-8">
         {/* User Profile Stats Header Bar (Incorporating exact design from screenshot) */}
-        {activeTab !== 'profile' && activeTab !== 'home' && (
+        {activeTab !== 'profile' && activeTab !== 'home' && activeTab !== 'messages' && (
           <ProfileStats user={user} lang={lang} onNavigateToQuest={handleNavigateToQuest} />
         )}
 

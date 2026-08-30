@@ -239,11 +239,11 @@ export const RoadmapBooksTab: React.FC<RoadmapBooksTabProps> = ({ lang }) => {
 
               <div className="mt-4 pt-3 border-t border-slate-200/40 flex items-center justify-between">
                 <span className="text-[11px] font-bold text-emerald-600 flex items-center gap-1">
-                  <CheckCircle2 className="w-3.5 h-3.5" /> {lang === 'kk' ? 'Онлайн қолжетімді' : lang === 'en' ? 'Available online' : 'Доступно онлайн'}
+                  <CheckCircle2 className="w-3.5 h-3.5" /> {lang === 'kk' ? 'Сыртқы дереккөз' : lang === 'en' ? 'External source' : 'Внешний источник'}
                 </span>
-                <span className="text-xs font-bold text-blue-600 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
-                  {lang === 'kk' ? 'Оқу' : lang === 'en' ? 'Read' : 'Читать'} <ArrowRight className="w-3.5 h-3.5" />
-                </span>
+                <a href={book.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-blue-600 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                  {lang === 'kk' ? 'Дереккөзді ашу' : lang === 'en' ? 'View source' : 'Открыть источник'} <ArrowRight className="w-3.5 h-3.5" />
+                </a>
               </div>
             </div>
           ))}
