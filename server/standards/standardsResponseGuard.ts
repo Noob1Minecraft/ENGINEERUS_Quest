@@ -1,5 +1,6 @@
 import type { SupportedLanguage } from "../ai/languagePolicy";
 import type { StandardsLookupResult, VerifiedStandard } from "./standardsService";
+import { extractExactStandardDesignation, generateKazStandardQueries } from "./standardsQuery";
 
 const STANDARD_IDENTIFIER = /(?:ГОСТ(?:\s+(?:Р|РК|ISO(?:\/IEC)?|IEC|EN))?|СТ\s+РК(?:\s+(?:ISO(?:\/IEC)?|IEC|EN))?|ҚР\s+СТ|ЕСКД|СП\s+РК|СНиП(?:\s+РК)?|СН\s+РК|ҚНжЕ(?:\s+РК)?|ННД|ТР\s+(?:ЕАЭС|ТС)|GOST(?:\s+(?:R|RK|ISO(?:\/IEC)?|IEC|EN))?|ST\s+RK(?:\s+(?:ISO(?:\/IEC)?|IEC|EN))?|ESKD|SP\s+RK|SNIP(?:\s+RK)?|SN\s+RK|KZ\s+SNiP|NND|TR\s+(?:EAEU|CU)|ISO(?:\/IEC)?|IEC|EN)\s+\d+(?:\s*[./:–—-]\s*\d+)*/giu;
 const CURRENT_CLAIM = /(?:действующ\p{L}*|действует|актуальн\p{L}*|подтвержд[её]н\p{L}*|current|valid|verified|in force|қолданыста|өзекті|расталған)/iu;
@@ -94,24 +95,35 @@ function noResultLimitation(language: SupportedLanguage): string {
   return "По открытому каталогу КазСтандарта не удалось подтвердить конкретный действующий стандарт для этого запроса.";
 }
 
+function searchedConceptsDisclosure(language: SupportedLanguage, userPrompt: string): string {
+  if (extractExactStandardDesignation(userPrompt)) return "";
+  const concepts = generateKazStandardQueries(userPrompt);
+  if (concepts.length === 0) return "";
+  const formatted = concepts.map((concept) => `«${concept}»`).join(", ");
+  if (language === "kk") return `Ресми каталогта тексерілген іздеу ұғымдары: ${formatted}.`;
+  if (language === "en") return `Official-catalog search concepts checked: ${formatted}.`;
+  return `В официальном каталоге проверены поисковые понятия: ${formatted}.`;
+}
+
 function noResultGuidanceFallback(language: SupportedLanguage, userPrompt: string): string {
   const documentationContext = DOCUMENTATION_CONTEXT.test(userPrompt);
+  const searchedConcepts = searchedConceptsDisclosure(language, userPrompt);
   if (language === "kk") {
     const guidance = documentationContext
       ? "Жалпы жағдайда конструкторлық құжаттаманы рәсімдеу ЕСКД қағидаттарымен және сызбаларға, форматтарға, белгілеулерге әрі құжаттар құрамына қойылатын талаптармен байланысты. Нақты қолданыстағы белгілеуді ҚазСтандарттың ресми каталогынан тексерген дұрыс."
       : "Мен расталмаған нөмірлерді келтірмей, жалпы инженерлік қағидаттарды, қолданылатын стандарттар топтарын және тексеру өлшемдерін түсіндіре аламын. Нақты қолданыстағы белгілеуді ресми каталогтан тексерген дұрыс.";
-    return `${noResultLimitation(language)} ${guidance}`;
+    return [noResultLimitation(language), searchedConcepts, guidance].filter(Boolean).join(" ");
   }
   if (language === "en") {
     const guidance = documentationContext
       ? "In general, engineering-documentation preparation is associated with ESKD principles and requirements for drawings, formats, designations, and document composition. The exact current designation should be checked in the official KazStandard catalog."
       : "I can still explain the general engineering principles, relevant standards families, and verification criteria without introducing unverified identifiers. The exact current designation should be checked in the official catalog.";
-    return `${noResultLimitation(language)} ${guidance}`;
+    return [noResultLimitation(language), searchedConcepts, guidance].filter(Boolean).join(" ");
   }
   const guidance = documentationContext
     ? "В общем случае оформление конструкторской документации связано с требованиями ЕСКД к чертежам, форматам, обозначениям и составу документов. Конкретное действующее обозначение лучше проверить в официальном каталоге КазСтандарта."
     : "Я могу дать общее инженерное объяснение, описать применимые семейства стандартов и критерии проверки без неподтверждённых номеров. Конкретное действующее обозначение лучше проверить в официальном каталоге.";
-  return `${noResultLimitation(language)} ${guidance}`;
+  return [noResultLimitation(language), searchedConcepts, guidance].filter(Boolean).join(" ");
 }
 
 function unverifiedWithoutLookupFallback(language: SupportedLanguage): string {
@@ -124,9 +136,10 @@ function unverifiedWithoutLookupFallback(language: SupportedLanguage): string {
   return "Конкретные номера стандартов в этом ответе не удалось проверить по официальному источнику. Я не буду представлять их как подтверждённые, но могу дать общее инженерное объяснение без номеров стандартов.";
 }
 
-function ensureNoResultLimitation(content: string, language: SupportedLanguage): string {
-  if (NO_RESULT_DISCLOSURE.test(content)) return content;
-  return `${noResultLimitation(language)}\n\n${content}`;
+function ensureNoResultLimitation(content: string, language: SupportedLanguage, userPrompt: string): string {
+  const concepts = searchedConceptsDisclosure(language, userPrompt);
+  if (NO_RESULT_DISCLOSURE.test(content)) return concepts ? `${content}\n\n${concepts}` : content;
+  return `${[noResultLimitation(language), concepts].filter(Boolean).join(" ")}\n\n${content}`;
 }
 
 export function guardStandardsResponse(options: {
@@ -163,7 +176,7 @@ export function guardStandardsResponse(options: {
   if (!introducedUnverified && !unsupportedCurrentClaim) {
     return {
       content: lookupResult.kind === "no_result"
-        ? ensureNoResultLimitation(content, language)
+        ? ensureNoResultLimitation(content, language, userPrompt)
         : content,
       rejected: false,
     };

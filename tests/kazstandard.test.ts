@@ -317,8 +317,59 @@ test("expands common engineering standards terminology deterministically", () =>
 test("uses concise official-catalog queries for seismic standards questions", () => {
   assert.deepEqual(
     generateKazStandardQueries("Какие нормы СНиП РК регламентируют сейсмостойкость зданий в Алматы?"),
-    ["сейсмостойкость", "сейсмические воздействия", "землетрясения"],
+    ["сейсмостойкость зданий", "сейсмические районы", "сейсмические воздействия конструкции"],
   );
+});
+
+test("verifies a building-seismic synonym while rejecting a narrow hydroelectric result", async () => {
+  const question = "Какие нормы СНиП РК регламентируют сейсмостойкость зданий в Алматы?";
+  const attemptedQueries: string[] = [];
+  const detailRequests: string[] = [];
+  const client = fixtureClient({
+    async searchKazStandard(query) {
+      attemptedQueries.push(query);
+      const candidates = query === "сейсмические районы"
+        ? [{
+            providerId: "57363",
+            designation: "ГОСТ Р 55260.1.5-2012",
+            title: "Гидроэлектростанции. Сооружения ГЭС гидротехнические. Требования к проектированию в сейсмических районах",
+            status: "Действующий",
+          }]
+        : query === "сейсмические воздействия конструкции"
+          ? [{
+              providerId: "81234",
+              designation: "СТ РК 8123-2026",
+              title: "Строительные конструкции. Общие требования к расчету на сейсмические воздействия",
+              status: "Действующий",
+            }]
+          : [];
+      return { html: searchFixture(candidates), sourceUrl: `https://new-shop.ksm.kz/catalog/search/?q=${encodeURIComponent(query)}` };
+    },
+    async getKazStandardDocument(documentId) {
+      detailRequests.push(documentId);
+      assert.equal(documentId, "81234");
+      return documentFixture(
+        "81234",
+        "СТ РК 8123-2026",
+        "Строительные конструкции. Общие требования к расчету на сейсмические воздействия",
+      );
+    },
+  });
+
+  const result = await createStandardsService({ enabled: true, client }).searchVerifiedStandards(question);
+
+  assert.deepEqual(attemptedQueries, [
+    "сейсмостойкость зданий",
+    "сейсмические районы",
+    "сейсмические воздействия конструкции",
+  ]);
+  assert.deepEqual(detailRequests, ["81234"]);
+  assert.equal(result.kind, "verified");
+  if (result.kind !== "verified") return;
+  assert.equal(result.standard.designation, "СТ РК 8123-2026");
+  const response = buildVerifiedStandardsResponse(result, "ru") ?? "";
+  assert.match(response, /СТ РК 8123-2026/u);
+  assert.doesNotMatch(response, /ГОСТ Р 55260\.1\.5-2012/u);
 });
 
 test("does not promote seismic equipment records as building standards", () => {
@@ -335,6 +386,20 @@ test("does not promote seismic equipment records as building standards", () => {
 
   assert.equal(ranked.every(({ topicRelevant }) => topicRelevant === false), true);
   assert.equal(ranked.some(({ earlyStopEligible }) => earlyStopEligible), false);
+});
+
+test("does not generalize a hydroelectric seismic standard to ordinary buildings", () => {
+  const question = "Какие нормы СНиП РК регламентируют сейсмостойкость зданий в Алматы?";
+  const queries = generateKazStandardQueries(question);
+  const [ranked] = rankKazStandardCandidates(parseKazStandardSearchResults(searchFixture([{
+    providerId: "57363",
+    designation: "ГОСТ Р 55260.1.5-2012",
+    title: "Гидроэлектростанции. Сооружения ГЭС гидротехнические. Требования к проектированию в сейсмических районах",
+    status: "Действующий",
+  }])), question, queries);
+
+  assert.equal(ranked.topicRelevant, false);
+  assert.equal(ranked.earlyStopEligible, false);
 });
 
 test("covers additional engineering domains without exceeding three queries", () => {
@@ -998,6 +1063,7 @@ test("keeps useful generic guidance for no_result and adds the verification limi
 
   assert.equal(result.rejected, false);
   assert.match(result.content, /^По открытому каталогу КазСтандарта не удалось подтвердить/u);
+  assert.match(result.content, /проверены поисковые понятия/u);
   assert.match(result.content, /принципы ЕСКД/u);
   assert.doesNotMatch(result.content, /(?:ГОСТ|СТ\s+РК|ЕСКД)\s+\d/u);
 });
@@ -1033,8 +1099,25 @@ test("keeps no_result guidance and verification limitations in the resolved lang
     });
     assert.equal(result.rejected, false);
     assert.match(result.content, testCase.limitation);
+    assert.match(result.content, /(?:поисковые понятия|іздеу ұғымдары|search concepts)/iu);
     assert.ok(result.content.endsWith(testCase.content));
   }
+});
+
+test("exact seismic-building no_result reports bounded search concepts without inventing identifiers", () => {
+  const userPrompt = "Какие нормы СНиП РК регламентируют сейсмостойкость зданий в Алматы?";
+  const result = guardStandardsResponse({
+    content: "В общем случае необходимо определить расчетную сейсмическую модель, категорию ответственности и исходные данные площадки.",
+    userPrompt,
+    lookupResult: { kind: "no_result" },
+    language: "ru",
+  });
+
+  assert.equal(result.rejected, false);
+  assert.match(result.content, /«сейсмостойкость зданий»/u);
+  assert.match(result.content, /«сейсмические районы»/u);
+  assert.match(result.content, /«сейсмические воздействия конструкции»/u);
+  assert.doesNotMatch(result.content, /(?:ГОСТ|СТ\s+РК|ННД|СНиП|СП\s+РК)\s+\d/iu);
 });
 
 test("allows an exact verified designation but rejects an additional invented standard", () => {

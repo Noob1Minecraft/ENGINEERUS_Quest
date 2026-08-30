@@ -28,8 +28,10 @@ const NARROW_APPLICATIONS = [
   /(?:текстов|textual\s+document|мәтіндік\s+құжат)/iu,
   /(?:трубопровод|pipeline|құбыр)/iu,
   /(?:нефтегаз|нефтян|газов|oil\s*(?:and|&)\s*gas|oil|gas|мұнай|газ)/iu,
+  /(?:конструкционн\p{L}*\s+стал\p{L}*|structural\s+steel|конструкциялық\s+болат)/iu,
   /(?:сварн\p{L}*\s+соединен|welded\s+joint|дәнекерленген\s+қосыл)/iu,
   /(?:неразрушающ\p{L}*\s+контрол|неразрушающ\p{L}*\s+испытан|nondestructive\s+(?:testing|examination)|бұзбайтын\s+бақыла)/iu,
+  /(?:гидроэлектростанц|(?<![\p{L}\p{N}])ГЭС(?![\p{L}\p{N}])|гидротехническ|hydroelectric|hydrotechnical|су\s+электр\s+станц)/iu,
 ] as const;
 
 const STOP_WORDS = new Set([
@@ -48,7 +50,9 @@ type EngineeringTerminologyRule = {
 const ENGINEERING_TERMINOLOGY: readonly EngineeringTerminologyRule[] = [
   {
     pattern: /(?:сейсмостойк\p{L}*|сейсмическ\p{L}*\s+(?:воздейств\p{L}*|район\p{L}*)|землетрясен\p{L}*|seismic\p{L}*|earthquake\p{L}*|сейсмик\p{L}*)/iu,
-    queries: ["сейсмостойкость", "сейсмические воздействия", "землетрясения"],
+    queries: (input) => /(?:здани\p{L}*|сооружени\p{L}*|строительств\p{L}*|building\p{L}*|structure\p{L}*|construction\p{L}*|ғимарат\p{L}*|құрылыс\p{L}*)/iu.test(input)
+      ? ["сейсмостойкость зданий", "сейсмические районы", "сейсмические воздействия конструкции"]
+      : ["сейсмостойкость", "сейсмические воздействия", "землетрясения"],
   },
   {
     pattern: /(?:размер\p{L}*|допуск\p{L}*|посадк\p{L}*|предельн\p{L}*\s+отклонен\p{L}*)/iu,
@@ -166,7 +170,7 @@ function requiredTopicPattern(originalQuery: string): RegExp | undefined {
   const asksAboutSeismicBuildings = /(?:сейсмостойк\p{L}*|сейсмическ\p{L}*|землетрясен\p{L}*|seismic\p{L}*|earthquake\p{L}*|сейсмик\p{L}*)/iu.test(originalQuery)
     && /(?:здани\p{L}*|сооружени\p{L}*|строительств\p{L}*|building\p{L}*|structure\p{L}*|ғимарат\p{L}*|құрылыс\p{L}*)/iu.test(originalQuery);
   if (asksAboutSeismicBuildings) {
-    return /(?=.*(?:сейсмостойк|сейсмическ|землетрясен|seismic|earthquake|сейсмик))(?=.*(?:здани|сооружени|building|structure|ғимарат))/iu;
+    return /(?=.*(?:сейсмостойк|сейсмическ|землетрясен|seismic|earthquake|сейсмик))(?=.*(?:здани|сооружени|строительств|строительн\p{L}*\s+конструкц|building|structure|construction|ғимарат|құрылыс))/iu;
   }
   if (/(?:конструкционн\p{L}*\s+стал\p{L}*|structural\s+steel|конструкциялық\s+болат)/iu.test(originalQuery)) {
     return /(?=.*(?:конструкционн|structural|конструкциялық))(?=.*(?:стал|steel|болат))/iu;
@@ -215,11 +219,12 @@ export function rankKazStandardCandidates(
       && normalizedCandidateDesignation === normalizedRequestedDesignation;
     const broadTitleMatch = BROAD_TITLE.test(candidate.title);
     const originalTopicMatches = originalTerms.filter((term) => searchableTermKeys.has(term)).length;
-    const topicRelevant = exactDesignationMatch || (requiredTopic
+    const topicMatches = requiredTopic
       ? requiredTopic.test(candidate.title)
-      : originalTopicMatches > 0);
+      : originalTopicMatches > 0;
     const candidateNarrowApplications = matchingNarrowApplications(candidate.title);
     const unmatchedNarrowApplications = candidateNarrowApplications.filter((index) => !originalNarrowApplications.has(index));
+    const topicRelevant = exactDesignationMatch || (topicMatches && unmatchedNarrowApplications.length === 0);
     let score = exactDesignationMatch ? 100 : 0;
 
     for (const query of normalizedQueries) {
