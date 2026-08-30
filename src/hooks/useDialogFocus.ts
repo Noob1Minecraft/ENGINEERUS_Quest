@@ -7,6 +7,7 @@ type DialogFocusOptions = {
   onClose: () => void;
   dialogRef: ElementRef<HTMLElement>;
   initialFocusRef: ElementRef<HTMLElement>;
+  returnFocusRef?: ElementRef<HTMLElement>;
 };
 
 const FOCUSABLE_SELECTOR = [
@@ -25,7 +26,7 @@ function focusableElements(dialog: HTMLElement): HTMLElement[] {
   ));
 }
 
-export function useDialogFocus({ open, onClose, dialogRef, initialFocusRef }: DialogFocusOptions): void {
+export function useDialogFocus({ open, onClose, dialogRef, initialFocusRef, returnFocusRef }: DialogFocusOptions): void {
   const previousFocus = useRef<HTMLElement | null>(null);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
@@ -77,7 +78,12 @@ export function useDialogFocus({ open, onClose, dialogRef, initialFocusRef }: Di
     return () => {
       window.cancelAnimationFrame(focusFrame);
       document.removeEventListener('keydown', handleKeyDown);
-      previousFocus.current?.focus({ preventScroll: true });
+      const returnTarget = returnFocusRef?.current;
+      if (returnTarget?.isConnected) {
+        returnTarget.focus({ preventScroll: true });
+        return;
+      }
+      if (previousFocus.current?.isConnected) previousFocus.current?.focus({ preventScroll: true });
     };
-  }, [dialogRef, initialFocusRef, open]);
+  }, [dialogRef, initialFocusRef, open, returnFocusRef]);
 }

@@ -17,6 +17,7 @@ import { BetaFeedbackModal } from './components/BetaFeedbackModal';
 import { GamificationPanel } from './components/GamificationPanel';
 import { loadGamification, type GamificationState } from './gamification/gamificationApi';
 import { ErrorState, LoadingState } from './components/ui';
+import { resolveStoredLanguage, syncDocumentLanguage } from './language';
 import {
   completeBetaOnboarding,
   loadBetaState,
@@ -81,9 +82,7 @@ function mapQuestDefinitions(definitions: QuestStateResponse['quests']): Record<
 
 export default function App() {
   const auth = useAuth();
-  const [lang, setLang] = useState<Language>(
-    (localStorage.getItem('lang') as Language) || 'ru'
-  );
+  const [lang, setLang] = useState<Language>(() => resolveStoredLanguage(localStorage.getItem('lang')));
 
   const [activeTab, setActiveTab] = useState<string>('home');
   const [isAuthOpen, setIsAuthOpen] = useState<boolean>(false);
@@ -109,6 +108,7 @@ export default function App() {
       : 'Opening workspace…';
 
   useEffect(() => {
+    syncDocumentLanguage(lang);
     localStorage.setItem('lang', lang);
   }, [lang]);
 

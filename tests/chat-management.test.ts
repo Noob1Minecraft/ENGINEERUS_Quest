@@ -61,7 +61,7 @@ test('AI Tutor exposes accessible localized management without deleting attachme
   for (const required of [
     'aria-haspopup="menu"', 'role="menu"', 'role="menuitem"', 'aria-modal="true"',
     "event.key !== 'Escape'", 'maxLength=\\{200\\}', 'sessionStorage.removeItem', 'clearChatDraft',
-    'managementCopy.rename', 'managementCopy.delete', 'dialogReturnFocusRef.current?.focus',
+    'managementCopy.rename', 'managementCopy.delete', 'returnFocusRef: dialogReturnFocusRef',
   ]) assert.match(assistant, new RegExp(required.replace(/[?.()]/g, '\\$&')));
   assert.match(repository, /requireOwnedSession\(userId, accessToken, sessionId\)/u);
   assert.match(repository, /\.eq\("user_id", userId\)/u);

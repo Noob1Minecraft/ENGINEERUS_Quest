@@ -566,7 +566,6 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
           : session)
       );
       setRenameTarget(null);
-      queueMicrotask(() => dialogReturnFocusRef.current?.focus());
     } catch {
       setPersistenceError(lang === 'kk' ? 'Чат атауы өзгертілмеді.' : lang === 'en' ? 'Chat could not be renamed.' : 'Не удалось переименовать чат.');
     } finally {
@@ -796,6 +795,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
     onClose: closeManagementDialog,
     dialogRef: managementDialogRef,
     initialFocusRef: managementInitialFocusRef,
+    returnFocusRef: dialogReturnFocusRef,
   });
 
   const sessionActions = (session: ChatSession, selected: boolean, inverted = false) => (
