@@ -32,6 +32,7 @@ test("production CSP is restrictive and contains the required Engineerus origins
   assert.deepEqual(directives["base-uri"], ["'self'"]);
   assert.deepEqual(directives["form-action"], ["'self'"]);
   assert.ok(directives["connect-src"].includes("https://engineerus-quest-supabase.onrender.com"));
+  assert.ok(directives["connect-src"].includes("https://api.equest.kz"));
   assert.ok(directives["connect-src"].includes("https://gsudtcyoaknehfixaxha.supabase.co"));
   assert.ok(directives["connect-src"].includes("wss://gsudtcyoaknehfixaxha.supabase.co"));
   assert.equal(PRODUCTION_CSP_VALUE.includes("groq"), false);

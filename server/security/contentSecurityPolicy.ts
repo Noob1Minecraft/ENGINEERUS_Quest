@@ -12,6 +12,9 @@ const productionDirectiveEntries = [
   ["connect-src", [
     "'self'",
     "https://engineerus-quest-supabase.onrender.com",
+    // Vercel serves this static CSP configuration to Preview and production.
+    // Keep both explicit API origins; never broaden this directive with a wildcard.
+    "https://api.equest.kz",
     "https://gsudtcyoaknehfixaxha.supabase.co",
     "wss://gsudtcyoaknehfixaxha.supabase.co",
   ]],
