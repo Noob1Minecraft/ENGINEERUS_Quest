@@ -6,6 +6,7 @@ import { verifySystemIntegrity } from '../utils/integrity';
 import { apiFetch } from '../utils/api';
 import { loadSavedAiNotes, storeSavedAiNotes } from '../utils/savedAiNotes';
 import { activeChatStorageKey, buildConversationTitle, clearChatDraft, isUntitledConversation, loadChatDraft, storeChatDraft } from '../ai/chatWorkspace';
+import { appendOffTopicTransientMessage, isOffTopicRedirectResponse, type ModuleAiResponse } from '../ai/moduleResponse';
 import { AiAttachmentPicker } from './AiAttachmentPicker';
 import { Button } from './ui';
 import { useDialogFocus } from '../hooks/useDialogFocus';
@@ -192,6 +193,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
 
   // User Multi-Chat Sessions
   const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [transientMessages, setTransientMessages] = useState<Record<string, ChatMessage[]>>({});
   const [activeSessionId, setActiveSessionId] = useState<string>('');
   const [sessionCursor, setSessionCursor] = useState<string | null>(null);
   const [messageCursors, setMessageCursors] = useState<Record<string, string | null>>({});
@@ -241,6 +243,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
     setMessageCursors({});
     setSessionCursor(null);
     setLoadingMessageSessions(new Set());
+    setTransientMessages({});
 
     if (!authenticatedUserId) {
       setSessions([]);
@@ -373,7 +376,9 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
 
   // Active Chat Session
   const activeSession = sessions.find((s) => s.id === activeSessionId) || sessions[0];
-  const messages = activeSession ? activeSession.messages : [];
+  const messages = activeSession
+    ? [...activeSession.messages, ...(transientMessages[activeSession.id] ?? [])]
+    : [];
 
   const selectSession = (session: ChatSession) => {
     setActiveSessionId(session.id);
@@ -610,19 +615,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
           : session));
       }
 
-      const data = await apiFetch<{
-        status: string;
-        response: string;
-        user_message: ChatMessage;
-        assistant_message: ChatMessage | null;
-        xp: number;
-        level: number;
-        streak: number;
-        requests_count: number;
-        material_count: number;
-        patent_count: number;
-        modules_used: string[];
-      }>('/api/module', {
+      const data = await apiFetch<ModuleAiResponse>('/api/module', {
         method: 'POST',
         headers: { 'Idempotency-Key': requestId },
         body: JSON.stringify({
@@ -634,6 +627,27 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
           ...(imageContext.length > 0 ? { image_ids: imageContext.map(({ id }) => id) } : {}),
         }),
       });
+      if (isOffTopicRedirectResponse(data)) {
+        setSessions((current) => current.map((session) => {
+          if (session.id !== targetSessionId) return session;
+          const messagesById = new Map(session.messages.map((message) => [message.id, message]));
+          messagesById.set(data.user_message.id, data.user_message);
+          return { ...session, messages: Array.from(messagesById.values()) };
+        }));
+        setTransientMessages((current) => {
+          const currentMessages = current[targetSessionId] ?? [];
+          return {
+            ...current,
+            [targetSessionId]: appendOffTopicTransientMessage(currentMessages, data, {
+              requestId,
+              module: selectedModule,
+              timestamp: new Date().toLocaleTimeString(),
+            }),
+          };
+        });
+        clearChatDraft(authenticatedUserId, targetSessionId);
+        return;
+      }
       if (data.status !== 'ok' || !data.assistant_message) {
         throw new Error('Canonical AI response was not persisted.');
       }
@@ -1220,7 +1234,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                       </div>
 
                       {/* AI Action Buttons: Save & Copy */}
-                      {!isUser && msg.id !== 'welcome-msg' && (
+                      {!isUser && msg.id !== 'welcome-msg' && !msg.transient && (
                         <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200/30">
                           <button
                             onClick={() => handleCopyText(translateMsgText(msg.text, msg.id), msg.id)}

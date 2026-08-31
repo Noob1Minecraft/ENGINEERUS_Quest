@@ -9,6 +9,7 @@ import {
   isContextualEngineeringFollowUp,
   type EngineeringIntent,
 } from "../server/ai/engineeringPolicy";
+import { guardMaterialPropertyResponse } from "../server/ai/materialPropertyGuard";
 import { buildBoundedConversationContext } from "../server/ai/conversationContext";
 import { buildSystemPrompt } from "../server/ai/languagePolicy";
 import { createGroqResponder } from "../server/ai/groqClient";
@@ -101,6 +102,42 @@ test("material-property policy requires evidence and labels any unverified educa
   assert.match(policy, /approximate educational reference only/iu);
   assert.match(policy, /not suitable as final design data/iu);
   assert.match(policy, /Never fabricate a datasheet, citation, manufacturer value, or source/iu);
+});
+
+test("material-property guard replaces unqualified novel values for exact property requests without blocking calculations or labeled educational values", () => {
+  const exactPrompt = "Какой точный предел текучести у стали?";
+  const unqualified = guardMaterialPropertyResponse({
+    userPrompt: exactPrompt,
+    language: "ru",
+    content: "Для S235 это 235 МПа, а для S355 — 355 МПа.",
+  });
+  assert.equal(unqualified.replaced, true);
+  assert.doesNotMatch(unqualified.content, /\b(?:235|355)\s*МПа\b/u);
+  assert.match(unqualified.content, /марки|марка/iu);
+  assert.match(unqualified.content, /температур/iu);
+  assert.match(unqualified.content, /паспорт|стандарт/iu);
+  assert.doesNotMatch(unqualified.content, /ГОСТ|ISO|ASTM|datasheet/i);
+
+  const qualified = guardMaterialPropertyResponse({
+    userPrompt: exactPrompt,
+    language: "en",
+    content: "S235 is about 235 MPa as an approximate educational reference only; it is not suitable as final design data.",
+  });
+  assert.equal(qualified.replaced, false);
+
+  const userProvided = guardMaterialPropertyResponse({
+    userPrompt: "Is a yield strength of 355 MPa correct for this steel?",
+    language: "en",
+    content: "The supplied 355 MPa must be checked against the grade datasheet.",
+  });
+  assert.equal(userProvided.replaced, false);
+
+  const calculation = guardMaterialPropertyResponse({
+    userPrompt: "Сила 5 кН на площади 200 мм².",
+    language: "ru",
+    content: "Напряжение равно 25 МПа.",
+  });
+  assert.equal(calculation.replaced, false);
 });
 
 test("hallucination trap set resolves to an engineering control rather than an unsupported answer path", () => {
@@ -227,11 +264,57 @@ test("off-topic route bypasses provider and lookup, persists only the user promp
   await withServer(app, async (baseUrl) => {
     const response = await fetch(`${baseUrl}/api/module`, { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() }, body: JSON.stringify({ session_id: SESSION_ID, module: "tutor", text: "Write me a love poem", lang: "en" }) });
     assert.equal(response.status, 200);
-    const body = await response.json() as { response: string; assistant_message: unknown };
+    const body = await response.json() as { response: string; response_type: string; assistant_message: unknown };
     assert.equal(body.response, engineeringOffTopicRedirect("en"));
+    assert.equal(body.response_type, "off_topic_redirect");
     assert.equal(body.assistant_message, null);
   });
   assert.deepEqual(state, { providerCalls: 0, lookupCalls: 0, completions: 0, events: 0, xp: 0, persisted: "" });
+});
+
+test("exact material-property requests persist the deterministic safe fallback instead of unqualified generated values", async () => {
+  let persistedAssistant = "";
+  let providerCalls = 0;
+  const repository = {
+    async beginExchange() {
+      return {
+        userMessage: { id: "u", sender: "user" as const, text: "Какой точный предел текучести у стали?", module: "tutor" as const, timestamp: new Date().toISOString() },
+        assistantMessage: null,
+        progress: { xp: 0, level: 1, streak: 1, requests_count: 0, material_count: 0, patent_count: 0, modules_used: [] },
+      };
+    },
+    async completeExchange(_u: string, _t: string, _s: string, requestId: string, text: string, module: "tutor", xp: number) {
+      persistedAssistant = text;
+      return {
+        userMessage: { id: "u", sender: "user" as const, text: "Какой точный предел текучести у стали?", module, timestamp: new Date().toISOString() },
+        assistantMessage: { id: "a", sender: "ai" as const, text, module, timestamp: new Date().toISOString(), requestId, xpEarned: xp },
+        progress: { xp, level: 1, streak: 1, requests_count: 1, material_count: 0, patent_count: 0, modules_used: [module] },
+        awarded: true,
+      };
+    },
+  } as unknown as ChatRepository;
+  const auth: RequestHandler = (_request, response, next) => { response.locals.auth = { userId: USER_ID, accessToken: "test", claims: {} }; next(); };
+  const app = express(); app.use(express.json()); app.use(createAiRouter(auth, (_request, _response, next) => next(), {
+    repository,
+    detectLanguage: () => "ru",
+    generateResponse: async () => { providerCalls += 1; return "Для S235 это 235 МПа. Источник: паспорт производителя."; },
+  }));
+
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/module`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
+      body: JSON.stringify({ session_id: SESSION_ID, module: "tutor", text: "Какой точный предел текучести у стали?", lang: "ru" }),
+    });
+    const body = await response.json() as { response: string; assistant_message: { text: string }; xp: number };
+    assert.equal(response.status, 200);
+    assert.equal(body.response, persistedAssistant);
+    assert.equal(body.assistant_message.text, persistedAssistant);
+    assert.equal(body.xp, 15);
+  });
+  assert.equal(providerCalls, 1);
+  assert.doesNotMatch(persistedAssistant, /\b235\s*МПа\b|паспорт производителя/iu);
+  assert.match(persistedAssistant, /марки|марка/iu);
 });
 
 test("repeated and idempotent off-topic redirects create no assistant or reward while engineering and standards requests retain normal XP", async () => {

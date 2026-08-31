@@ -29,6 +29,7 @@ import {
   isContextualEngineeringFollowUp,
 } from "../ai/engineeringPolicy";
 import { buildBoundedConversationContext } from "../ai/conversationContext";
+import { guardMaterialPropertyResponse } from "../ai/materialPropertyGuard";
 
 const MODULES = ["tutor", "material", "patent", "engi_legal", "engi_match"] as const;
 const baseAiRequestSchema = z.object({
@@ -132,6 +133,7 @@ export function createAiRouter(
         }, started.assistantMessage.id);
         response.json({
           status: "ok",
+          response_type: "completion",
           response: started.assistantMessage.text,
           user_message: started.userMessage,
           assistant_message: started.assistantMessage,
@@ -172,6 +174,7 @@ export function createAiRouter(
         const responseText = engineeringOffTopicRedirect(detectedLanguage);
         response.json({
           status: "ok",
+          response_type: "off_topic_redirect",
           response: responseText,
           user_message: started.userMessage,
           assistant_message: null,
@@ -221,8 +224,19 @@ export function createAiRouter(
         generatedResponse = error.fallbackContent;
       }
       const sanitizedResponse = sanitizeAssistantContent(generatedResponse);
-      const firstGuardResult = guardStandardsResponse({
+      const materialGuardResult = guardMaterialPropertyResponse({
         content: sanitizedResponse,
+        userPrompt: canonicalPrompt,
+        language: detectedLanguage,
+      });
+      if (materialGuardResult.replaced) {
+        securityLogger.warn("material_property_response_replaced", {
+          language: detectedLanguage,
+          intent: engineeringIntent,
+        });
+      }
+      const firstGuardResult = guardStandardsResponse({
+        content: materialGuardResult.content,
         userPrompt: canonicalPrompt,
         lookupResult: prepared.lookupResult,
         language: detectedLanguage,
@@ -310,6 +324,7 @@ export function createAiRouter(
 
       response.json({
         status: "ok",
+        response_type: "completion",
         response: completed.assistantMessage?.text ?? responseText,
         user_message: completed.userMessage,
         assistant_message: completed.assistantMessage,

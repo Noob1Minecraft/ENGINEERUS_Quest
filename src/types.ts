@@ -276,6 +276,7 @@ export interface ChatMessage {
   xpEarned?: number;
   queryForAi?: string;
   requestId?: string;
+  transient?: boolean;
 }
 
 export interface ChatSession {
