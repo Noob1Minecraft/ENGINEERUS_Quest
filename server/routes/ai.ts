@@ -170,29 +170,14 @@ export function createAiRouter(
 
       if (engineeringIntent === "OFF_TOPIC") {
         const responseText = engineeringOffTopicRedirect(detectedLanguage);
-        const completed = await dependencies.repository.completeExchange(
-          userId,
-          accessToken,
-          sessionId,
-          requestId,
-          responseText,
-          moduleName,
-          xpAmount,
-        );
-        if (completed.assistantMessage) {
-          await trackProductEvent(dependencies.recordEvent, userId, "ai_message_sent", {
-            module: moduleName,
-            language: detectedLanguage,
-          }, completed.assistantMessage.id);
-        }
         response.json({
           status: "ok",
-          response: completed.assistantMessage?.text ?? responseText,
-          user_message: completed.userMessage,
-          assistant_message: completed.assistantMessage,
-          ...completed.progress,
+          response: responseText,
+          user_message: started.userMessage,
+          assistant_message: null,
+          ...started.progress,
           lang: detectedLanguage,
-          idempotent_replay: completed.awarded === false,
+          idempotent_replay: true,
         });
         return;
       }
