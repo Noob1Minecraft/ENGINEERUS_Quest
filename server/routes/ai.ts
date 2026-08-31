@@ -22,6 +22,13 @@ import type { ProductEventRecorder } from "../persistence/beta";
 import { trackProductEvent } from "../beta/trackProductEvent";
 import type { AiVisionImage } from "../ai/groqClient";
 import { MAX_IMAGES_PER_REQUEST, visionSystemPolicy } from "../images/imagePolicy";
+import {
+  buildEngineeringIntentPolicy,
+  classifyEngineeringIntent,
+  engineeringOffTopicRedirect,
+  isContextualEngineeringFollowUp,
+} from "../ai/engineeringPolicy";
+import { buildBoundedConversationContext } from "../ai/conversationContext";
 
 const MODULES = ["tutor", "material", "patent", "engi_legal", "engi_match"] as const;
 const baseAiRequestSchema = z.object({
@@ -135,6 +142,61 @@ export function createAiRouter(
         return;
       }
 
+      let conversationContext: ReturnType<typeof buildBoundedConversationContext>;
+      if (isContextualEngineeringFollowUp(canonicalPrompt)
+          && typeof dependencies.repository.messages === "function") {
+        try {
+          const history = await dependencies.repository.messages(userId, accessToken, sessionId, 8);
+          conversationContext = buildBoundedConversationContext(history.items, started.userMessage.id);
+        } catch {
+          // A follow-up remains safe and usable without history; the engineering
+          // policy requires clarification instead of invented prior parameters.
+        }
+      }
+
+      const engineeringIntent = classifyEngineeringIntent({
+        text: canonicalPrompt,
+        module: moduleName,
+        hasDocument: Boolean(documentId),
+        hasImages: Boolean(imageIds?.length),
+      });
+      securityLogger.info("ai_engineering_route", {
+        intent: engineeringIntent,
+        off_topic: engineeringIntent === "OFF_TOPIC",
+        standards_route: engineeringIntent === "ENGINEERING_STANDARD",
+        has_document: Boolean(documentId),
+        image_count: imageIds?.length ?? 0,
+      });
+
+      if (engineeringIntent === "OFF_TOPIC") {
+        const responseText = engineeringOffTopicRedirect(detectedLanguage);
+        const completed = await dependencies.repository.completeExchange(
+          userId,
+          accessToken,
+          sessionId,
+          requestId,
+          responseText,
+          moduleName,
+          xpAmount,
+        );
+        if (completed.assistantMessage) {
+          await trackProductEvent(dependencies.recordEvent, userId, "ai_message_sent", {
+            module: moduleName,
+            language: detectedLanguage,
+          }, completed.assistantMessage.id);
+        }
+        response.json({
+          status: "ok",
+          response: completed.assistantMessage?.text ?? responseText,
+          user_message: completed.userMessage,
+          assistant_message: completed.assistantMessage,
+          ...completed.progress,
+          lang: detectedLanguage,
+          idempotent_replay: completed.awarded === false,
+        });
+        return;
+      }
+
       const prepared = await preparePromptWithStandardsMetadata(canonicalPrompt, dependencies.lookupStandards);
       const documentContext = documentId
         ? await dependencies.loadDocumentContext?.(userId, documentId, canonicalPrompt)
@@ -148,9 +210,11 @@ export function createAiRouter(
       if (imageIds?.length && !imageContext) {
         throw new PersistenceError(503, "image_context_unavailable", "Image context is temporarily unavailable.");
       }
-      const providerPrompt = [prepared.prompt, documentContext?.promptBlock].filter(Boolean).join("\n\n");
+      const providerPrompt = [prepared.prompt, conversationContext?.promptBlock, documentContext?.promptBlock].filter(Boolean).join("\n\n");
       const baseSystemPolicy = [
+        buildEngineeringIntentPolicy(engineeringIntent),
         prepared.systemInstructions,
+        conversationContext?.systemPolicy,
         documentContext?.systemPolicy,
         imageContext?.length ? visionSystemPolicy() : undefined,
       ].filter(Boolean).join("\n\n");

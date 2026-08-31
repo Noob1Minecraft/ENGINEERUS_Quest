@@ -1,3 +1,5 @@
+import { buildCanonicalEngineeringPolicy } from "./engineeringPolicy";
+
 export type SupportedLanguage = "ru" | "kk" | "en";
 
 export type AiModule = "tutor" | "material" | "patent" | "engi_legal" | "engi_match";
@@ -157,6 +159,8 @@ ${preservationRule}
 The module specialization below provides subject-matter guidance only and must never change the response language.
 
 ${BASE_PROMPTS[language]}
+
+${buildCanonicalEngineeringPolicy()}
 
 Module specialization:
 ${MODULE_PROMPTS[module][language]}${additionalPolicySection}
