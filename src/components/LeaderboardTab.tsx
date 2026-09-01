@@ -44,6 +44,8 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({ user, lang }) =>
         <span>{lang === 'kk' ? 'ОРЫН' : lang === 'en' ? 'RANK' : 'МЕСТО'}</span>
         <span>{lang === 'kk' ? 'ИНЖЕНЕР' : lang === 'en' ? 'ENGINEER' : 'ИНЖЕНЕР'}</span>
         <span>XP</span>
+        <span>{lang === 'kk' ? 'ДЕҢГЕЙ' : lang === 'en' ? 'LEVEL' : 'УРОВЕНЬ'}</span>
+        <span>{lang === 'kk' ? 'СЕРИЯ' : lang === 'en' ? 'STREAK' : 'СЕРИЯ'}</span>
       </div>
       <div className="eq-leaderboard__list" role="list">
           {LEADERBOARD_USERS.map((entry) => {
@@ -59,11 +61,13 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({ user, lang }) =>
 
                 <div className="eq-leaderboard-row__identity">
                   <div><strong>{entry.name}</strong>{isGold && <span>{t.champion}</span>}</div>
-                  <p>{t.levelLabel} {entry.level} · <Flame aria-hidden="true" /> {entry.streak} {t.streakLabel}</p>
+                  <p>{entry.university}</p>
                 </div>
                 <div className="eq-leaderboard-row__score">
                   <strong>{entry.xp}</strong><span>XP</span>
                 </div>
+                <span className="eq-leaderboard-row__level"><small>{t.levelLabel}</small>{entry.level}</span>
+                <span className="eq-leaderboard-row__streak"><Flame aria-hidden="true" />{entry.streak}<small>{t.streakLabel}</small></span>
               </div>
             );
           })}
@@ -72,9 +76,11 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({ user, lang }) =>
             <span className="eq-leaderboard-row__rank">07</span>
             <div className="eq-leaderboard-row__identity">
               <div><strong>{user.username} ({t.you})</strong><span>{t.yourAccount}</span></div>
-              <p>{t.levelLabel} {user.level} · <Flame aria-hidden="true" /> {user.streak} {t.streakLabel}</p>
+              <p>{t.inKazakhstan}</p>
             </div>
             <div className="eq-leaderboard-row__score"><strong>{user.xp}</strong><span>XP</span></div>
+            <span className="eq-leaderboard-row__level"><small>{t.levelLabel}</small>{user.level}</span>
+            <span className="eq-leaderboard-row__streak"><Flame aria-hidden="true" />{user.streak}<small>{t.streakLabel}</small></span>
           </div>
       </div>
     </section>

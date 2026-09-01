@@ -117,14 +117,11 @@ export function ProjectCard({
 }) {
   return (
     <article className="eq-project-row">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3>{project.title}</h3>
-          <p className="eq-project-row__discipline">
-            {project.primary_discipline ? label(project.primary_discipline, lang) : '—'}
-          </p>
-        </div>
-        <span className="eq-status-label"><CircleDot aria-hidden="true" />{STATUS_LABEL[lang][project.status]}</span>
+      <div className="eq-project-row__identity">
+        <h3>{project.title}</h3>
+        <p className="eq-project-row__discipline">
+          {project.primary_discipline ? label(project.primary_discipline, lang) : '—'}
+        </p>
       </div>
       <p className="eq-project-row__description">
         {project.description || '—'}
@@ -133,11 +130,12 @@ export function ProjectCard({
         <span><UserRound aria-hidden="true" />{ownerView ? COPY[lang].mine : ownerName(project)}</span>
         <time dateTime={project.created_at}>{new Date(project.created_at).toLocaleDateString(lang)}</time>
       </div>
-      {onOpen && (
+      <span className="eq-status-label"><CircleDot aria-hidden="true" />{STATUS_LABEL[lang][project.status]}</span>
+      <div className="eq-project-row__actions">{onOpen && (
         <button type="button" onClick={() => onOpen(project.id)} className="eq-project-row__action">
           {COPY[lang].open}<ArrowLeft aria-hidden="true" className="rotate-180" />
         </button>
-      )}
+      )}</div>
     </article>
   );
 }
@@ -414,7 +412,7 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({ authenticated, lang, o
 
       {mode === 'requests' && !selected && <ProjectRequestsPanel lang={lang} onOpenConversation={onOpenConversation} />}
 
-      {!selected && mode !== 'requests' && (loading && projects.length === 0 ? <LoadingState label={copy.loading} /> : projects.length === 0 ? <EmptyState title={mode === 'mine' ? copy.emptyMine : copy.emptyDiscover} action={mode === 'mine' ? <Button onClick={() => { setCreating(true); setForm(EMPTY_FORM); }}>{copy.create}</Button> : undefined} /> : <div className="eq-project-list">{projects.map((project) => <ProjectCard key={project.id} project={project} lang={lang} ownerView={mode === 'mine'} onOpen={openProject} />)}</div>)}
+      {!selected && mode !== 'requests' && (loading && projects.length === 0 ? <LoadingState label={copy.loading} /> : projects.length === 0 ? <EmptyState title={mode === 'mine' ? copy.emptyMine : copy.emptyDiscover} action={mode === 'mine' ? <Button onClick={() => { setCreating(true); setForm(EMPTY_FORM); }}>{copy.create}</Button> : undefined} /> : <div className="eq-project-registry"><div className="eq-project-registry__head" aria-hidden="true"><span>{lang === 'kk' ? 'ЖОБА / ПӘН' : lang === 'en' ? 'PROJECT / DISCIPLINE' : 'ПРОЕКТ / ДИСЦИПЛИНА'}</span><span>{lang === 'kk' ? 'ҚЫСҚАША СИПАТТАМА' : lang === 'en' ? 'ENGINEERING BRIEF' : 'ИНЖЕНЕРНЫЙ БРИФ'}</span><span>{lang === 'kk' ? 'КОМАНДА / КҮН' : lang === 'en' ? 'TEAM / DATE' : 'КОМАНДА / ДАТА'}</span><span>{lang === 'kk' ? 'КҮЙІ' : lang === 'en' ? 'STATUS' : 'СТАТУС'}</span><span>{lang === 'kk' ? 'ӘРЕКЕТ' : lang === 'en' ? 'ACTION' : 'ДЕЙСТВИЕ'}</span></div><div className="eq-project-list">{projects.map((project) => <ProjectCard key={project.id} project={project} lang={lang} ownerView={mode === 'mine'} onOpen={openProject} />)}</div></div>)}
 
       {!selected && mode === 'mine' && myCursor && <button type="button" disabled={loading} onClick={loadMoreMine} className="mx-auto block rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-xs font-bold disabled:opacity-50">{copy.loadMore}</button>}
       {!selected && mode === 'discover' && discoverCursor && <button type="button" onClick={() => runDiscovery(discoverCursor)} className="mx-auto block rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-xs font-bold">{copy.loadMore}</button>}

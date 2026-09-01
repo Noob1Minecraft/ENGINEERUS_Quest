@@ -63,3 +63,27 @@ test('existing behavior hooks remain present on refined interactive surfaces', (
   for (const required of ['createProject', 'updateProject', 'archiveProject', 'ProjectRecruitmentPanel']) assert.match(projects, new RegExp(required, 'u'));
   for (const required of ['findTeammates', 'findProjectMatches', 'inviteToProjectRole', 'applyToProjectRole']) assert.match(matching, new RegExp(required, 'u'));
 });
+
+test('corrective pass replaces legacy card compositions with task-specific structures', () => {
+  const learning = source('src/components/RoadmapBooksTab.tsx');
+  const tutor = source('src/components/AIAssistantTab.tsx');
+  const documents = source('src/components/DocumentsTab.tsx');
+  const images = source('src/components/ImagesPanel.tsx');
+  const projects = source('src/components/ProjectsTab.tsx');
+  const matching = source('src/components/EngiMatchTab.tsx');
+  const ranking = source('src/components/LeaderboardTab.tsx');
+
+  assert.match(learning, /eq-learning-path__rail/u);
+  assert.match(learning, /eq-resource-register__head/u);
+  assert.match(tutor, /<aside className=\{`eq-ai-history/u);
+  assert.match(tutor, /eq-ai-transcript/u);
+  assert.match(documents, /role="table"/u);
+  assert.match(documents, /eq-document-table__head/u);
+  assert.match(images, /eq-image-toolbar/u);
+  assert.match(images, /<figure/u);
+  assert.match(projects, /eq-project-registry__head/u);
+  assert.match(matching, /eq-match-register__head/u);
+  assert.match(matching, /fitScore\(match\)/u);
+  assert.match(ranking, /eq-leaderboard-row__level/u);
+  assert.match(ranking, /eq-leaderboard-row__streak/u);
+});

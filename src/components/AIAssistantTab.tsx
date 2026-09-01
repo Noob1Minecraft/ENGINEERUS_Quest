@@ -945,7 +945,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
       {activeSubView === 'chat' ? (
         <div className={`flex flex-col gap-4 ${isFullscreen ? 'flex-1 min-h-0' : ''}`}>
           {/* Module Selectors Row */}
-          <div className="eq-ai-modules grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 shrink-0">
+          <nav className="eq-ai-modules grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 shrink-0" aria-label={lang === 'kk' ? 'Инженерлік модуль' : lang === 'en' ? 'Engineering module' : 'Инженерный модуль'}>
             {Object.entries(MODULE_CONFIG).map(([key, config]) => {
               const IconComp = config.icon;
               const isSelected = selectedModule === key;
@@ -981,7 +981,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                 </button>
               );
             })}
-          </div>
+          </nav>
 
           {/* Quick Preset Questions Bar */}
           {!isFullscreen && (
@@ -1017,7 +1017,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
               isFullscreen ? 'flex-1 min-h-0 bg-slate-900 border-slate-800 text-slate-100' : 'min-h-[420px] max-h-[650px]'
             }`}
           >
-            <aside className={`absolute inset-y-0 left-0 z-10 hidden w-64 flex-col border-r lg:flex ${isFullscreen ? 'border-slate-800 bg-slate-950' : 'border-slate-200 bg-slate-50'}`} aria-label={lang === 'kk' ? 'Сақталған чаттар' : lang === 'en' ? 'Saved conversations' : 'Сохранённые чаты'}>
+            <aside className={`eq-ai-history hidden min-h-0 w-64 flex-col border-r lg:flex ${isFullscreen ? 'border-slate-800 bg-slate-950' : 'border-slate-200 bg-slate-50'}`} aria-label={lang === 'kk' ? 'Сақталған чаттар' : lang === 'en' ? 'Saved conversations' : 'Сохранённые чаты'}>
               <div className="flex items-center justify-between gap-2 border-b border-inherit p-3">
                 <span className="flex min-w-0 items-center gap-2 text-xs font-black uppercase tracking-wide"><History className="h-4 w-4 text-blue-500" />{lang === 'kk' ? 'Чаттар' : lang === 'en' ? 'Conversations' : 'Диалоги'}</span>
                 <button type="button" onClick={handleCreateNewChat} aria-label={t.newChat} className="rounded-lg bg-blue-600 p-2 text-white transition hover:bg-blue-700"><Plus className="h-4 w-4" /></button>
@@ -1038,7 +1038,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
             </aside>
             {/* Top Bar with Saved Chats Switcher & New Chat Button */}
             <div
-              className={`border-b px-4 py-2.5 flex items-center justify-between gap-2 shrink-0 lg:ml-64 ${
+              className={`eq-ai-conversation-bar border-b px-4 py-2.5 flex items-center justify-between gap-2 shrink-0 ${
                 isFullscreen ? 'bg-slate-900/90 border-slate-800' : 'bg-slate-50/90 border-slate-200/80'
               }`}
             >
@@ -1150,7 +1150,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
 
             {/* Chat Messages Timeline Scroll Box */}
             <div
-              className={`flex-1 p-4 sm:p-5 overflow-y-auto space-y-4 lg:ml-64 ${
+              className={`eq-ai-transcript flex-1 p-4 sm:p-5 overflow-y-auto space-y-4 ${
                 isFullscreen ? 'bg-slate-950/60' : 'bg-slate-50/30'
               }`}
             >
@@ -1323,7 +1323,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
 
             {/* Chat Composer Input Area */}
             <div
-              className={`eq-ai-composer p-3 sm:p-4 border-t shrink-0 lg:ml-64 ${
+              className={`eq-ai-composer p-3 sm:p-4 border-t shrink-0 ${
                 isFullscreen ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200/80'
               }`}
             >
