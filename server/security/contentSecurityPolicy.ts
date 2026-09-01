@@ -1,6 +1,8 @@
 export const CONTENT_SECURITY_POLICY_HEADER = "Content-Security-Policy-Report-Only";
+export const PRODUCTION_API_ORIGIN = "https://api.equest.kz";
+export const PREVIEW_API_ORIGIN = "https://engineerus-quest-supabase.onrender.com";
 
-const productionDirectiveEntries = [
+const createDirectiveEntries = (apiOrigin: string) => [
   ["default-src", ["'self'"]],
   ["script-src", ["'self'"]],
   // React currently renders two progress indicators with style attributes.
@@ -11,10 +13,7 @@ const productionDirectiveEntries = [
   ["font-src", ["'self'"]],
   ["connect-src", [
     "'self'",
-    "https://engineerus-quest-supabase.onrender.com",
-    // Vercel serves this static CSP configuration to Preview and production.
-    // Keep both explicit API origins; never broaden this directive with a wildcard.
-    "https://api.equest.kz",
+    apiOrigin,
     "https://gsudtcyoaknehfixaxha.supabase.co",
     "wss://gsudtcyoaknehfixaxha.supabase.co",
   ]],
@@ -24,14 +23,29 @@ const productionDirectiveEntries = [
   ["form-action", ["'self'"]],
 ] as const;
 
-export const PRODUCTION_CSP_VALUE = productionDirectiveEntries
+const serializeDirectives = (entries: ReturnType<typeof createDirectiveEntries>) => entries
   .map(([directive, values]) => `${directive} ${values.join(" ")}`)
   .join("; ");
 
-export function createContentSecurityPolicyDirectives(nodeEnv: string): Record<string, string[]> {
-  const directives = Object.fromEntries(
-    productionDirectiveEntries.map(([directive, values]) => [directive, [...values]]),
+export const PRODUCTION_CSP_VALUE = serializeDirectives(
+  createDirectiveEntries(PRODUCTION_API_ORIGIN),
+);
+
+export const PREVIEW_CSP_VALUE = serializeDirectives(
+  createDirectiveEntries(PREVIEW_API_ORIGIN),
+);
+
+export function createFrontendContentSecurityPolicyDirectives(
+  environment: "production" | "preview",
+): Record<string, string[]> {
+  const apiOrigin = environment === "production" ? PRODUCTION_API_ORIGIN : PREVIEW_API_ORIGIN;
+  return Object.fromEntries(
+    createDirectiveEntries(apiOrigin).map(([directive, values]) => [directive, [...values]]),
   ) as Record<string, string[]>;
+}
+
+export function createContentSecurityPolicyDirectives(nodeEnv: string): Record<string, string[]> {
+  const directives = createFrontendContentSecurityPolicyDirectives("production");
 
   if (nodeEnv !== "production") {
     directives["connect-src"].push(
