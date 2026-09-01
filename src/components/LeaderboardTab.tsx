@@ -1,7 +1,7 @@
 import React from 'react';
 import { UserProfile, Language } from '../types';
 import { TRANSLATIONS } from '../data';
-import { Trophy, Award, Flame, Star, Sparkles } from 'lucide-react';
+import { Trophy, Flame } from 'lucide-react';
 
 interface LeaderboardTabProps {
   user: UserProfile;
@@ -21,124 +21,57 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({ user, lang }) =>
   const t = TRANSLATIONS[lang];
 
   return (
-    <div className="space-y-4 sm:space-y-6 animate-fade-in">
-      <div className="bg-gradient-to-br from-slate-50 via-slate-100/40 to-blue-50/25 text-slate-800 rounded-2xl p-5 sm:p-6 md:p-8 shadow-xs relative overflow-hidden border border-slate-200/50">
-        <div className="absolute top-0 right-0 -mt-10 -mr-10 w-60 h-60 bg-blue-500/5 rounded-full blur-3xl pointer-events-none" />
-        <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
+    <section className="eq-legacy-page eq-leaderboard" aria-labelledby="leaderboard-title">
+      <header className="eq-legacy-page__header eq-leaderboard__header">
           <div>
-            <div className="inline-flex items-center gap-1.5 bg-blue-50 border border-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold mb-3">
-              <Trophy className="w-3.5 h-3.5 text-amber-500" /> {t.topEngineers}
-            </div>
-            <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900">
+            <span className="eq-legacy-page__eyebrow"><Trophy aria-hidden="true" />{t.topEngineers}</span>
+            <h2 id="leaderboard-title" className="eq-legacy-page__title">
               {t.leaderboardTitle}
             </h2>
-            <p className="text-xs text-slate-500 font-medium mt-1 max-w-md leading-relaxed">
+            <p className="eq-legacy-page__description">
               {t.leaderboardDesc}
             </p>
           </div>
 
-          <div className="bg-white border border-slate-200/60 rounded-2xl p-4 text-center shrink-0 min-w-[200px] shadow-xs">
-            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-              {t.yourPosition}
-            </div>
-            <div className="text-2xl font-extrabold text-blue-600 my-1">
-              #7 <span className="text-xs font-bold text-slate-400">{t.inKazakhstan}</span>
-            </div>
-            <div className="text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200/50 px-3 py-1 rounded-full inline-block">
-              {user.xp} XP • Lvl {user.level}
-            </div>
+          <div className="eq-leaderboard__position">
+            <span>{t.yourPosition}</span>
+            <strong>#7</strong>
+            <small>{t.inKazakhstan} · {user.xp} XP · Lvl {user.level}</small>
           </div>
-        </div>
-      </div>
+      </header>
 
-      {/* Leaderboard Table Card */}
-      <div className="bg-white rounded-2xl border border-slate-200/60 shadow-xs overflow-hidden">
-        <div className="divide-y divide-slate-100">
+      <div className="eq-leaderboard__list" role="list">
           {LEADERBOARD_USERS.map((entry) => {
             const isGold = entry.rank === 1;
-            const isSilver = entry.rank === 2;
-            const isBronze = entry.rank === 3;
 
             return (
               <div
                 key={entry.rank}
-                className={`p-4 sm:p-5 flex items-center justify-between gap-4 transition-colors ${
-                  isGold ? 'bg-amber-50/10' : 'hover:bg-slate-50/50'
-                }`}
+                role="listitem"
+                className={`eq-leaderboard-row${isGold ? ' is-leading' : ''}`}
               >
-                <div className="flex items-center gap-3.5">
-                  {/* Rank Badge */}
-                  <div
-                    className={`w-9.5 h-9.5 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 ${
-                      isGold
-                        ? 'bg-amber-50 text-amber-700 border border-amber-200/50'
-                        : isSilver
-                        ? 'bg-slate-100 text-slate-700 border border-slate-200/30'
-                        : isBronze
-                        ? 'bg-amber-50/50 text-amber-800/80 border border-amber-200/30'
-                        : 'bg-slate-50 text-slate-500 border border-slate-100'
-                    }`}
-                  >
-                    {isGold ? <Trophy className="w-4 h-4 text-amber-500" /> : `#${entry.rank}`}
-                  </div>
+                <span className="eq-leaderboard-row__rank">{String(entry.rank).padStart(2, '0')}</span>
 
-                  <div>
-                    <div className="font-bold text-sm text-slate-900 flex items-center gap-2">
-                      <span>{entry.name}</span>
-                      {isGold && (
-                        <span className="bg-amber-50 text-amber-800 text-[9px] font-bold px-1.5 py-0.2 rounded-md border border-amber-200/40">
-                          {t.champion}
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-xs text-slate-400 font-medium flex items-center gap-3 mt-0.5">
-                      <span>{t.levelLabel} {entry.level}</span>
-                      <span className="flex items-center gap-1 text-orange-500 font-bold">
-                        <Flame className="w-3 h-3" /> {entry.streak} {t.streakLabel}
-                      </span>
-                    </div>
-                  </div>
+                <div className="eq-leaderboard-row__identity">
+                  <div><strong>{entry.name}</strong>{isGold && <span>{t.champion}</span>}</div>
+                  <p>{t.levelLabel} {entry.level} · <Flame aria-hidden="true" /> {entry.streak} {t.streakLabel}</p>
                 </div>
-
-                <div className="text-right shrink-0">
-                  <div className="text-sm sm:text-base font-extrabold text-slate-800">
-                    {entry.xp} <span className="text-xs font-bold text-amber-600">XP</span>
-                  </div>
+                <div className="eq-leaderboard-row__score">
+                  <strong>{entry.xp}</strong><span>XP</span>
                 </div>
               </div>
             );
           })}
 
-          {/* Current User Row */}
-          <div className="p-4 sm:p-5 flex items-center justify-between gap-4 bg-blue-50/20 border-t border-blue-100">
-            <div className="flex items-center gap-3.5">
-              <div className="w-9.5 h-9.5 rounded-xl bg-blue-50 text-blue-600 border border-blue-100/60 flex items-center justify-center font-bold text-sm shrink-0 shadow-2xs">
-                #7
-              </div>
-              <div>
-                <div className="font-bold text-sm text-slate-900 flex items-center gap-2">
-                  <span>{user.username} ({t.you})</span>
-                  <span className="bg-blue-600 text-white text-[9px] font-bold px-1.5 py-0.2 rounded-md">
-                    {t.yourAccount}
-                  </span>
-                </div>
-                <div className="text-xs text-slate-400 font-medium flex items-center gap-3 mt-0.5">
-                  <span>{t.levelLabel} {user.level}</span>
-                  <span className="flex items-center gap-1 text-orange-500 font-bold">
-                    <Flame className="w-3 h-3" /> {user.streak} {t.streakLabel}
-                  </span>
-                </div>
-              </div>
+          <div role="listitem" className="eq-leaderboard-row is-current">
+            <span className="eq-leaderboard-row__rank">07</span>
+            <div className="eq-leaderboard-row__identity">
+              <div><strong>{user.username} ({t.you})</strong><span>{t.yourAccount}</span></div>
+              <p>{t.levelLabel} {user.level} · <Flame aria-hidden="true" /> {user.streak} {t.streakLabel}</p>
             </div>
-
-            <div className="text-right shrink-0">
-              <div className="text-sm sm:text-base font-extrabold text-blue-700">
-                {user.xp} <span className="text-xs font-bold text-blue-500">XP</span>
-              </div>
-            </div>
+            <div className="eq-leaderboard-row__score"><strong>{user.xp}</strong><span>XP</span></div>
           </div>
-        </div>
       </div>
-    </div>
+    </section>
   );
 };

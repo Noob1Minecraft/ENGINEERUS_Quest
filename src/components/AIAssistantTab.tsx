@@ -3,8 +3,16 @@ import ReactMarkdown from 'react-markdown';
 import { UserProfile, Language, SavedNote, ChatMessage, ChatSession } from '../types';
 import { TRANSLATIONS } from '../data';
 import { verifySystemIntegrity } from '../utils/integrity';
+import { apiFetch } from '../utils/api';
+import { loadSavedAiNotes, storeSavedAiNotes } from '../utils/savedAiNotes';
+import { activeChatStorageKey, buildConversationTitle, clearChatDraft, isUntitledConversation, loadChatDraft, storeChatDraft } from '../ai/chatWorkspace';
+import { appendOffTopicTransientMessage, isOffTopicRedirectResponse, type ModuleAiResponse } from '../ai/moduleResponse';
+import { AiAttachmentPicker } from './AiAttachmentPicker';
+import { Button } from './ui';
+import { useDialogFocus } from '../hooks/useDialogFocus';
 import {
-  Sparkles,
+  DraftingCompass,
+  GraduationCap,
   Send,
   Layers,
   Cpu,
@@ -28,20 +36,25 @@ import {
   Maximize2,
   Minimize2,
   Edit2,
+  MoreHorizontal,
   X,
   History,
   FolderKanban
 } from 'lucide-react';
 
-//  ДОБАВЛЕНО: Базовый URL для API (подтягивается из Vercel/локального .env)
-const API_BASE = import.meta.env.VITE_API_URL || '';
-
 interface AIAssistantTabProps {
   user: UserProfile;
+  authenticatedUserId: string | null;
   lang: Language;
   onUpdateUser: (updated: Partial<UserProfile>) => void;
-  onCompleteQuest?: (questId: string) => void;
+  onCompleteQuest?: (questId: string) => Promise<void>;
   initialModule?: string;
+  documentContext?: { id: string; name: string } | null;
+  onClearDocumentContext?: () => void;
+  onSelectDocumentContext?: (document: { id: string; name: string } | null) => void;
+  imageContext?: Array<{ id: string; name: string }>;
+  onClearImageContext?: () => void;
+  onSelectImageContext?: (images: Array<{ id: string; name: string }>) => void;
 }
 
 const PRESET_QUESTIONS: Record<string, Record<Language, string[]>> = {
@@ -133,19 +146,35 @@ const PRESET_QUESTIONS: Record<string, Record<Language, string[]>> = {
 };
 
 const MODULE_CONFIG: Record<string, { label: string; icon: React.FC<{ className?: string }>; color: string; badgeBg: string }> = {
-  tutor: { label: 'TUTOR AI', icon: Sparkles, color: 'text-blue-600', badgeBg: 'bg-blue-600' },
+  tutor: { label: 'TUTOR AI', icon: GraduationCap, color: 'text-blue-600', badgeBg: 'bg-blue-600' },
   material: { label: 'MaterialSwap', icon: Layers, color: 'text-emerald-600', badgeBg: 'bg-emerald-600' },
   patent: { label: 'PatentCraft', icon: Cpu, color: 'text-purple-600', badgeBg: 'bg-purple-600' },
   engi_legal: { label: 'EngiLegal', icon: ShieldCheck, color: 'text-amber-600', badgeBg: 'bg-amber-600' },
   engi_match: { label: 'EngiMatch', icon: Users, color: 'text-indigo-600', badgeBg: 'bg-indigo-600' },
 };
 
+type PageResponse<T> = { items: T[]; next_cursor: string | null };
+
+function mergeMessages(...groups: ChatMessage[][]): ChatMessage[] {
+  const byId = new Map<string, ChatMessage>();
+  groups.flat().forEach((message) => byId.set(message.id, message));
+  return [...byId.values()].sort((left, right) =>
+    left.timestamp.localeCompare(right.timestamp) || left.id.localeCompare(right.id));
+}
+
 export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
   user,
+  authenticatedUserId,
   lang,
   onUpdateUser,
   onCompleteQuest,
   initialModule,
+  documentContext,
+  onClearDocumentContext,
+  onSelectDocumentContext,
+  imageContext = [],
+  onClearImageContext,
+  onSelectImageContext,
 }) => {
   const t = TRANSLATIONS[lang];
   const [activeSubView, setActiveSubView] = useState<'chat' | 'saved'>('chat');
@@ -160,41 +189,33 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
   const [loading, setLoading] = useState<boolean>(false);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [showSessionsDrawer, setShowSessionsDrawer] = useState<boolean>(false);
+  const [persistenceError, setPersistenceError] = useState<string | null>(null);
 
   // User Multi-Chat Sessions
   const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [transientMessages, setTransientMessages] = useState<Record<string, ChatMessage[]>>({});
   const [activeSessionId, setActiveSessionId] = useState<string>('');
-  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [sessionCursor, setSessionCursor] = useState<string | null>(null);
+  const [messageCursors, setMessageCursors] = useState<Record<string, string | null>>({});
+  const [loadingOlderSessions, setLoadingOlderSessions] = useState(false);
+  const [loadingMessageSessions, setLoadingMessageSessions] = useState<Set<string>>(new Set());
+  const [sessionMenuId, setSessionMenuId] = useState<string | null>(null);
+  const [renameTarget, setRenameTarget] = useState<ChatSession | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ChatSession | null>(null);
   const [newTitleInput, setNewTitleInput] = useState<string>('');
+  const [sessionMutationPending, setSessionMutationPending] = useState(false);
+  const loadedMessageSessionsRef = useRef<Set<string>>(new Set());
+  const sessionPageInFlightRef = useRef(false);
+  const messagePagesInFlightRef = useRef<Set<string>>(new Set());
+  const sessionMenuTriggersRef = useRef<Map<string, HTMLButtonElement>>(new Map());
+  const dialogReturnFocusRef = useRef<HTMLButtonElement | null>(null);
+  const managementDialogRef = useRef<HTMLElement>(null);
+  const managementInitialFocusRef = useRef<HTMLElement>(null);
+  const newChatButtonRef = useRef<HTMLButtonElement | null>(null);
 
   // Saved Notes Library
-  const [savedNotes, setSavedNotes] = useState<SavedNote[]>(() => {
-    const saved = localStorage.getItem('eq_saved_ai_notes');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    return [
-      {
-        id: 'sample-saved-1',
-        module: 'material',
-        query: 'Сравни конструкционную сталь 09Г2С и Сталь 45 для северного Казахстана',
-        response: `**Сравнение Стали 09Г2С и Стали 45 для северных регионов РК:**\n\n` +
-          `1. **Сталь 09Г2С (Низколегированная)**:\n` +
-          `   - **Предел текучести**: ~345 МПа\n` +
-          `   - **Хладноломкость**: Сохраняет ударную вязкость при температурах до -70°C (ГОСТ 19281).\n` +
-          `   - **Свариваемость**: Без ограничений.\n` +
-          `2. **Сталь 45 (Качественная углеродистая)**:\n` +
-          `   - **Предел текучести**: ~355 МПа\n` +
-          `   - **Хладноломкость**: Склонна к хрупкому разрушению при температурах ниже -20°C.\n` +
-          `   - **Вывод**: Для уличных несущих металлоконструкций рекомендована **Сталь 09Г2С**.`,
-        savedAt: '22 Июля 2026, 11:30',
-      },
-    ];
-  });
+  const [savedNotes, setSavedNotes] = useState<SavedNote[]>(() =>
+    loadSavedAiNotes(localStorage, authenticatedUserId));
 
   // UI Toast & Search States
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -202,57 +223,168 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
   const [savedFilterModule, setSavedFilterModule] = useState<string>('all');
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const promptHydrationRef = useRef<string>('');
+  const skipDraftPersistRef = useRef(false);
 
   useEffect(() => {
     // Assert system integrity across modules
     verifySystemIntegrity(t.attributionCaption);
   }, [lang, t]);
 
+  useEffect(() => {
+    setSavedNotes(loadSavedAiNotes(localStorage, authenticatedUserId));
+  }, [authenticatedUserId]);
+
   // Load chats for user from server
   useEffect(() => {
-    const userEmail = user.email || 'student@engineerus.kz';
-    //  ИСПРАВЛЕНО: Добавлен API_BASE
-    fetch(`${API_BASE}/api/chats/${encodeURIComponent(userEmail)}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data && data.chats && data.chats.length > 0) {
-          setSessions(data.chats);
-          setActiveSessionId(data.chats[0].id);
-        } else {
-          // create default
-          const defaultSession: ChatSession = {
-            id: 'session_' + Date.now(),
-            title: 'Инженерный консилиум (Главный)',
-            module: 'tutor',
-            createdAt: new Date().toLocaleDateString('ru-RU'),
-            updatedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            messages: [
-              {
-                id: 'welcome-msg',
-                sender: 'ai',
-                module: 'tutor',
-                text: 'Здравствуйте! Я ваш инженерный ИИ-тьютор **Engineerus**. Задайте вопрос по сопромату, ГОСТ РК, материалам или патентам.',
-                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-              },
-            ],
-          };
-          setSessions([defaultSession]);
-          setActiveSessionId(defaultSession.id);
-        }
-      })
-      .catch((err) => {
-        console.error(err);
-      });
-  }, [user.email]);
+    loadedMessageSessionsRef.current = new Set();
+    messagePagesInFlightRef.current = new Set();
+    sessionPageInFlightRef.current = false;
+    setMessageCursors({});
+    setSessionCursor(null);
+    setLoadingMessageSessions(new Set());
+    setTransientMessages({});
 
-  // Sync saved notes to local storage
+    if (!authenticatedUserId) {
+      setSessions([]);
+      setActiveSessionId('');
+      setPersistenceError(null);
+      return;
+    }
+
+    let active = true;
+    const loadPersistentChats = async () => {
+      try {
+        setPersistenceError(null);
+        const data = await apiFetch<PageResponse<Omit<ChatSession, 'messages'>>>('/api/chats?limit=20');
+        let persistentSessions = data.items;
+        let nextCursor = data.next_cursor;
+        if (persistentSessions.length === 0) {
+          const created = await apiFetch<{ session: Omit<ChatSession, 'messages'> }>('/api/chats', {
+            method: 'POST',
+            body: JSON.stringify({
+              module: 'tutor',
+              title: 'New conversation',
+            }),
+          });
+          persistentSessions = [created.session];
+          nextCursor = null;
+          loadedMessageSessionsRef.current.add(created.session.id);
+        }
+
+        if (active) {
+          setSessions(persistentSessions.map((session) => ({ ...session, messages: [] })));
+          setSessionCursor(nextCursor);
+          const restoredId = sessionStorage.getItem(activeChatStorageKey(authenticatedUserId));
+          const selectedId = persistentSessions.some((session) => session.id === restoredId)
+            ? restoredId!
+            : persistentSessions[0]?.id || '';
+          setActiveSessionId(selectedId);
+          setSelectedModule(persistentSessions.find((session) => session.id === selectedId)?.module ?? 'tutor');
+        }
+      } catch {
+        if (active) {
+          setSessions([]);
+          setActiveSessionId('');
+          setPersistenceError(lang === 'kk'
+            ? 'Чаттарды тұрақты сақтау орнына қосылу мүмкін болмады.'
+            : lang === 'en'
+              ? 'Persistent chat storage is unavailable.'
+              : 'Постоянное хранилище чатов временно недоступно.');
+        }
+      }
+    };
+
+    void loadPersistentChats();
+    return () => { active = false; };
+  }, [authenticatedUserId]);
+
   useEffect(() => {
-    localStorage.setItem('eq_saved_ai_notes', JSON.stringify(savedNotes));
-  }, [savedNotes]);
+    if (!authenticatedUserId || !activeSessionId) return;
+    sessionStorage.setItem(activeChatStorageKey(authenticatedUserId), activeSessionId);
+    const key = `${authenticatedUserId}:${activeSessionId}`;
+    promptHydrationRef.current = key;
+    skipDraftPersistRef.current = true;
+    setPromptText(loadChatDraft(authenticatedUserId, activeSessionId));
+  }, [activeSessionId, authenticatedUserId]);
+
+  useEffect(() => {
+    if (!authenticatedUserId || !activeSessionId) return;
+    const key = `${authenticatedUserId}:${activeSessionId}`;
+    if (promptHydrationRef.current !== key) return;
+    if (skipDraftPersistRef.current) {
+      skipDraftPersistRef.current = false;
+      return;
+    }
+    storeChatDraft(authenticatedUserId, activeSessionId, promptText);
+  }, [activeSessionId, authenticatedUserId, promptText]);
+
+  useEffect(() => {
+    if (!sessionMenuId) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      if (sessionMenuId) {
+        const trigger = sessionMenuTriggersRef.current.get(sessionMenuId);
+        setSessionMenuId(null);
+        queueMicrotask(() => trigger?.focus());
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [sessionMenuId]);
+
+  // Hydrate only the selected chat. Other sessions remain lightweight until opened.
+  useEffect(() => {
+    if (!authenticatedUserId || !activeSessionId
+      || loadedMessageSessionsRef.current.has(activeSessionId)
+      || messagePagesInFlightRef.current.has(activeSessionId)) return;
+
+    let active = true;
+    loadedMessageSessionsRef.current.add(activeSessionId);
+    messagePagesInFlightRef.current.add(activeSessionId);
+    setLoadingMessageSessions((current) => new Set(current).add(activeSessionId));
+
+    void apiFetch<PageResponse<ChatMessage>>(
+      `/api/chats/${encodeURIComponent(activeSessionId)}/messages?limit=50`,
+    ).then((result) => {
+      if (!active) return;
+      setSessions((current) => current.map((session) => session.id === activeSessionId
+        ? { ...session, messages: result.items }
+        : session));
+      setMessageCursors((current) => ({ ...current, [activeSessionId]: result.next_cursor }));
+    }).catch(() => {
+      loadedMessageSessionsRef.current.delete(activeSessionId);
+      if (active) {
+        setPersistenceError(lang === 'kk'
+          ? 'Чат хабарларын жүктеу мүмкін болмады.'
+          : lang === 'en'
+            ? 'Chat messages could not be loaded.'
+            : 'Не удалось загрузить сообщения чата.');
+      }
+    }).finally(() => {
+      messagePagesInFlightRef.current.delete(activeSessionId);
+      setLoadingMessageSessions((current) => {
+        const next = new Set(current);
+        next.delete(activeSessionId);
+        return next;
+      });
+    });
+
+    return () => { active = false; };
+  }, [activeSessionId, authenticatedUserId, lang]);
 
   // Active Chat Session
   const activeSession = sessions.find((s) => s.id === activeSessionId) || sessions[0];
-  const messages = activeSession ? activeSession.messages : [];
+  const messages = activeSession
+    ? [...activeSession.messages, ...(transientMessages[activeSession.id] ?? [])]
+    : [];
+
+  const selectSession = (session: ChatSession) => {
+    setActiveSessionId(session.id);
+    setSelectedModule(session.module);
+    setShowSessionsDrawer(false);
+  };
 
   const translateMsgText = (text: string, id: string) => {
     if (id === 'welcome-msg') {
@@ -273,6 +405,9 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
   };
 
   const translateSessionTitle = (title: string) => {
+    if (title === 'New conversation') {
+      return lang === 'kk' ? 'Жаңа чат' : lang === 'en' ? 'New chat' : 'Новый чат';
+    }
     if (title === 'Инженерный консилиум (Главный)') {
       return lang === 'kk'
         ? 'Инженерлік консилиум (Басты)'
@@ -304,262 +439,272 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
     }
   }, [messages, loading, activeSubView]);
 
-  // Save current session to server
-  const syncSessionToServer = async (updatedSession: ChatSession) => {
+  const loadOlderSessions = async () => {
+    if (!sessionCursor || sessionPageInFlightRef.current) return;
+    sessionPageInFlightRef.current = true;
+    setLoadingOlderSessions(true);
     try {
-      //  ИСПРАВЛЕНО: Добавлен API_BASE
-      await fetch(`${API_BASE}/api/chats/save`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: user.email,
-          session: updatedSession,
-        }),
+      const result = await apiFetch<PageResponse<Omit<ChatSession, 'messages'>>>(
+        `/api/chats?limit=20&cursor=${encodeURIComponent(sessionCursor)}`,
+      );
+      setSessions((current) => {
+        const byId = new Map(current.map((session) => [session.id, session]));
+        result.items.forEach((session) => {
+          if (!byId.has(session.id)) byId.set(session.id, { ...session, messages: [] });
+        });
+        return [...byId.values()];
       });
-    } catch (e) {
-      console.error(e);
+      setSessionCursor(result.next_cursor);
+    } catch {
+      setPersistenceError(lang === 'kk'
+        ? 'Ескі чаттарды жүктеу мүмкін болмады.'
+        : lang === 'en'
+          ? 'Older chats could not be loaded.'
+          : 'Не удалось загрузить старые чаты.');
+    } finally {
+      sessionPageInFlightRef.current = false;
+      setLoadingOlderSessions(false);
+    }
+  };
+
+  const loadOlderMessages = async () => {
+    const cursor = activeSessionId ? messageCursors[activeSessionId] : null;
+    if (!activeSessionId || !cursor || messagePagesInFlightRef.current.has(activeSessionId)) return;
+    const sessionId = activeSessionId;
+    messagePagesInFlightRef.current.add(sessionId);
+    setLoadingMessageSessions((current) => new Set(current).add(sessionId));
+    try {
+      const result = await apiFetch<PageResponse<ChatMessage>>(
+        `/api/chats/${encodeURIComponent(sessionId)}/messages?limit=50&cursor=${encodeURIComponent(cursor)}`,
+      );
+      setSessions((current) => current.map((session) => session.id === sessionId
+        ? { ...session, messages: mergeMessages(result.items, session.messages) }
+        : session));
+      setMessageCursors((current) => ({ ...current, [sessionId]: result.next_cursor }));
+    } catch {
+      setPersistenceError(lang === 'kk'
+        ? 'Ескі хабарларды жүктеу мүмкін болмады.'
+        : lang === 'en'
+          ? 'Older messages could not be loaded.'
+          : 'Не удалось загрузить старые сообщения.');
+    } finally {
+      messagePagesInFlightRef.current.delete(sessionId);
+      setLoadingMessageSessions((current) => {
+        const next = new Set(current);
+        next.delete(sessionId);
+        return next;
+      });
     }
   };
 
   const handleCreateNewChat = async () => {
     try {
-      //  ИСПРАВЛЕНО: Добавлен API_BASE
-      const res = await fetch(`${API_BASE}/api/chats/new`, {
+      setPersistenceError(null);
+      const data = await apiFetch<{ session: Omit<ChatSession, 'messages'> }>('/api/chats', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: user.email,
           module: selectedModule,
-          title: `Квест ${MODULE_CONFIG[selectedModule]?.label || 'ИИ'} (#${sessions.length + 1})`,
+          title: 'New conversation',
         }),
       });
-      const data = await res.json();
-      if (data.status === 'ok' && data.newSession) {
-        setSessions(data.chats);
-        setActiveSessionId(data.newSession.id);
-        setShowSessionsDrawer(false);
-      }
-    } catch (e) {
-      console.error(e);
-      // fallback local
-      const newSess: ChatSession = {
-        id: 'sess_' + Date.now(),
-        title: `Чат #${sessions.length + 1}`,
-        module: selectedModule,
-        createdAt: new Date().toLocaleDateString('ru-RU'),
-        updatedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        messages: [
-          {
-            id: 'welc_' + Date.now(),
-            sender: 'ai',
-            module: selectedModule,
-            text: 'Создан новый диалог! Чем я могу помочь?',
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          },
-        ],
-      };
-      setSessions((prev) => [newSess, ...prev]);
-      setActiveSessionId(newSess.id);
+      const newSession: ChatSession = { ...data.session, messages: [] };
+      loadedMessageSessionsRef.current.add(newSession.id);
+      setMessageCursors((current) => ({ ...current, [newSession.id]: null }));
+      setSessions((current) => [newSession, ...current]);
+      setActiveSessionId(newSession.id);
       setShowSessionsDrawer(false);
+    } catch {
+      setPersistenceError(lang === 'kk' ? 'Чат жасалмады.' : lang === 'en' ? 'Chat could not be created.' : 'Не удалось создать чат.');
     }
   };
 
-  const handleDeleteChat = async (sessionId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    const confirmMsg = lang === 'kk'
-      ? 'Таңдалған чатты жою керек пе?'
-      : lang === 'en'
-      ? 'Are you sure you want to delete the selected chat?'
-      : 'Удалить выбранный чат?';
-    if (confirm(confirmMsg)) {
-      try {
-        //  ИСПРАВЛЕНО: Добавлен API_BASE
-        const res = await fetch(`${API_BASE}/api/chats/${encodeURIComponent(user.email)}/${sessionId}`, {
-          method: 'DELETE',
-        });
-        const data = await res.json();
-        if (data.status === 'ok') {
-          setSessions(data.chats);
-          if (activeSessionId === sessionId) {
-            setActiveSessionId(data.chats[0]?.id || '');
-          }
+  const handleDeleteChat = async (sessionId: string) => {
+    if (sessionMutationPending) return;
+    setSessionMutationPending(true);
+    try {
+      await apiFetch<void>(`/api/chats/${encodeURIComponent(sessionId)}`, { method: 'DELETE' });
+      const remaining = sessions.filter((session) => session.id !== sessionId);
+      const next = activeSessionId === sessionId ? remaining[0] : undefined;
+      setSessions(remaining);
+      loadedMessageSessionsRef.current.delete(sessionId);
+      setMessageCursors((current) => {
+        const nextCursors = { ...current };
+        delete nextCursors[sessionId];
+        return nextCursors;
+      });
+      if (authenticatedUserId) {
+        clearChatDraft(authenticatedUserId, sessionId);
+        if (sessionStorage.getItem(activeChatStorageKey(authenticatedUserId)) === sessionId) {
+          if (next) sessionStorage.setItem(activeChatStorageKey(authenticatedUserId), next.id);
+          else sessionStorage.removeItem(activeChatStorageKey(authenticatedUserId));
         }
-      } catch (err) {
-        setSessions((prev) => prev.filter((s) => s.id !== sessionId));
       }
+      if (activeSessionId === sessionId) {
+        setActiveSessionId(next?.id ?? '');
+        setSelectedModule(next?.module ?? 'tutor');
+      }
+      setDeleteTarget(null);
+      queueMicrotask(() => (next ? sessionMenuTriggersRef.current.get(next.id) : newChatButtonRef.current)?.focus());
+    } catch {
+      setPersistenceError(lang === 'kk' ? 'Чат жойылмады.' : lang === 'en' ? 'Chat could not be deleted.' : 'Не удалось удалить чат.');
+    } finally {
+      setSessionMutationPending(false);
     }
   };
 
   const handleRenameChat = async (sessionId: string, title: string) => {
-    if (!title.trim()) return;
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle || trimmedTitle.length > 200) {
+      setPersistenceError(lang === 'kk' ? 'Чат атауы 1–200 таңбадан тұруы керек.' : lang === 'en' ? 'Chat title must contain 1–200 characters.' : 'Название чата должно содержать от 1 до 200 символов.');
+      return;
+    }
+    if (sessionMutationPending) return;
+    setSessionMutationPending(true);
     try {
-      // ИСПРАВЛЕНО: Добавлен API_BASE
-      const res = await fetch(`${API_BASE}/api/chats/rename`, {
+      const data = await apiFetch<{ session: Omit<ChatSession, 'messages'> }>(`/api/chats/${encodeURIComponent(sessionId)}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: user.email,
-          sessionId,
-          newTitle: title,
-        }),
+        body: JSON.stringify({ title: trimmedTitle }),
       });
-      const data = await res.json();
-      if (data.status === 'ok') {
-        setSessions(data.chats);
-      }
-    } catch (err) {
-      setSessions((prev) =>
-        prev.map((s) => (s.id === sessionId ? { ...s, title } : s))
+      setSessions((current) =>
+        current.map((session) => session.id === sessionId
+          ? { ...data.session, messages: session.messages }
+          : session)
       );
+      setRenameTarget(null);
+    } catch {
+      setPersistenceError(lang === 'kk' ? 'Чат атауы өзгертілмеді.' : lang === 'en' ? 'Chat could not be renamed.' : 'Не удалось переименовать чат.');
     } finally {
-      setEditingSessionId(null);
+      setSessionMutationPending(false);
     }
   };
 
   const handleSendPrompt = async (textToSend?: string) => {
     const query = textToSend || promptText;
-    if (!query.trim() || loading || !activeSession) return;
-
-    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    const userMsgId = 'usr_' + Date.now();
-    const userMsg: ChatMessage = {
-      id: userMsgId,
-      sender: 'user',
-      text: query,
-      module: selectedModule,
-      timestamp: timeStr,
-    };
-
-    // Update active session locally
-    const updatedMessages = [...activeSession.messages, userMsg];
-    const updatedSession: ChatSession = {
-      ...activeSession,
-      messages: updatedMessages,
-      updatedAt: timeStr,
-      // Auto-update title if it was generic default
-      title:
-        activeSession.messages.length <= 1
-          ? query.slice(0, 30) + (query.length > 30 ? '...' : '')
-          : activeSession.title,
-    };
-
-    setSessions((prev) =>
-      prev.map((s) => (s.id === activeSession.id ? updatedSession : s))
-    );
-
+    if (!query.trim() || loading) return;
+    const requestId = crypto.randomUUID();
+    let targetSessionId = activeSession?.id;
     setPromptText('');
     setLoading(true);
+    setPersistenceError(null);
 
     try {
-      //  ИСПРАВЛЕНО: Добавлен API_BASE
-      const res = await fetch(`${API_BASE}/api/module`, {
+      if (!targetSessionId) {
+        const created = await apiFetch<{ session: Omit<ChatSession, 'messages'> }>('/api/chats', {
+          method: 'POST',
+          body: JSON.stringify({
+            module: selectedModule,
+            title: 'New conversation',
+          }),
+        });
+        const newSession: ChatSession = { ...created.session, messages: [] };
+        loadedMessageSessionsRef.current.add(newSession.id);
+        setMessageCursors((current) => ({ ...current, [newSession.id]: null }));
+        targetSessionId = newSession.id;
+        setSessions((current) => [newSession, ...current]);
+        setActiveSessionId(newSession.id);
+      }
+
+      if (isUntitledConversation(activeSession?.id === targetSessionId ? activeSession.title : sessions.find((session) => session.id === targetSessionId)?.title ?? 'New conversation')) {
+        const title = buildConversationTitle(query);
+        const renamed = await apiFetch<{ session: Omit<ChatSession, 'messages'> }>(`/api/chats/${encodeURIComponent(targetSessionId)}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ title }),
+        });
+        setSessions((current) => current.map((session) => session.id === targetSessionId
+          ? { ...renamed.session, messages: session.messages }
+          : session));
+      }
+
+      const data = await apiFetch<ModuleAiResponse>('/api/module', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Idempotency-Key': requestId },
         body: JSON.stringify({
+          session_id: targetSessionId,
           module: selectedModule,
           text: query,
           lang,
-          email: user.email,
+          ...(documentContext ? { document_id: documentContext.id } : {}),
+          ...(imageContext.length > 0 ? { image_ids: imageContext.map(({ id }) => id) } : {}),
         }),
       });
-
-      const data = await res.json();
-      if (data.status === 'ok') {
-        const aiMsg: ChatMessage = {
-          id: 'ai_' + Date.now(),
-          sender: 'ai',
-          text: data.response,
-          module: selectedModule,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          xpEarned: 15,
-          queryForAi: query,
-        };
-
-        const finalMessages = [...updatedMessages, aiMsg];
-        const finalSession: ChatSession = {
-          ...updatedSession,
-          messages: finalMessages,
-        };
-
-        setSessions((prev) =>
-          prev.map((s) => (s.id === activeSession.id ? finalSession : s))
-        );
-
-        syncSessionToServer(finalSession);
-
-        onUpdateUser({
-          xp: data.xp,
-          level: data.level,
+      if (isOffTopicRedirectResponse(data)) {
+        setSessions((current) => current.map((session) => {
+          if (session.id !== targetSessionId) return session;
+          const messagesById = new Map(session.messages.map((message) => [message.id, message]));
+          messagesById.set(data.user_message.id, data.user_message);
+          return { ...session, messages: Array.from(messagesById.values()) };
+        }));
+        setTransientMessages((current) => {
+          const currentMessages = current[targetSessionId] ?? [];
+          return {
+            ...current,
+            [targetSessionId]: appendOffTopicTransientMessage(currentMessages, data, {
+              requestId,
+              module: selectedModule,
+              timestamp: new Date().toLocaleTimeString(),
+            }),
+          };
         });
-
-        if (onCompleteQuest) {
-          // 1. First contact quest (Ask 1st question to AI tutor)
-          onCompleteQuest('first_contact');
-
-          // 2. Material scout quest (Use MaterialSwap module)
-          if (selectedModule === 'material') {
-            onCompleteQuest('material_scout');
-          }
-
-          // 3. Module explorer quest (Track used modules)
-          try {
-            const usedRaw = localStorage.getItem('eq_used_modules');
-            const usedList: string[] = usedRaw ? JSON.parse(usedRaw) : [];
-            if (!usedList.includes(selectedModule)) {
-              const newList = [...usedList, selectedModule];
-              localStorage.setItem('eq_used_modules', JSON.stringify(newList));
-              if (newList.length >= 5) {
-                onCompleteQuest('module_explorer');
-              }
-            } else if (usedList.length >= 5) {
-              onCompleteQuest('module_explorer');
-            }
-          } catch (err) {
-            console.error(err);
-          }
-
-          // 4. XP hunter quest
-          if (data.xp >= 100) {
-            onCompleteQuest('xp_hunter');
-          }
-
-          // 5. Streak master quest
-          if (user.streak >= 3) {
-            onCompleteQuest('streak_master');
-          }
-        }
-      } else {
-        const errAiMsg: ChatMessage = {
-          id: 'ai_err_' + Date.now(),
-          sender: 'ai',
-          text: 'Произошла ошибка при обращении к ИИ. Пожалуйста, попробуйте еще раз.',
-          module: selectedModule,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        };
-        const finalSession = {
-          ...updatedSession,
-          messages: [...updatedMessages, errAiMsg],
-        };
-        setSessions((prev) =>
-          prev.map((s) => (s.id === activeSession.id ? finalSession : s))
-        );
+        clearChatDraft(authenticatedUserId, targetSessionId);
+        return;
       }
-    } catch (err) {
-      console.error(err);
-      const errAiMsg: ChatMessage = {
-        id: 'ai_err_' + Date.now(),
-        sender: 'ai',
-        text: 'Ошибка сети или сервера. Проверьте соединение.',
-        module: selectedModule,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      };
-      const finalSession = {
-        ...updatedSession,
-        messages: [...updatedMessages, errAiMsg],
-      };
-      setSessions((prev) =>
-        prev.map((s) => (s.id === activeSession.id ? finalSession : s))
-      );
+      if (data.status !== 'ok' || !data.assistant_message) {
+        throw new Error('Canonical AI response was not persisted.');
+      }
+
+      setSessions((current) => current.map((session) => {
+        if (session.id !== targetSessionId) return session;
+        const byId = new Map(session.messages.map((message) => [message.id, message]));
+        byId.set(data.user_message.id, data.user_message);
+        byId.set(data.assistant_message!.id, {
+          ...data.assistant_message!,
+          queryForAi: query,
+        });
+        return { ...session, messages: Array.from(byId.values()) };
+      }));
+
+      clearChatDraft(authenticatedUserId, targetSessionId);
+      onSelectDocumentContext?.(null);
+      onSelectImageContext?.([]);
+
+      onUpdateUser({
+        xp: data.xp,
+        level: data.level,
+        streak: data.streak,
+        requests_count: data.requests_count,
+        material_count: data.material_count,
+        patent_count: data.patent_count,
+        modules_used: data.modules_used,
+      });
+
+      if (onCompleteQuest) {
+        await onCompleteQuest('first_contact');
+        if (selectedModule === 'material') await onCompleteQuest('material_scout');
+        if (data.modules_used.length >= 4) await onCompleteQuest('module_explorer');
+        if (data.xp >= 100) await onCompleteQuest('xp_hunter');
+        if (data.streak >= 3) await onCompleteQuest('streak_master');
+      }
+    } catch {
+      setPersistenceError(lang === 'kk'
+        ? 'Хабарлама сақталмады немесе ЖИ жауабы аяқталмады.'
+        : lang === 'en'
+          ? 'The message could not be persisted or the AI response did not complete.'
+          : 'Сообщение не сохранено или ответ ИИ не был завершён.');
+
+      // Reload canonical rows. A user message may have committed before an AI
+      // provider failure; no client-only error message is treated as canonical.
+      try {
+        if (!targetSessionId) return;
+        const result = await apiFetch<PageResponse<ChatMessage>>(
+          `/api/chats/${encodeURIComponent(targetSessionId)}/messages?limit=50`,
+        );
+        setSessions((current) => current.map((session) => session.id === targetSessionId
+          ? { ...session, messages: mergeMessages(session.messages, result.items) }
+          : session));
+        setMessageCursors((current) => ({ ...current, [targetSessionId]: result.next_cursor }));
+      } catch {
+        // The visible persistence error remains the single source of truth.
+      }
     } finally {
       setLoading(false);
     }
@@ -571,9 +716,11 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
     );
 
     if (isAlreadySaved) {
-      setSavedNotes((prev) =>
-        prev.filter((note) => !(note.query === query && note.response === response))
-      );
+      setSavedNotes((previous) => {
+        const next = previous.filter((note) => !(note.query === query && note.response === response));
+        storeSavedAiNotes(localStorage, authenticatedUserId, next);
+        return next;
+      });
       return;
     }
 
@@ -591,7 +738,19 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
       }),
     };
 
-    setSavedNotes((prev) => [newNote, ...prev]);
+    setSavedNotes((previous) => {
+      const next = [newNote, ...previous];
+      storeSavedAiNotes(localStorage, authenticatedUserId, next);
+      return next;
+    });
+  };
+
+  const handleDeleteSavedNote = (noteId: string) => {
+    setSavedNotes((previous) => {
+      const next = previous.filter((note) => note.id !== noteId);
+      storeSavedAiNotes(localStorage, authenticatedUserId, next);
+      return next;
+    });
   };
 
   const handleCopyText = (text: string, id: string) => {
@@ -621,28 +780,87 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
     return matchesModule && matchesSearch;
   });
 
+  const managementCopy = lang === 'kk'
+    ? { manage: 'Чатты басқару', rename: 'Атын өзгерту', delete: 'Чатты жою', renameTitle: 'Чат атауын өзгерту', deleteTitle: 'Чатты жою керек пе?', deleteBody: 'Чат және оның хабарлары біржола жойылады. Тіркелген құжаттар мен суреттер кітапханада қалады.', titleLabel: 'Чат атауы', confirmDelete: 'Жою', cancel: 'Бас тарту' }
+    : lang === 'en'
+      ? { manage: 'Manage chat', rename: 'Rename', delete: 'Delete chat', renameTitle: 'Rename chat', deleteTitle: 'Delete this chat?', deleteBody: 'The chat and its messages will be permanently removed. Attached documents and images will remain in your library.', titleLabel: 'Chat title', confirmDelete: 'Delete', cancel: 'Cancel' }
+      : { manage: 'Управление чатом', rename: 'Переименовать', delete: 'Удалить чат', renameTitle: 'Переименовать чат', deleteTitle: 'Удалить этот чат?', deleteBody: 'Чат и его сообщения будут удалены безвозвратно. Прикреплённые документы и изображения останутся в библиотеке.', titleLabel: 'Название чата', confirmDelete: 'Удалить', cancel: 'Отмена' };
+
+  const openRenameDialog = (session: ChatSession) => {
+    setSessionMenuId(null);
+    setNewTitleInput(session.title);
+    setRenameTarget(session);
+  };
+
+  const openDeleteDialog = (session: ChatSession) => {
+    setSessionMenuId(null);
+    setDeleteTarget(session);
+  };
+
+  const closeManagementDialog = () => {
+    setRenameTarget(null);
+    setDeleteTarget(null);
+  };
+
+  useDialogFocus({
+    open: Boolean(renameTarget || deleteTarget),
+    onClose: closeManagementDialog,
+    dialogRef: managementDialogRef,
+    initialFocusRef: managementInitialFocusRef,
+    returnFocusRef: dialogReturnFocusRef,
+  });
+
+  const sessionActions = (session: ChatSession, selected: boolean, inverted = false) => (
+    <div className="relative shrink-0" onClick={(event) => event.stopPropagation()}>
+      <button
+        type="button"
+        ref={(node) => { if (node) sessionMenuTriggersRef.current.set(session.id, node); else sessionMenuTriggersRef.current.delete(session.id); }}
+        aria-label={`${managementCopy.manage}: ${translateSessionTitle(session.title)}`}
+        aria-haspopup="menu"
+        aria-expanded={sessionMenuId === session.id}
+        onClick={(event) => {
+          dialogReturnFocusRef.current = event.currentTarget;
+          setSessionMenuId((current) => current === session.id ? null : session.id);
+        }}
+        className={`rounded-lg p-1.5 transition ${inverted ? 'text-white hover:bg-blue-500' : selected ? 'text-blue-700 hover:bg-blue-100' : 'text-slate-500 hover:bg-slate-200'}`}
+      >
+        <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+      </button>
+      {sessionMenuId === session.id && (
+        <div role="menu" aria-label={managementCopy.manage} className="absolute right-0 top-full z-30 mt-1 min-w-40 rounded-xl border border-slate-200 bg-white p-1 shadow-lg">
+          <button type="button" role="menuitem" onClick={() => openRenameDialog(session)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-bold text-slate-700 hover:bg-slate-100"><Edit2 className="h-3.5 w-3.5" aria-hidden="true" />{managementCopy.rename}</button>
+          <button type="button" role="menuitem" onClick={() => openDeleteDialog(session)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-bold text-red-700 hover:bg-red-50"><Trash2 className="h-3.5 w-3.5" aria-hidden="true" />{managementCopy.delete}</button>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div
-      className={`space-y-5 md:space-y-6 transition-all ${
+      className={`eq-ai-workspace space-y-5 md:space-y-6 transition-all ${
         isFullscreen
           ? 'fixed inset-0 z-[100] bg-slate-950 text-slate-100 p-3 sm:p-6 overflow-hidden flex flex-col m-0 rounded-none'
           : ''
       }`}
     >
+      {persistenceError && (
+        <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold p-3 rounded-xl">
+          {persistenceError}
+        </div>
+      )}
+
       {/* Top Banner & Sub-View Switcher Bar */}
       <div className={`relative overflow-hidden shrink-0 transition-all ${
         isFullscreen
           ? 'bg-slate-900 border border-slate-800 p-4 sm:p-5 rounded-2xl text-slate-100 shadow-lg'
-          : 'bg-gradient-to-br from-slate-50 via-slate-100/40 to-blue-50/25 text-slate-800 rounded-2xl p-5 sm:p-6 md:p-8 shadow-xs border border-slate-200/50'
+          : 'eq-ai-intro text-slate-800 p-5 sm:p-6 md:p-8'
       }`}>
-        <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 rounded-full blur-3xl pointer-events-none" />
-
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
           <div>
             <div className={`flex items-center gap-1.5 font-bold text-xs uppercase tracking-wider mb-1 ${
               isFullscreen ? 'text-blue-400' : 'text-blue-600'
             }`}>
-              <Sparkles className="w-4 h-4 text-amber-500" /> {t.aiCoreTitle || 'Engineerus AI Core'}
+              <DraftingCompass className="w-4 h-4" aria-hidden="true" /> {t.aiCoreTitle || 'Engineerus AI Core'}
             </div>
             <h2 className={`text-xl sm:text-2xl font-extrabold tracking-tight flex flex-wrap items-center gap-2 sm:gap-3 ${
               isFullscreen ? 'text-white' : 'text-slate-900'
@@ -727,15 +945,17 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
       {activeSubView === 'chat' ? (
         <div className={`flex flex-col gap-4 ${isFullscreen ? 'flex-1 min-h-0' : ''}`}>
           {/* Module Selectors Row */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5 sm:gap-3 shrink-0">
+          <div className="eq-ai-modules grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 shrink-0">
             {Object.entries(MODULE_CONFIG).map(([key, config]) => {
               const IconComp = config.icon;
               const isSelected = selectedModule === key;
               return (
                 <button
                   key={key}
+                  type="button"
+                  aria-pressed={isSelected}
                   onClick={() => setSelectedModule(key)}
-                  className={`p-3 sm:p-3.5 rounded-2xl border text-left transition-all ${
+                  className={`eq-ai-module p-3 sm:p-3.5 border text-left transition-all ${
                     isSelected
                       ? 'border-blue-500 bg-blue-50/90 shadow-md ring-2 ring-blue-500/20 text-slate-900'
                       : isFullscreen
@@ -765,7 +985,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
 
           {/* Quick Preset Questions Bar */}
           {!isFullscreen && (
-            <div className="bg-white rounded-3xl p-3.5 sm:p-4 border border-slate-200/80 shadow-2xs space-y-2 shrink-0">
+            <div className="eq-ai-prompts p-3.5 sm:p-4 space-y-2 shrink-0">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-extrabold text-slate-800 flex items-center gap-1.5">
                   <HelpCircle className="w-4 h-4 text-blue-600" /> {lang === 'kk' ? 'Модульге арналған кеңес' : lang === 'en' ? 'Prompt suggestion for module' : 'Подсказка для модуля'}{' '}
@@ -781,7 +1001,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                       setPromptText(preset);
                       handleSendPrompt(preset);
                     }}
-                    className="text-xs font-bold text-slate-700 bg-slate-100/80 hover:bg-blue-50 hover:text-blue-700 border border-slate-200/80 hover:border-blue-300 px-3 py-1 rounded-2xl transition-all text-left shadow-2xs flex items-center gap-1.5"
+                    className="eq-ai-prompt text-xs font-bold text-slate-700 px-3 py-1 transition-all text-left flex items-center gap-1.5"
                   >
                     <span>{preset}</span>
                     <ArrowRight className="w-3 h-3 text-slate-400 shrink-0" />
@@ -793,13 +1013,32 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
 
           {/* Main Chat Interface Window with Multi-Chat Drawer */}
           <div
-            className={`bg-white rounded-3xl border border-slate-200/80 shadow-2xs overflow-hidden flex flex-col ${
+            className={`eq-ai-chat-frame relative bg-white border border-slate-200/80 overflow-hidden flex flex-col ${
               isFullscreen ? 'flex-1 min-h-0 bg-slate-900 border-slate-800 text-slate-100' : 'min-h-[420px] max-h-[650px]'
             }`}
           >
+            <aside className={`absolute inset-y-0 left-0 z-10 hidden w-64 flex-col border-r lg:flex ${isFullscreen ? 'border-slate-800 bg-slate-950' : 'border-slate-200 bg-slate-50'}`} aria-label={lang === 'kk' ? 'Сақталған чаттар' : lang === 'en' ? 'Saved conversations' : 'Сохранённые чаты'}>
+              <div className="flex items-center justify-between gap-2 border-b border-inherit p-3">
+                <span className="flex min-w-0 items-center gap-2 text-xs font-black uppercase tracking-wide"><History className="h-4 w-4 text-blue-500" />{lang === 'kk' ? 'Чаттар' : lang === 'en' ? 'Conversations' : 'Диалоги'}</span>
+                <button type="button" onClick={handleCreateNewChat} aria-label={t.newChat} className="rounded-lg bg-blue-600 p-2 text-white transition hover:bg-blue-700"><Plus className="h-4 w-4" /></button>
+              </div>
+              <div className="min-h-0 flex-1 space-y-1 overflow-y-auto p-2">
+                {sessions.map((session) => {
+                  const selected = session.id === activeSessionId;
+                  return <div key={session.id} className={`flex w-full items-center rounded-xl border pr-1 transition ${selected ? 'border-blue-200 bg-blue-50 text-blue-950' : isFullscreen ? 'border-transparent text-slate-300 hover:bg-slate-900' : 'border-transparent text-slate-700 hover:bg-white'}`}>
+                    <button type="button" aria-current={selected ? 'true' : undefined} onClick={() => selectSession(session)} className="min-w-0 flex-1 px-3 py-2.5 text-left">
+                      <span className="block truncate text-xs font-extrabold">{translateSessionTitle(session.title)}</span>
+                      <span className="mt-1 block truncate text-[10px] font-semibold opacity-60">{MODULE_CONFIG[session.module]?.label ?? session.module}</span>
+                    </button>
+                    {sessionActions(session, selected)}
+                  </div>;
+                })}
+                {sessionCursor && <button type="button" disabled={loadingOlderSessions} onClick={() => void loadOlderSessions()} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 disabled:opacity-60">{loadingOlderSessions ? (lang === 'en' ? 'Loading…' : lang === 'kk' ? 'Жүктелуде…' : 'Загрузка…') : (lang === 'en' ? 'Load older' : lang === 'kk' ? 'Ескілерін жүктеу' : 'Загрузить ещё')}</button>}
+              </div>
+            </aside>
             {/* Top Bar with Saved Chats Switcher & New Chat Button */}
             <div
-              className={`border-b px-4 py-2.5 flex items-center justify-between gap-2 shrink-0 ${
+              className={`border-b px-4 py-2.5 flex items-center justify-between gap-2 shrink-0 lg:ml-64 ${
                 isFullscreen ? 'bg-slate-900/90 border-slate-800' : 'bg-slate-50/90 border-slate-200/80'
               }`}
             >
@@ -807,7 +1046,8 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
               <div className="flex items-center gap-2 min-w-0">
                 <button
                   onClick={() => setShowSessionsDrawer(!showSessionsDrawer)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition-all ${
+                  aria-expanded={showSessionsDrawer}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition-all lg:hidden ${
                     showSessionsDrawer
                       ? 'bg-blue-600 text-white'
                       : isFullscreen
@@ -827,6 +1067,8 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
               {/* Right: New Chat Button & Clear */}
               <div className="flex items-center gap-2 shrink-0">
                 <button
+                  ref={newChatButtonRef}
+                  type="button"
                   onClick={handleCreateNewChat}
                   className="bg-blue-600 hover:bg-blue-500 active:scale-95 text-white px-3 py-1.5 rounded-xl text-xs font-black shadow-md shadow-blue-500/20 transition-all flex items-center gap-1.5"
                 >
@@ -839,7 +1081,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
             {/* Multi-Chat Drawer Overlay (Slide Down / Expand) */}
             {showSessionsDrawer && (
               <div
-                className={`p-3 border-b space-y-2 animate-fade-in ${
+                className={`p-3 border-b space-y-2 animate-fade-in lg:hidden ${
                   isFullscreen ? 'bg-slate-950 border-slate-800' : 'bg-slate-100/95 border-slate-200'
                 }`}
               >
@@ -858,15 +1100,13 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-48 overflow-y-auto">
                   {sessions.map((sess) => {
                     const isActive = sess.id === activeSessionId;
-                    const isEditing = editingSessionId === sess.id;
                     const modConfig = MODULE_CONFIG[sess.module] || MODULE_CONFIG.tutor;
 
                     return (
                       <div
                         key={sess.id}
                         onClick={() => {
-                          setActiveSessionId(sess.id);
-                          setShowSessionsDrawer(false);
+                          selectSession(sess);
                         }}
                         className={`p-2.5 rounded-2xl border cursor-pointer transition-all flex items-center justify-between gap-2 ${
                           isActive
@@ -877,21 +1117,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                         }`}
                       >
                         <div className="min-w-0 flex-1">
-                          {isEditing ? (
-                            <input
-                              type="text"
-                              value={newTitleInput}
-                              onChange={(e) => setNewTitleInput(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') handleRenameChat(sess.id, newTitleInput);
-                              }}
-                              onClick={(e) => e.stopPropagation()}
-                              className="w-full text-xs font-bold bg-white text-slate-900 px-2 py-1 rounded-md border border-blue-500 outline-none"
-                              autoFocus
-                            />
-                          ) : (
-                            <div className="font-extrabold text-xs truncate">{translateSessionTitle(sess.title)}</div>
-                          )}
+                          <div className="font-extrabold text-xs truncate">{translateSessionTitle(sess.title)}</div>
                           <div
                             className={`text-[10px] font-medium mt-0.5 flex items-center gap-1.5 ${
                               isActive ? 'text-blue-100' : 'text-slate-400'
@@ -902,51 +1128,51 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                           </div>
                         </div>
 
-                        {/* Actions */}
-                        <div className="flex items-center gap-1 shrink-0">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (isEditing) {
-                                handleRenameChat(sess.id, newTitleInput);
-                              } else {
-                                setEditingSessionId(sess.id);
-                                setNewTitleInput(sess.title);
-                              }
-                            }}
-                            className={`p-1 rounded-lg transition-all ${
-                              isActive ? 'hover:bg-blue-500 text-white' : 'hover:bg-slate-200 text-slate-500'
-                            }`}
-                            title={lang === 'kk' ? 'Атын ауыстыру' : lang === 'en' ? 'Rename' : 'Переименовать'}
-                          >
-                            <Edit2 className="w-3 h-3" />
-                          </button>
-
-                          {sessions.length > 1 && (
-                            <button
-                              onClick={(e) => handleDeleteChat(sess.id, e)}
-                              className={`p-1 rounded-lg transition-all ${
-                                isActive ? 'hover:bg-blue-500 text-red-200' : 'hover:bg-red-50 text-red-500'
-                              }`}
-                              title={lang === 'kk' ? 'Чатты жою' : lang === 'en' ? 'Delete chat' : 'Удалить чат'}
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </button>
-                          )}
-                        </div>
+                        {sessionActions(sess, isActive, isActive)}
                       </div>
                     );
                   })}
                 </div>
+                {sessionCursor && (
+                  <button
+                    type="button"
+                    disabled={loadingOlderSessions}
+                    onClick={() => void loadOlderSessions()}
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-60"
+                  >
+                    {loadingOlderSessions
+                      ? (lang === 'kk' ? 'Жүктелуде…' : lang === 'en' ? 'Loading…' : 'Загрузка…')
+                      : (lang === 'kk' ? 'Ескі чаттарды жүктеу' : lang === 'en' ? 'Load older chats' : 'Загрузить старые чаты')}
+                  </button>
+                )}
               </div>
             )}
 
             {/* Chat Messages Timeline Scroll Box */}
             <div
-              className={`flex-1 p-4 sm:p-5 overflow-y-auto space-y-4 ${
+              className={`flex-1 p-4 sm:p-5 overflow-y-auto space-y-4 lg:ml-64 ${
                 isFullscreen ? 'bg-slate-950/60' : 'bg-slate-50/30'
               }`}
             >
+              {activeSessionId && messageCursors[activeSessionId] && (
+                <div className="flex justify-center">
+                  <button
+                    type="button"
+                    disabled={loadingMessageSessions.has(activeSessionId)}
+                    onClick={() => void loadOlderMessages()}
+                    className="rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 disabled:opacity-60"
+                  >
+                    {loadingMessageSessions.has(activeSessionId)
+                      ? (lang === 'kk' ? 'Жүктелуде…' : lang === 'en' ? 'Loading…' : 'Загрузка…')
+                      : (lang === 'kk' ? 'Ескі хабарларды жүктеу' : lang === 'en' ? 'Load older messages' : 'Загрузить старые сообщения')}
+                  </button>
+                </div>
+              )}
+              {activeSessionId && loadingMessageSessions.has(activeSessionId) && messages.length === 0 && (
+                <div className="text-center text-xs font-bold text-slate-400">
+                  {lang === 'kk' ? 'Хабарлар жүктелуде…' : lang === 'en' ? 'Loading messages…' : 'Загрузка сообщений…'}
+                </div>
+              )}
               {messages.map((msg) => {
                 const isUser = msg.sender === 'user';
                 const modConfig = MODULE_CONFIG[msg.module] || MODULE_CONFIG.tutor;
@@ -960,18 +1186,18 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                     className={`flex gap-3 ${isUser ? 'justify-end' : 'justify-start'} animate-fade-in`}
                   >
                     {!isUser && (
-                      <div className="w-8 h-8 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-md">
+                      <div className="eq-ai-avatar">
                         <Bot className="w-4 h-4" />
                       </div>
                     )}
 
                     <div
-                      className={`max-w-[88%] sm:max-w-[80%] rounded-3xl p-4 sm:p-5 shadow-2xs ${
+                      className={`max-w-[88%] sm:max-w-[80%] rounded-xl p-4 sm:p-5 ${
                         isUser
-                          ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-br-xs'
+                          ? 'bg-blue-700 text-white rounded-br-xs'
                           : isFullscreen
                           ? 'bg-slate-900 border border-slate-800 text-slate-100 rounded-bl-xs space-y-3'
-                          : 'bg-white border border-slate-200/90 text-slate-800 rounded-bl-xs space-y-3'
+                          : 'bg-white border border-slate-200/90 border-l-[3px] border-l-teal-600 text-slate-800 rounded-bl-xs space-y-3'
                       }`}
                     >
                       {/* Top AI Message Header Bar */}
@@ -1008,7 +1234,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                       </div>
 
                       {/* AI Action Buttons: Save & Copy */}
-                      {!isUser && msg.id !== 'welcome-msg' && (
+                      {!isUser && msg.id !== 'welcome-msg' && !msg.transient && (
                         <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200/30">
                           <button
                             onClick={() => handleCopyText(translateMsgText(msg.text, msg.id), msg.id)}
@@ -1078,16 +1304,16 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
 
               {loading && (
                 <div className="flex gap-3 justify-start animate-fade-in">
-                  <div className="w-8 h-8 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-md">
+                  <div className="eq-ai-avatar">
                     <Bot className="w-4 h-4" />
                   </div>
                   <div
-                    className={`rounded-3xl p-4 shadow-2xs text-xs font-bold flex items-center gap-2 ${
+                    className={`rounded-xl p-4 text-xs font-bold flex items-center gap-2 ${
                       isFullscreen ? 'bg-slate-900 border border-slate-800 text-slate-300' : 'bg-white border border-slate-200/90 text-slate-600'
                     }`}
                   >
                     <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                    <span>{lang === 'kk' ? 'Engineerus ЖИ есепті шығаруда...' : lang === 'en' ? 'Engineerus AI is solving the problem...' : 'Engineerus AI решает задачу и форматирует ответ...'}</span>
+                    <span>{lang === 'kk' ? 'Шарттарды тексеріп, инженерлік жауап дайындап жатырмын…' : lang === 'en' ? 'Checking the given conditions and preparing an engineering answer…' : 'Проверяю условия и готовлю инженерный ответ…'}</span>
                   </div>
                 </div>
               )}
@@ -1097,11 +1323,25 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
 
             {/* Chat Composer Input Area */}
             <div
-              className={`p-3 sm:p-4 border-t shrink-0 ${
+              className={`p-3 sm:p-4 border-t shrink-0 lg:ml-64 ${
                 isFullscreen ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200/80'
               }`}
             >
-              <div className="flex items-center gap-2">
+              {(documentContext || imageContext.length > 0) && (
+                <div className="mb-2 flex flex-wrap gap-2" aria-label={lang === 'kk' ? 'Таңдалған контекст' : lang === 'en' ? 'Selected context' : 'Выбранный контекст'}>
+                  {documentContext && <span className="flex max-w-full items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs font-bold text-blue-900"><span aria-hidden="true">📄</span><span className="min-w-0 truncate">{documentContext.name}</span><button type="button" onClick={() => { onClearDocumentContext?.(); onSelectDocumentContext?.(null); }} aria-label={`${lang === 'en' ? 'Remove' : lang === 'kk' ? 'Алып тастау' : 'Убрать'} ${documentContext.name}`} className="rounded p-0.5 hover:bg-blue-100"><X className="h-3.5 w-3.5" /></button></span>}
+                  {imageContext.map((image) => <span key={image.id} className="flex max-w-full items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-1.5 text-xs font-bold text-violet-900"><span aria-hidden="true">🖼</span><span className="min-w-0 truncate">{image.name}</span><button type="button" onClick={() => onSelectImageContext?.(imageContext.filter((item) => item.id !== image.id))} aria-label={`${lang === 'en' ? 'Remove' : lang === 'kk' ? 'Алып тастау' : 'Убрать'} ${image.name}`} className="rounded p-0.5 hover:bg-violet-100"><X className="h-3.5 w-3.5" /></button></span>)}
+                </div>
+              )}
+              <div className="flex items-end gap-2">
+                <AiAttachmentPicker
+                  lang={lang}
+                  disabled={loading}
+                  document={documentContext ?? null}
+                  images={imageContext}
+                  onSelectDocument={(value) => onSelectDocumentContext?.(value)}
+                  onSelectImages={(value) => onSelectImageContext?.(value)}
+                />
                 <textarea
                   value={promptText}
                   onChange={(e) => setPromptText(e.target.value)}
@@ -1111,9 +1351,10 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                       handleSendPrompt();
                     }
                   }}
-                  rows={2}
-                  placeholder={lang === 'kk' ? 'Инженерлік сұрағыңызды қойыңыз (Markdown қолдайды)...' : lang === 'en' ? 'Ask any engineering question (supports Markdown formulas)...' : 'Задайте любой инженерный вопрос (поддерживает Markdown формулы)...'}
-                  className={`flex-1 p-3 rounded-2xl border outline-none text-xs sm:text-sm font-medium transition-all resize-none ${
+                  rows={1}
+                  placeholder={lang === 'kk' ? 'Есепті, бастапқы деректерді немесе инженерлік сұрақты сипаттаңыз…' : lang === 'en' ? 'Describe the problem, given data, or engineering question…' : 'Опишите задачу, исходные данные или инженерный вопрос…'}
+                  aria-label={lang === 'kk' ? 'ЖИ-ге хабарлама' : lang === 'en' ? 'Message AI Tutor' : 'Сообщение ИИ-тьютору'}
+                  className={`min-h-11 min-w-0 flex-1 p-3 rounded-xl border outline-none text-xs sm:text-sm font-medium transition-all resize-none ${
                     isFullscreen
                       ? 'bg-slate-950 border-slate-800 text-slate-100 focus:border-blue-500'
                       : 'bg-white border-slate-200 text-slate-900 focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20'
@@ -1123,10 +1364,10 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                 <button
                   onClick={() => handleSendPrompt()}
                   disabled={loading || !promptText.trim()}
-                  className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 text-white font-black px-4 sm:px-5 py-3.5 rounded-2xl shadow-md shadow-blue-500/20 transition-all flex items-center justify-center gap-2 text-xs shrink-0 h-full min-h-[44px]"
+                  className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-black px-3 sm:px-4 py-3 rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 text-xs shrink-0 min-h-[44px]"
                 >
                   <Send className="w-4 h-4" />
-                  <span className="hidden sm:inline">{lang === 'kk' ? 'Жіберу (+15 XP)' : lang === 'en' ? 'Send (+15 XP)' : 'Отправить (+15 XP)'}</span>
+                  <span className="hidden sm:inline">{lang === 'kk' ? 'Жіберу' : lang === 'en' ? 'Send' : 'Отправить'}</span>
                 </button>
               </div>
             </div>
@@ -1251,9 +1492,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                         </button>
 
                         <button
-                          onClick={() =>
-                            setSavedNotes((prev) => prev.filter((n) => n.id !== note.id))
-                          }
+                          onClick={() => handleDeleteSavedNote(note.id)}
                           className="p-1.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 transition-all"
                           title="Удалить из сохраненных"
                         >
@@ -1279,6 +1518,27 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
               })}
             </div>
           )}
+        </div>
+      )}
+      {renameTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) closeManagementDialog(); }}>
+          <form ref={managementDialogRef as React.RefObject<HTMLFormElement>} onSubmit={(event) => { event.preventDefault(); void handleRenameChat(renameTarget.id, newTitleInput); }} role="dialog" aria-modal="true" aria-labelledby="rename-chat-title" className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl">
+            <h2 id="rename-chat-title" className="text-lg font-black text-slate-950">{managementCopy.renameTitle}</h2>
+            <label className="mt-4 block text-xs font-bold text-slate-700">{managementCopy.titleLabel}
+              <input ref={managementInitialFocusRef as React.RefObject<HTMLInputElement>} required maxLength={200} value={newTitleInput} onChange={(event) => setNewTitleInput(event.target.value)} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+            </label>
+            <div className="mt-5 flex justify-end gap-2"><Button type="button" variant="secondary" disabled={sessionMutationPending} onClick={closeManagementDialog}>{managementCopy.cancel}</Button><Button type="submit" disabled={sessionMutationPending || !newTitleInput.trim()}>{managementCopy.rename}</Button></div>
+          </form>
+        </div>
+      )}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) closeManagementDialog(); }}>
+          <div ref={managementDialogRef as React.RefObject<HTMLDivElement>} role="dialog" aria-modal="true" aria-labelledby="delete-chat-title" aria-describedby="delete-chat-description" className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl">
+            <h2 id="delete-chat-title" className="text-lg font-black text-slate-950">{managementCopy.deleteTitle}</h2>
+            <p className="mt-2 text-sm font-semibold text-slate-800">{translateSessionTitle(deleteTarget.title)}</p>
+            <p id="delete-chat-description" className="mt-2 text-sm leading-6 text-slate-600">{managementCopy.deleteBody}</p>
+            <div className="mt-5 flex justify-end gap-2"><button ref={managementInitialFocusRef as React.RefObject<HTMLButtonElement>} type="button" className="eq-button eq-button--secondary" disabled={sessionMutationPending} onClick={closeManagementDialog}>{managementCopy.cancel}</button><Button type="button" variant="danger" disabled={sessionMutationPending} onClick={() => void handleDeleteChat(deleteTarget.id)}>{managementCopy.confirmDelete}</Button></div>
+          </div>
         </div>
       )}
     </div>

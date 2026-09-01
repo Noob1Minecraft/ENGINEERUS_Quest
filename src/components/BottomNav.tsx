@@ -1,6 +1,8 @@
-import React from 'react';
-import { Home, Flag, BarChart3, Sparkles, User } from 'lucide-react';
-import { Language } from '../types';
+import React, { useRef, useState } from 'react';
+import { BriefcaseBusiness, LayoutGrid, Menu, MessageCircle, Sparkles, X } from 'lucide-react';
+import type { Language } from '../types';
+import { APP_NAVIGATION_ITEMS, getNavigationItem } from './appNavigation';
+import { useDialogFocus } from '../hooks/useDialogFocus';
 
 interface BottomNavProps {
   activeTab: string;
@@ -8,73 +10,58 @@ interface BottomNavProps {
   lang: Language;
 }
 
-export const BottomNav: React.FC<BottomNavProps> = ({
-  activeTab,
-  onSelectTab,
-  lang,
-}) => {
-  const getNavLabel = (tab: string) => {
-    if (tab === 'home') {
-      return lang === 'kk' ? 'Басты бет' : lang === 'en' ? 'Home' : 'Главная';
-    }
-    if (tab === 'quests') {
-      return lang === 'kk' ? 'Квесттер' : lang === 'en' ? 'Quests' : 'Квесты';
-    }
-    if (tab === 'leaderboard') {
-      return lang === 'kk' ? 'Көшбасшылар' : lang === 'en' ? 'Leaderboard' : 'Лидерборд';
-    }
-    if (tab === 'ai') {
-      return lang === 'kk' ? 'ИИ-Тьютор' : lang === 'en' ? 'AI Tutor' : 'ИИ-Тьютор';
-    }
-    if (tab === 'sync') {
-      return lang === 'kk' ? 'Профиль' : lang === 'en' ? 'Profile' : 'Профиль';
-    }
-    return '';
+const PRIMARY_IDS = ['home', 'ai', 'projects', 'messages'] as const;
+const PRIMARY_ICONS = { home: LayoutGrid, ai: Sparkles, projects: BriefcaseBusiness, messages: MessageCircle };
+const MORE_IDS = APP_NAVIGATION_ITEMS.map((item) => item.id).filter((id) => !PRIMARY_IDS.includes(id as typeof PRIMARY_IDS[number]));
+
+export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onSelectTab, lang }) => {
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreButton = useRef<HTMLButtonElement>(null);
+  const closeButton = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLElement>(null);
+  const moreActive = MORE_IDS.includes(activeTab);
+  const moreLabel = lang === 'ru' ? 'Ещё' : lang === 'kk' ? 'Тағы' : 'More';
+
+  useDialogFocus({ open: moreOpen, onClose: () => setMoreOpen(false), dialogRef, initialFocusRef: closeButton });
+
+  const select = (id: string) => {
+    onSelectTab(id);
+    setMoreOpen(false);
   };
 
-  const navItems = [
-    { id: 'home', icon: Home },
-    { id: 'quests', icon: Flag },
-    { id: 'leaderboard', icon: BarChart3 },
-    { id: 'ai', icon: Sparkles },
-    { id: 'sync', icon: User },
-  ];
-
   return (
-    <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-slate-200/80 px-2 pt-2 pb-2 shadow-lg">
-      <div className="max-w-md mx-auto flex items-center justify-between gap-1 px-1">
-        {navItems.map((item) => {
-          const isActive = activeTab === item.id;
-          const Icon = item.icon;
-          const label = getNavLabel(item.id);
+    <>
+      {moreOpen && (
+        <div className="eq-mobile-menu" id="mobile-more-navigation">
+          <button type="button" className="eq-mobile-menu__backdrop" onClick={() => setMoreOpen(false)} aria-label={lang === 'ru' ? 'Закрыть меню' : lang === 'kk' ? 'Мәзірді жабу' : 'Close menu'} />
+          <section ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="mobile-menu-title" className="eq-mobile-menu__sheet">
+            <div className="eq-mobile-menu__header">
+              <div><small>Engineerus Quest</small><h2 id="mobile-menu-title">{lang === 'ru' ? 'Все разделы' : lang === 'kk' ? 'Барлық бөлімдер' : 'All areas'}</h2></div>
+              <button ref={closeButton} type="button" className="eq-icon-button" onClick={() => setMoreOpen(false)} aria-label={lang === 'ru' ? 'Закрыть' : lang === 'kk' ? 'Жабу' : 'Close'}><X aria-hidden="true" /></button>
+            </div>
+            <nav className="eq-mobile-menu__grid" aria-label={lang === 'ru' ? 'Дополнительная навигация' : lang === 'kk' ? 'Қосымша навигация' : 'More navigation'}>
+              {MORE_IDS.map((id) => {
+                const item = getNavigationItem(id)!;
+                const Icon = item.icon;
+                const active = activeTab === id;
+                return <button key={id} type="button" aria-current={active ? 'page' : undefined} onClick={() => select(id)} className={active ? 'is-active' : ''}><Icon aria-hidden="true" /><span>{item.labels[lang]}</span></button>;
+              })}
+            </nav>
+          </section>
+        </div>
+      )}
 
-          return (
-            <button
-              key={item.id}
-              onClick={() => onSelectTab(item.id)}
-              className={`flex flex-col items-center justify-center gap-1 transition-all px-2.5 py-1.5 rounded-2xl flex-1 ${
-                isActive
-                  ? 'bg-blue-50/90 text-blue-600 font-extrabold'
-                  : 'text-slate-500 hover:text-slate-800 font-medium'
-              }`}
-            >
-              <Icon
-                className={`w-5 h-5 ${
-                  isActive ? 'text-blue-600 stroke-[2.2]' : 'text-slate-500 stroke-[1.8]'
-                }`}
-              />
-              <span className="text-[11px] leading-tight text-center truncate max-w-[64px]">
-                {label}
-              </span>
-            </button>
-          );
+      <nav className="eq-bottom-nav" aria-label={lang === 'ru' ? 'Мобильная навигация' : lang === 'kk' ? 'Мобильді навигация' : 'Mobile navigation'}>
+        {PRIMARY_IDS.map((id) => {
+          const item = getNavigationItem(id)!;
+          const Icon = PRIMARY_ICONS[id];
+          const active = activeTab === id;
+          return <button key={id} type="button" aria-current={active ? 'page' : undefined} onClick={() => select(id)} className={active ? 'is-active' : ''}><Icon aria-hidden="true" /><span>{item.labels[lang]}</span></button>;
         })}
-      </div>
-
-      {/* iOS / Mobile Home Indicator line */}
-      <div className="w-32 h-1 bg-slate-700/80 rounded-full mx-auto mt-2 mb-0.5" />
-    </div>
+        <button ref={moreButton} type="button" aria-expanded={moreOpen} aria-controls="mobile-more-navigation" onClick={() => setMoreOpen((open) => !open)} className={moreActive || moreOpen ? 'is-active' : ''}>
+          <Menu aria-hidden="true" /><span>{moreLabel}</span>
+        </button>
+      </nav>
+    </>
   );
 };
-
-

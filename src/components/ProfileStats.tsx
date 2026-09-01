@@ -284,8 +284,10 @@ export const ProfileStats: React.FC<ProfileStatsProps> = ({ user, lang, onNaviga
       {/* Badge Detail Modal */}
       {selectedBadge && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 relative animate-in fade-in zoom-in duration-200 text-center">
+          <div role="dialog" aria-modal="true" aria-labelledby="badge-detail-title" className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 relative animate-in fade-in zoom-in duration-200 text-center">
             <button
+              type="button"
+              aria-label={lang === 'kk' ? 'Жабу' : lang === 'en' ? 'Close' : 'Закрыть'}
               onClick={() => setSelectedBadge(null)}
               className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-2 rounded-full hover:bg-slate-100 transition-all cursor-pointer"
             >
@@ -318,7 +320,7 @@ export const ProfileStats: React.FC<ProfileStatsProps> = ({ user, lang, onNaviga
               )}
             </div>
 
-            <h3 className="text-lg font-black text-slate-900 mt-1">
+            <h3 id="badge-detail-title" className="text-lg font-black text-slate-900 mt-1">
               {selectedBadge.name[lang] || selectedBadge.name.ru}
             </h3>
 

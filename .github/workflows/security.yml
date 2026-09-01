@@ -1,0 +1,70 @@
+name: Security gates
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - feat/supabase-foundation
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  secrets:
+    name: Secret history scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out complete history without persisted credentials
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Scan committed history with Gitleaks
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITLEAKS_ENABLE_COMMENTS: "false"
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "false"
+
+  application-security:
+    name: Build and security validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source without persisted credentials
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Use repository Node and npm versions
+        uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install exact lockfile dependencies
+        run: npm ci
+      - name: TypeScript
+        run: npm run typecheck
+      - name: Production build
+        run: npm run build
+      - name: Focused security tests
+        run: npm run test:security
+      - name: Critical production dependency audit
+        run: npm audit --omit=dev --audit-level=critical
+      - name: Generate production CycloneDX SBOM
+        run: |
+          mkdir -p artifacts
+          npm sbom --sbom-format cyclonedx --omit dev --package-lock-only > artifacts/engineerus-sbom.cdx.json
+      - name: Upload SBOM for review
+        uses: actions/upload-artifact@v4
+        with:
+          name: engineerus-cyclonedx-sbom
+          path: artifacts/engineerus-sbom.cdx.json
+          if-no-files-found: error
+          retention-days: 14

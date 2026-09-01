@@ -13,6 +13,12 @@ Educational platform for engineering students.
 - Vite
 
 ## Installation
+
 ```bash
-npm install
+npm ci
 npm run dev
+```
+
+The canonical toolchain is Node.js 24.18.0 with npm 11.16.0. See
+[`docs/local-development.md`](docs/local-development.md) for environment,
+Supabase CLI, database migration, and validation instructions.
