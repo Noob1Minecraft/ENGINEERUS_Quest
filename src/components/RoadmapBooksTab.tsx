@@ -19,16 +19,18 @@ export const RoadmapBooksTab: React.FC<RoadmapBooksTabProps> = ({ lang }) => {
   ];
   const categoryLabels = {
     all: lang === 'kk' ? 'Барлық пәндер' : lang === 'en' ? 'All disciplines' : 'Все дисциплины',
-    mechanical: 'Mechanical & Sopromat', electrical: 'Electrical & ТОЭ', robotics: 'Robotics & AI',
+    mechanical: lang === 'kk' ? 'Механика және материалдар кедергісі' : lang === 'en' ? 'Mechanics & strength of materials' : 'Механика и сопромат',
+    electrical: lang === 'kk' ? 'Электртехника және тізбектер' : lang === 'en' ? 'Electrical engineering & circuits' : 'Электротехника и ТОЭ',
+    robotics: lang === 'kk' ? 'Робототехника және ЖИ' : lang === 'en' ? 'Robotics & AI' : 'Робототехника и ИИ',
   };
   const filteredBooks = BOOKS.filter((book) =>
     (selectedLangFilter === 'all' || book.lang === selectedLangFilter)
     && (selectedCategory === 'all' || book.category === selectedCategory));
 
-  return <div className="eq-legacy-page eq-learning">
+  return <div className="eq-legacy-page eq-learning eq-study-workspace">
     <section className="eq-learning__roadmap" aria-labelledby="roadmap-title">
       <header className="eq-legacy-page__header"><div>
-        <span className="eq-legacy-page__eyebrow">LEARNING PATH / 05 STEPS</span>
+        <span className="eq-legacy-page__eyebrow">{lang === 'kk' ? 'ОҚУ БАҒЫТЫ / 05 ҚАДАМ' : lang === 'en' ? 'LEARNING PATH / 05 STEPS' : 'УЧЕБНЫЙ МАРШРУТ / 05 ЭТАПОВ'}</span>
         <h2 id="roadmap-title" className="eq-legacy-page__title">{t.roadmapTitle}</h2>
         <p className="eq-legacy-page__description">{lang === 'kk'
           ? 'Инженерлік дағдыларды негізден қолданбалы жұмысқа дейін ретімен дамытыңыз.'
@@ -37,7 +39,7 @@ export const RoadmapBooksTab: React.FC<RoadmapBooksTabProps> = ({ lang }) => {
       </div></header>
       <ol className="eq-roadmap-list">{steps.map(([title, description], index) =>
         <li className="eq-roadmap-step" key={title}>
-          <span className="eq-roadmap-step__number">{String(index + 1).padStart(2, '0')}</span>
+          <span className="eq-roadmap-step__number">{lang === 'kk' ? 'МОДУЛЬ' : lang === 'en' ? 'MODULE' : 'МОДУЛЬ'} {String(index + 1).padStart(2, '0')}</span>
           <div><h3>{title}</h3><p>{description}</p></div>
         </li>)}</ol>
     </section>
@@ -45,7 +47,7 @@ export const RoadmapBooksTab: React.FC<RoadmapBooksTabProps> = ({ lang }) => {
     <section className="eq-learning__library" aria-labelledby="library-title">
       <header className="eq-learning__library-header">
         <div>
-          <span className="eq-legacy-page__eyebrow">REFERENCE SHELF / VERIFIED LINKS</span>
+          <span className="eq-legacy-page__eyebrow">{lang === 'kk' ? 'АНЫҚТАМАЛЫҚ СӨРЕ / ТЕКСЕРІЛГЕН СІЛТЕМЕЛЕР' : lang === 'en' ? 'REFERENCE SHELF / VERIFIED LINKS' : 'СПРАВОЧНАЯ ПОЛКА / ПРОВЕРЕННЫЕ ССЫЛКИ'}</span>
           <h2 id="library-title" className="eq-legacy-page__title"><BookOpen aria-hidden="true" />{t.libraryTitle}</h2>
           <p className="eq-legacy-page__description">{lang === 'kk'
             ? 'Негізгі инженерлік пәндерге арналған тексерілген оқу материалдары.'

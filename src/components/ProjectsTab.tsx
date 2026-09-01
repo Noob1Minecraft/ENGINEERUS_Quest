@@ -62,7 +62,7 @@ const COPY = {
     cancel: 'Отмена', edit: 'Редактировать', archive: 'Архивировать', loadMore: 'Показать ещё',
     emptyMine: 'Пока нет проектов. Создайте первый инженерный проект.', emptyDiscover: 'Подходящие открытые проекты не найдены.',
     signIn: 'Войдите, чтобы работать с проектами.', open: 'Открыть проект', back: 'К списку проектов', owner: 'Координатор',
-    description: 'Задача проекта', visibility: 'Доступ', private: 'Приватный', authenticated: 'Участникам Engineerus', public: 'Публичный', search: 'Поиск', discipline: 'Направление', status: 'Статус', all: 'Все', loading: 'Загружаем проекты…',
+    description: 'Задача проекта', visibility: 'Доступ', private: 'Приватный', authenticated: 'Участникам Engineerus', public: 'Публичный', search: 'Поиск', discipline: 'Направление', status: 'Статус', all: 'Все', loading: 'Загружаем проекты…', workshop: 'Проектная мастерская', signInAction: 'Войти',
   },
   kk: {
     title: 'Инженерлік жобалар', subtitle: 'Нақты жобалар құрыңыз және ашық бастамаларды табыңыз.',
@@ -70,7 +70,7 @@ const COPY = {
     cancel: 'Бас тарту', edit: 'Өзгерту', archive: 'Мұрағаттау', loadMore: 'Тағы көрсету',
     emptyMine: 'Сізде әзірге жоба жоқ.', emptyDiscover: 'Сәйкес ашық жобалар табылмады.',
     signIn: 'Жобалармен жұмыс істеу үшін кіріңіз.', open: 'Жобаны ашу', back: 'Жобалар тізіміне', owner: 'Үйлестіруші',
-    description: 'Жоба міндеті', visibility: 'Қолжетімділік', private: 'Жеке', authenticated: 'Engineerus қатысушыларына', public: 'Ашық', search: 'Іздеу', discipline: 'Бағыт', status: 'Күйі', all: 'Барлығы', loading: 'Жобалар жүктелуде…',
+    description: 'Жоба міндеті', visibility: 'Қолжетімділік', private: 'Жеке', authenticated: 'Engineerus қатысушыларына', public: 'Ашық', search: 'Іздеу', discipline: 'Бағыт', status: 'Күйі', all: 'Барлығы', loading: 'Жобалар жүктелуде…', workshop: 'Жобалық шеберхана', signInAction: 'Кіру',
   },
   en: {
     title: 'Engineering projects', subtitle: 'Create real projects and discover open engineering initiatives.',
@@ -78,7 +78,7 @@ const COPY = {
     cancel: 'Cancel', edit: 'Edit', archive: 'Archive', loadMore: 'Load more',
     emptyMine: 'You do not have any projects yet.', emptyDiscover: 'No matching open projects were found.',
     signIn: 'Sign in to work with projects.', open: 'Open project', back: 'Back to projects', owner: 'Coordinator',
-    description: 'Project brief', visibility: 'Access', private: 'Private', authenticated: 'Engineerus members', public: 'Public', search: 'Search', discipline: 'Discipline', status: 'Status', all: 'All', loading: 'Loading projects…',
+    description: 'Project brief', visibility: 'Access', private: 'Private', authenticated: 'Engineerus members', public: 'Public', search: 'Search', discipline: 'Discipline', status: 'Status', all: 'All', loading: 'Loading projects…', workshop: 'Project workshop', signInAction: 'Sign in',
   },
 } satisfies Record<Language, Record<string, string>>;
 
@@ -358,7 +358,7 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({ authenticated, lang, o
         <BriefcaseBusiness className="mx-auto h-9 w-9 text-blue-600" />
         <h1 className="mt-3 text-xl font-black">{copy.title}</h1>
         <p className="mt-2 text-sm text-slate-500">{copy.signIn}</p>
-        <Button onClick={onRequireAuth}>Sign in</Button>
+        <Button onClick={onRequireAuth}>{copy.signInAction}</Button>
       </section>
     );
   }
@@ -367,7 +367,7 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({ authenticated, lang, o
   return (
     <section className="eq-project-workspace animate-fade-in">
       <header className="eq-collab-heading">
-        <div><span className="eq-collab-kicker"><Compass aria-hidden="true" />Project workshop</span><h1>{copy.title}</h1><p>{copy.subtitle}</p></div>
+        <div><span className="eq-collab-kicker"><Compass aria-hidden="true" />{copy.workshop}</span><h1>{copy.title}</h1><p>{copy.subtitle}</p></div>
         <Button onClick={() => { setCreating(true); setSelected(null); setForm(EMPTY_FORM); }}><Plus aria-hidden="true" />{copy.create}</Button>
       </header>
 

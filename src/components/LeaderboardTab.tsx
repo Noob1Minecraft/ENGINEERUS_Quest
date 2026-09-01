@@ -21,7 +21,7 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({ user, lang }) =>
   const t = TRANSLATIONS[lang];
 
   return (
-    <section className="eq-legacy-page eq-leaderboard" aria-labelledby="leaderboard-title">
+    <section className="eq-legacy-page eq-leaderboard eq-ranking-register" aria-labelledby="leaderboard-title">
       <header className="eq-legacy-page__header eq-leaderboard__header">
           <div>
             <span className="eq-legacy-page__eyebrow"><Trophy aria-hidden="true" />{t.topEngineers}</span>
@@ -40,6 +40,11 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({ user, lang }) =>
           </div>
       </header>
 
+      <div className="eq-leaderboard__columns" aria-hidden="true">
+        <span>{lang === 'kk' ? 'ОРЫН' : lang === 'en' ? 'RANK' : 'МЕСТО'}</span>
+        <span>{lang === 'kk' ? 'ИНЖЕНЕР' : lang === 'en' ? 'ENGINEER' : 'ИНЖЕНЕР'}</span>
+        <span>XP</span>
+      </div>
       <div className="eq-leaderboard__list" role="list">
           {LEADERBOARD_USERS.map((entry) => {
             const isGold = entry.rank === 1;

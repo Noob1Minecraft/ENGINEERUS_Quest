@@ -837,7 +837,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
 
   return (
     <div
-      className={`eq-ai-workspace space-y-5 md:space-y-6 transition-all ${
+      className={`eq-ai-workspace eq-ai-refined space-y-5 md:space-y-6 transition-all ${
         isFullscreen
           ? 'fixed inset-0 z-[100] bg-slate-950 text-slate-100 p-3 sm:p-6 overflow-hidden flex flex-col m-0 rounded-none'
           : ''
@@ -883,7 +883,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
 
           {/* Subview Tabs: Chat vs Saved Solutions & Fullscreen Toggle */}
           <div className="flex items-center gap-2 flex-wrap">
-            <div className={`flex items-center p-1 rounded-xl border ${
+            <div className={`eq-ai-view-switcher flex items-center p-1 rounded-xl border ${
               isFullscreen
                 ? 'bg-slate-850 border-slate-700'
                 : 'bg-slate-100/80 border-slate-200/55'
@@ -1070,7 +1070,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                   ref={newChatButtonRef}
                   type="button"
                   onClick={handleCreateNewChat}
-                  className="bg-blue-600 hover:bg-blue-500 active:scale-95 text-white px-3 py-1.5 rounded-xl text-xs font-black shadow-md shadow-blue-500/20 transition-all flex items-center gap-1.5"
+                  className="eq-ai-new-chat bg-blue-600 hover:bg-blue-500 active:scale-95 text-white px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">{t.newChat}</span>
@@ -1192,7 +1192,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                     )}
 
                     <div
-                      className={`max-w-[88%] sm:max-w-[80%] rounded-xl p-4 sm:p-5 ${
+                      className={`eq-ai-message max-w-[88%] sm:max-w-[80%] rounded-xl p-4 sm:p-5 ${
                         isUser
                           ? 'bg-blue-700 text-white rounded-br-xs'
                           : isFullscreen
@@ -1323,7 +1323,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
 
             {/* Chat Composer Input Area */}
             <div
-              className={`p-3 sm:p-4 border-t shrink-0 lg:ml-64 ${
+              className={`eq-ai-composer p-3 sm:p-4 border-t shrink-0 lg:ml-64 ${
                 isFullscreen ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200/80'
               }`}
             >
@@ -1377,7 +1377,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
         /* Saved Notes & Solutions View */
         <div className="space-y-4 animate-fade-in">
           {/* Controls: Search & Module Filter Bar */}
-          <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/80 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="eq-ai-saved-toolbar bg-white p-4 sm:p-5 border border-slate-200/80 flex flex-col sm:flex-row items-center justify-between gap-3">
             {/* Search input */}
             <div className="relative w-full sm:max-w-xs">
               <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -1422,7 +1422,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
 
           {/* Saved Cards Grid */}
           {filteredSavedNotes.length === 0 ? (
-            <div className="bg-white rounded-3xl p-8 text-center border border-slate-200/80 shadow-2xs space-y-3">
+            <div className="eq-ai-saved-empty bg-white p-8 text-center border border-slate-200/80 space-y-3">
               <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 mx-auto flex items-center justify-center">
                 <Bookmark className="w-6 h-6" />
               </div>
@@ -1452,7 +1452,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                 return (
                   <div
                     key={note.id}
-                    className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-2xs space-y-3 transition-all hover:border-blue-300"
+                    className="eq-ai-saved-note bg-white p-5 border border-slate-200/80 space-y-3 transition-all hover:border-blue-300"
                   >
                     {/* Header */}
                     <div className="flex items-center justify-between border-b border-slate-100 pb-3">
