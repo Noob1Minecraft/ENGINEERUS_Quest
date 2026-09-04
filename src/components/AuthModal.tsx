@@ -4,6 +4,7 @@ import { TRANSLATIONS } from '../data';
 import { User, Lock, Mail, ArrowRight, X, LogOut } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { useDialogFocus } from '../hooks/useDialogFocus';
+import { BrandLogo } from './BrandLogo';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -99,7 +100,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <button type="button" onClick={onClose} aria-label="Close account" className="eq-dialog__close eq-auth-dialog__close">
             <X className="w-4 h-4" />
           </button>
-          <div className="eq-dialog__mark">EQ</div>
+          <BrandLogo decorative eager className="eq-auth-dialog__logo" />
           <div>
             <h2 id="auth-account-title" className="eq-auth-dialog__title">Engineerus Quest</h2>
             <p className="text-xs text-slate-500 mt-2">{auth.user.email}</p>
@@ -132,9 +133,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         </button>
 
         <div className="text-center space-y-2 mb-6">
-          <div className="eq-dialog__mark">
-            EQ
-          </div>
+          <BrandLogo decorative eager className="eq-auth-dialog__logo" />
           <h2 id="auth-dialog-title" className="eq-auth-dialog__title">
             Engineerus Quest
           </h2>

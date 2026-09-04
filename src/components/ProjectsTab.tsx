@@ -62,7 +62,7 @@ const COPY = {
     cancel: 'Отмена', edit: 'Редактировать', archive: 'Архивировать', loadMore: 'Показать ещё',
     emptyMine: 'Пока нет проектов. Создайте первый инженерный проект.', emptyDiscover: 'Подходящие открытые проекты не найдены.',
     signIn: 'Войдите, чтобы работать с проектами.', open: 'Открыть проект', back: 'К списку проектов', owner: 'Координатор',
-    description: 'Задача проекта', visibility: 'Доступ', private: 'Приватный', authenticated: 'Участникам Engineerus', public: 'Публичный', search: 'Поиск', discipline: 'Направление', status: 'Статус', all: 'Все', loading: 'Загружаем проекты…',
+    description: 'Задача проекта', visibility: 'Доступ', private: 'Приватный', authenticated: 'Участникам Engineerus', public: 'Публичный', search: 'Поиск', discipline: 'Направление', status: 'Статус', all: 'Все', loading: 'Загружаем проекты…', workshop: 'Проектная мастерская', signInAction: 'Войти',
   },
   kk: {
     title: 'Инженерлік жобалар', subtitle: 'Нақты жобалар құрыңыз және ашық бастамаларды табыңыз.',
@@ -70,7 +70,7 @@ const COPY = {
     cancel: 'Бас тарту', edit: 'Өзгерту', archive: 'Мұрағаттау', loadMore: 'Тағы көрсету',
     emptyMine: 'Сізде әзірге жоба жоқ.', emptyDiscover: 'Сәйкес ашық жобалар табылмады.',
     signIn: 'Жобалармен жұмыс істеу үшін кіріңіз.', open: 'Жобаны ашу', back: 'Жобалар тізіміне', owner: 'Үйлестіруші',
-    description: 'Жоба міндеті', visibility: 'Қолжетімділік', private: 'Жеке', authenticated: 'Engineerus қатысушыларына', public: 'Ашық', search: 'Іздеу', discipline: 'Бағыт', status: 'Күйі', all: 'Барлығы', loading: 'Жобалар жүктелуде…',
+    description: 'Жоба міндеті', visibility: 'Қолжетімділік', private: 'Жеке', authenticated: 'Engineerus қатысушыларына', public: 'Ашық', search: 'Іздеу', discipline: 'Бағыт', status: 'Күйі', all: 'Барлығы', loading: 'Жобалар жүктелуде…', workshop: 'Жобалық шеберхана', signInAction: 'Кіру',
   },
   en: {
     title: 'Engineering projects', subtitle: 'Create real projects and discover open engineering initiatives.',
@@ -78,7 +78,7 @@ const COPY = {
     cancel: 'Cancel', edit: 'Edit', archive: 'Archive', loadMore: 'Load more',
     emptyMine: 'You do not have any projects yet.', emptyDiscover: 'No matching open projects were found.',
     signIn: 'Sign in to work with projects.', open: 'Open project', back: 'Back to projects', owner: 'Coordinator',
-    description: 'Project brief', visibility: 'Access', private: 'Private', authenticated: 'Engineerus members', public: 'Public', search: 'Search', discipline: 'Discipline', status: 'Status', all: 'All', loading: 'Loading projects…',
+    description: 'Project brief', visibility: 'Access', private: 'Private', authenticated: 'Engineerus members', public: 'Public', search: 'Search', discipline: 'Discipline', status: 'Status', all: 'All', loading: 'Loading projects…', workshop: 'Project workshop', signInAction: 'Sign in',
   },
 } satisfies Record<Language, Record<string, string>>;
 
@@ -117,14 +117,11 @@ export function ProjectCard({
 }) {
   return (
     <article className="eq-project-row">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3>{project.title}</h3>
-          <p className="eq-project-row__discipline">
-            {project.primary_discipline ? label(project.primary_discipline, lang) : '—'}
-          </p>
-        </div>
-        <span className="eq-status-label"><CircleDot aria-hidden="true" />{STATUS_LABEL[lang][project.status]}</span>
+      <div className="eq-project-row__identity">
+        <h3>{project.title}</h3>
+        <p className="eq-project-row__discipline">
+          {project.primary_discipline ? label(project.primary_discipline, lang) : '—'}
+        </p>
       </div>
       <p className="eq-project-row__description">
         {project.description || '—'}
@@ -133,11 +130,12 @@ export function ProjectCard({
         <span><UserRound aria-hidden="true" />{ownerView ? COPY[lang].mine : ownerName(project)}</span>
         <time dateTime={project.created_at}>{new Date(project.created_at).toLocaleDateString(lang)}</time>
       </div>
-      {onOpen && (
+      <span className="eq-status-label"><CircleDot aria-hidden="true" />{STATUS_LABEL[lang][project.status]}</span>
+      <div className="eq-project-row__actions">{onOpen && (
         <button type="button" onClick={() => onOpen(project.id)} className="eq-project-row__action">
           {COPY[lang].open}<ArrowLeft aria-hidden="true" className="rotate-180" />
         </button>
-      )}
+      )}</div>
     </article>
   );
 }
@@ -358,7 +356,7 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({ authenticated, lang, o
         <BriefcaseBusiness className="mx-auto h-9 w-9 text-blue-600" />
         <h1 className="mt-3 text-xl font-black">{copy.title}</h1>
         <p className="mt-2 text-sm text-slate-500">{copy.signIn}</p>
-        <Button onClick={onRequireAuth}>Sign in</Button>
+        <Button onClick={onRequireAuth}>{copy.signInAction}</Button>
       </section>
     );
   }
@@ -367,7 +365,7 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({ authenticated, lang, o
   return (
     <section className="eq-project-workspace animate-fade-in">
       <header className="eq-collab-heading">
-        <div><span className="eq-collab-kicker"><Compass aria-hidden="true" />Project workshop</span><h1>{copy.title}</h1><p>{copy.subtitle}</p></div>
+        <div><span className="eq-collab-kicker"><Compass aria-hidden="true" />{copy.workshop}</span><h1>{copy.title}</h1><p>{copy.subtitle}</p></div>
         <Button onClick={() => { setCreating(true); setSelected(null); setForm(EMPTY_FORM); }}><Plus aria-hidden="true" />{copy.create}</Button>
       </header>
 
@@ -414,7 +412,7 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({ authenticated, lang, o
 
       {mode === 'requests' && !selected && <ProjectRequestsPanel lang={lang} onOpenConversation={onOpenConversation} />}
 
-      {!selected && mode !== 'requests' && (loading && projects.length === 0 ? <LoadingState label={copy.loading} /> : projects.length === 0 ? <EmptyState title={mode === 'mine' ? copy.emptyMine : copy.emptyDiscover} action={mode === 'mine' ? <Button onClick={() => { setCreating(true); setForm(EMPTY_FORM); }}>{copy.create}</Button> : undefined} /> : <div className="eq-project-list">{projects.map((project) => <ProjectCard key={project.id} project={project} lang={lang} ownerView={mode === 'mine'} onOpen={openProject} />)}</div>)}
+      {!selected && mode !== 'requests' && (loading && projects.length === 0 ? <LoadingState label={copy.loading} /> : projects.length === 0 ? <EmptyState title={mode === 'mine' ? copy.emptyMine : copy.emptyDiscover} action={mode === 'mine' ? <Button onClick={() => { setCreating(true); setForm(EMPTY_FORM); }}>{copy.create}</Button> : undefined} /> : <div className="eq-project-registry"><div className="eq-project-registry__head" aria-hidden="true"><span>{lang === 'kk' ? 'ЖОБА / ПӘН' : lang === 'en' ? 'PROJECT / DISCIPLINE' : 'ПРОЕКТ / ДИСЦИПЛИНА'}</span><span>{lang === 'kk' ? 'ҚЫСҚАША СИПАТТАМА' : lang === 'en' ? 'ENGINEERING BRIEF' : 'ИНЖЕНЕРНЫЙ БРИФ'}</span><span>{lang === 'kk' ? 'КОМАНДА / КҮН' : lang === 'en' ? 'TEAM / DATE' : 'КОМАНДА / ДАТА'}</span><span>{lang === 'kk' ? 'КҮЙІ' : lang === 'en' ? 'STATUS' : 'СТАТУС'}</span><span>{lang === 'kk' ? 'ӘРЕКЕТ' : lang === 'en' ? 'ACTION' : 'ДЕЙСТВИЕ'}</span></div><div className="eq-project-list">{projects.map((project) => <ProjectCard key={project.id} project={project} lang={lang} ownerView={mode === 'mine'} onOpen={openProject} />)}</div></div>)}
 
       {!selected && mode === 'mine' && myCursor && <button type="button" disabled={loading} onClick={loadMoreMine} className="mx-auto block rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-xs font-bold disabled:opacity-50">{copy.loadMore}</button>}
       {!selected && mode === 'discover' && discoverCursor && <button type="button" onClick={() => runDiscovery(discoverCursor)} className="mx-auto block rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-xs font-bold">{copy.loadMore}</button>}

@@ -2,6 +2,7 @@ import React from 'react';
 import { Bot } from 'lucide-react';
 import type { Language } from '../types';
 import { APP_NAVIGATION_GROUPS } from './appNavigation';
+import { BrandLogo } from './BrandLogo';
 
 type AppSidebarProps = {
   activeTab: string;
@@ -12,6 +13,14 @@ type AppSidebarProps = {
 export function AppSidebar({ activeTab, language, onSelectTab }: AppSidebarProps) {
   return (
     <aside className="eq-sidebar" aria-label={language === 'ru' ? 'Основная навигация' : language === 'kk' ? 'Негізгі навигация' : 'Primary navigation'}>
+      <button
+        type="button"
+        className="eq-sidebar__brand"
+        onClick={() => onSelectTab('home')}
+        aria-label={language === 'ru' ? 'Engineerus Quest — главная' : language === 'kk' ? 'Engineerus Quest — басты бет' : 'Engineerus Quest — home'}
+      >
+        <BrandLogo decorative eager />
+      </button>
       <div className="eq-sidebar__scroll">
         {APP_NAVIGATION_GROUPS.map((group) => (
           <section key={group.id} className="eq-sidebar__group" aria-labelledby={`nav-group-${group.id}`}>
