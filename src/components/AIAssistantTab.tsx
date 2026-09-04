@@ -11,14 +11,12 @@ import { AiAttachmentPicker } from './AiAttachmentPicker';
 import { Button } from './ui';
 import { useDialogFocus } from '../hooks/useDialogFocus';
 import {
-  DraftingCompass,
   GraduationCap,
   Send,
   Layers,
   Cpu,
   ShieldCheck,
   Users,
-  HelpCircle,
   CheckCircle2,
   Bookmark,
   BookmarkCheck,
@@ -30,7 +28,6 @@ import {
   MessageSquare,
   Bot,
   User,
-  ArrowRight,
   Filter,
   Plus,
   Maximize2,
@@ -39,7 +36,6 @@ import {
   MoreHorizontal,
   X,
   History,
-  FolderKanban
 } from 'lucide-react';
 
 interface AIAssistantTabProps {
@@ -57,92 +53,12 @@ interface AIAssistantTabProps {
   onSelectImageContext?: (images: Array<{ id: string; name: string }>) => void;
 }
 
-const PRESET_QUESTIONS: Record<string, Record<Language, string[]>> = {
-  tutor: {
-    ru: [
-      "Как рассчитать эпюру изгибающих моментов для двухопорной балки?",
-      "Объясни теорему Карно и цикл Стирлинга простыми словами",
-      "В чем разница между кинематикой и динамикой механизмов?",
-    ],
-    kk: [
-      "Екі тіректі арқалықтың иілу моменттері эпюрасын қалай есептейді?",
-      "Карно теоремасы мен Стирлинг циклін қарапайым сөзбен түсіндір",
-      "Механизмдер кинематикасы мен динамикасының айырмашылығы неде?",
-    ],
-    en: [
-      "How to calculate bending moment diagrams for a simply supported beam?",
-      "Explain Carnot's theorem and the Stirling cycle in simple terms",
-      "What is the difference between kinematics and dynamics of mechanisms?",
-    ],
-  },
-  material: {
-    ru: [
-      "Сравни конструкционную сталь 09Г2С и Сталь 45 для северного Казахстана",
-      "Подбери легкий и прочный алюминиевый сплав для корпуса БПЛА",
-      "Какие композиты применяются в ветроэнергетике в Акмолинской области?",
-    ],
-    kk: [
-      "Солтүстік Қазақстан үшін 09Г2С және Болат 45 конструкциялық болаттарын салыстыр",
-      "ҰҰА корпусы үшін жеңіл әрі берік алюминий қорытпасын таңда",
-      "Ақмола облысындағы жел энергетикасында қандай композиттер қолданылады?",
-    ],
-    en: [
-      "Compare 09G2S and Steel 45 structural steels for Northern Kazakhstan",
-      "Select a lightweight and strong aluminum alloy for a UAV frame",
-      "Which composites are used in wind energy projects in Akmola region?",
-    ],
-  },
-  patent: {
-    ru: [
-      "Составь формулу изобретения для устройства мониторинга мостов",
-      "Как проверить патентную чистоту инженерной разработки в Казпатент?",
-      "Подготовь описание полезной модели для системы очистки воды",
-    ],
-    kk: [
-      "Көпірлерді мониторингтеу құрылғысы үшін өнертабыс формуласын жаса",
-      "Қазпатентте инженерлік әзірлеменің патенттік тазалығын қалай тексереді?",
-      "Су тазарту жүйесі үшін пайдалы модель сипаттамасын дайында",
-    ],
-    en: [
-      "Draft a patent claim for a bridge structural monitoring device",
-      "How to verify patent clearance of an engineering design at Kazpatent?",
-      "Prepare a utility model description for a water filtration system",
-    ],
-  },
-  engi_legal: {
-    ru: [
-      "Какие нормы СНиП РК регламентируют сейсмостойкость зданий в Алматы?",
-      "Проверь типовой договор подрядных инженерных работ на риски",
-      "Какие сертификаты ТР ТС необходимы для ввоза промышленного насоса?",
-    ],
-    kk: [
-      "Алматыдағы ғимараттардың сейсмотөзімділігін ҚР ҚНжЕ-нің қандай нормалары реттейді?",
-      "Мердігерлік инженерлік жұмыстар шартын тәуекелдерге тексер",
-      "Өнеркәсіптік сорғыны импорттау үшін ҚР КО ТР қандай сертификаттары қажет?",
-    ],
-    en: [
-      "Which SNiP KZ standards regulate earthquake resistance of buildings in Almaty?",
-      "Review a standard engineering contract for compliance and legal risks",
-      "Which CU TR certificates are required to import an industrial pump?",
-    ],
-  },
-  engi_match: {
-    ru: [
-      "Какие ключевые роли нужны для стартапа в области агро-робототехники?",
-      "Как правильно распределить доли (Equity) между 3 инженерами-сооснователями?",
-      "Где найти специалиста по Embedded C/C++ и ROS2 в Алматы?",
-    ],
-    kk: [
-      "Агро-робототехника саласындағы стартап үшін қандай негізгі рөлдер қажет?",
-      "3 инженер-негізін қалаушы арасында үлесті (Equity) қалай дұрыс бөледі?",
-      "Алматыда Embedded C/C++ және ROS2 маманын қайдан табуға болады?",
-    ],
-    en: [
-      "What key roles are needed for an agritech robotics startup?",
-      "How to split founder equity fairly between 3 co-founding engineers?",
-      "Where to recruit Embedded C/C++ and ROS2 specialists in Almaty?",
-    ],
-  },
+const PRESET_KEYS: Record<string, string[]> = {
+  tutor: ['aiExampleTutorBeam', 'aiExampleTutorCarnot', 'aiExampleTutorMotion'],
+  material: ['aiExampleMaterialSteel', 'aiExampleMaterialUav', 'aiExampleMaterialWind'],
+  patent: ['aiExamplePatentBridge', 'aiExamplePatentClearance', 'aiExamplePatentWater'],
+  engi_legal: ['aiExampleLegalSeismic', 'aiExampleLegalContract', 'aiExampleLegalPump'],
+  engi_match: ['aiExampleMatchRoles', 'aiExampleMatchEquity', 'aiExampleMatchEmbedded'],
 };
 
 const MODULE_CONFIG: Record<string, { label: string; icon: React.FC<{ className?: string }>; color: string; badgeBg: string }> = {
@@ -163,7 +79,6 @@ function mergeMessages(...groups: ChatMessage[][]): ChatMessage[] {
 }
 
 export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
-  user,
   authenticatedUserId,
   lang,
   onUpdateUser,
@@ -856,23 +771,11 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
           : 'eq-ai-intro text-slate-800 p-5 sm:p-6 md:p-8'
       }`}>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
-          <div>
-            <div className={`flex items-center gap-1.5 font-bold text-xs uppercase tracking-wider mb-1 ${
-              isFullscreen ? 'text-blue-400' : 'text-blue-600'
-            }`}>
-              <DraftingCompass className="w-4 h-4" aria-hidden="true" /> {t.aiCoreTitle || 'Engineerus AI Core'}
-            </div>
-            <h2 className={`text-xl sm:text-2xl font-extrabold tracking-tight flex flex-wrap items-center gap-2 sm:gap-3 ${
+          <div className="min-w-0">
+            <h2 className={`text-xl sm:text-2xl font-extrabold tracking-tight ${
               isFullscreen ? 'text-white' : 'text-slate-900'
             }`}>
-              <span>{t.aiAssistantTitle}</span>
-              <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
-                isFullscreen
-                  ? 'text-emerald-400 bg-emerald-950/80 border border-emerald-500/20'
-                  : 'text-emerald-700 bg-emerald-50 border border-emerald-200/60'
-              }`}>
-                {t.session || 'Сессия'}: {user.username}
-              </span>
+              {t.aiAssistantTitle}
             </h2>
             <p className={`text-xs font-medium mt-1 max-w-xl leading-relaxed ${
               isFullscreen ? 'text-slate-400' : 'text-slate-500'
@@ -889,6 +792,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                 : 'bg-slate-100/80 border-slate-200/55'
             }`}>
               <button
+                type="button"
                 onClick={() => setActiveSubView('chat')}
                 className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${
                   activeSubView === 'chat'
@@ -903,6 +807,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
               </button>
 
               <button
+                type="button"
                 onClick={() => setActiveSubView('saved')}
                 className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${
                   activeSubView === 'saved'
@@ -924,7 +829,9 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
 
             {/* Fullscreen Toggle Button */}
             <button
+              type="button"
               onClick={() => setIsFullscreen(!isFullscreen)}
+              aria-label={isFullscreen ? t.exitFullscreen : t.fullscreen}
               className={`p-2 rounded-xl border transition-all flex items-center justify-center ${
                 isFullscreen
                   ? 'bg-slate-850 hover:bg-slate-800 text-white border-slate-700'
@@ -945,7 +852,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
       {activeSubView === 'chat' ? (
         <div className={`eq-ai-chat-column flex flex-col gap-4 ${isFullscreen ? 'flex-1 min-h-0' : ''}`}>
           {/* Module Selectors Row */}
-          <nav className="eq-ai-modules grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 shrink-0" aria-label={lang === 'kk' ? 'Инженерлік модуль' : lang === 'en' ? 'Engineering module' : 'Инженерный модуль'}>
+          <nav className="eq-ai-modules grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 shrink-0" aria-label={t.aiModuleNavLabel}>
             {Object.entries(MODULE_CONFIG).map(([key, config]) => {
               const IconComp = config.icon;
               const isSelected = selectedModule === key;
@@ -968,48 +875,13 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                   >
                     <IconComp className="w-3.5 h-3.5" />
                   </div>
-                  <div className="font-extrabold text-xs truncate">
+                  <div className="font-extrabold text-xs whitespace-normal leading-tight">
                     {config.label}
-                  </div>
-                  <div className="text-[10px] text-slate-400 font-semibold mt-0.5 truncate">
-                    {key === 'tutor' && (lang === 'kk' ? 'Репетитор' : lang === 'en' ? 'AI Tutor' : 'Репетитор')}
-                    {key === 'material' && (lang === 'kk' ? 'МЕМСТ Материалдар' : lang === 'en' ? 'GOST Materials' : 'Материалы ГОСТ')}
-                    {key === 'patent' && (lang === 'kk' ? 'Патент Формуласы' : lang === 'en' ? 'Patent Draft' : 'Формула Патента')}
-                    {key === 'engi_legal' && (lang === 'kk' ? 'ҚНжЕ & Нормалар' : lang === 'en' ? 'Codes & Standards' : 'СНиП & Нормы')}
-                    {key === 'engi_match' && (lang === 'kk' ? 'Команда' : lang === 'en' ? 'Team' : 'Команда')}
                   </div>
                 </button>
               );
             })}
           </nav>
-
-          {/* Quick Preset Questions Bar */}
-          {!isFullscreen && (
-            <div className="eq-ai-prompts p-3.5 sm:p-4 space-y-2 shrink-0">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-extrabold text-slate-800 flex items-center gap-1.5">
-                  <HelpCircle className="w-4 h-4 text-blue-600" /> {lang === 'kk' ? 'Модульге арналған кеңес' : lang === 'en' ? 'Prompt suggestion for module' : 'Подсказка для модуля'}{' '}
-                  <span className="text-blue-600">{MODULE_CONFIG[selectedModule]?.label}</span>:
-                </span>
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                {(PRESET_QUESTIONS[selectedModule]?.[lang] || PRESET_QUESTIONS[selectedModule]?.ru || []).map((preset, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => {
-                      setPromptText(preset);
-                      handleSendPrompt(preset);
-                    }}
-                    className="eq-ai-prompt text-xs font-bold text-slate-700 px-3 py-1 transition-all text-left flex items-center gap-1.5"
-                  >
-                    <span>{preset}</span>
-                    <ArrowRight className="w-3 h-3 text-slate-400 shrink-0" />
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
 
           {/* Main Chat Interface Window with Multi-Chat Drawer */}
           <div
@@ -1017,9 +889,9 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
               isFullscreen ? 'flex-1 min-h-0 bg-slate-900 border-slate-800 text-slate-100' : 'eq-ai-chat-frame--embedded'
             }`}
           >
-            <aside className={`eq-ai-history hidden min-h-0 w-64 flex-col border-r lg:flex ${isFullscreen ? 'border-slate-800 bg-slate-950' : 'border-slate-200 bg-slate-50'}`} aria-label={lang === 'kk' ? 'Сақталған чаттар' : lang === 'en' ? 'Saved conversations' : 'Сохранённые чаты'}>
+            <aside className={`eq-ai-history hidden min-h-0 w-64 flex-col border-r lg:flex ${isFullscreen ? 'border-slate-800 bg-slate-950' : 'border-slate-200 bg-slate-50'}`} aria-label={t.aiSavedChatsLabel}>
               <div className="flex items-center justify-between gap-2 border-b border-inherit p-3">
-                <span className="flex min-w-0 items-center gap-2 text-xs font-black uppercase tracking-wide"><History className="h-4 w-4 text-blue-500" />{lang === 'kk' ? 'Чаттар' : lang === 'en' ? 'Conversations' : 'Диалоги'}</span>
+                <span className="flex min-w-0 items-center gap-2 text-xs font-black uppercase tracking-wide"><History className="h-4 w-4 text-blue-500" />{t.chatsCount}</span>
                 <button type="button" onClick={handleCreateNewChat} aria-label={t.newChat} className="rounded-lg bg-blue-600 p-2 text-white transition hover:bg-blue-700"><Plus className="h-4 w-4" /></button>
               </div>
               <div className="min-h-0 flex-1 space-y-1 overflow-y-auto p-2">
@@ -1059,9 +931,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                   <span>{t.chatsCount || 'Чаты'} ({sessions.length})</span>
                 </button>
 
-                <div className="font-extrabold text-xs truncate max-w-[150px] sm:max-w-[280px]">
-                  {activeSession ? translateSessionTitle(activeSession.title) : (lang === 'kk' ? 'Инженерлік сеанс' : lang === 'en' ? 'Engineering Session' : 'Инженерный сеанс')}
-                </div>
+                {activeSession && <div className="font-extrabold text-xs truncate max-w-[150px] sm:max-w-[280px]">{translateSessionTitle(activeSession.title)}</div>}
               </div>
 
               {/* Right: New Chat Button & Clear */}
@@ -1085,11 +955,11 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                   isFullscreen ? 'bg-slate-950 border-slate-800' : 'bg-slate-100/95 border-slate-200'
                 }`}
               >
-                <button type="button" className="eq-ai-history-drawer__backdrop" onClick={() => setShowSessionsDrawer(false)} aria-label={lang === 'kk' ? 'Чаттар тізімін жабу' : lang === 'en' ? 'Close conversation history' : 'Закрыть историю диалогов'} />
-                <section className="eq-ai-history-drawer__panel" aria-label={lang === 'kk' ? 'Сақталған чаттар' : lang === 'en' ? 'Saved conversations' : 'Сохранённые чаты'}>
+                <button type="button" className="eq-ai-history-drawer__backdrop" onClick={() => setShowSessionsDrawer(false)} aria-label={t.aiCloseHistory} />
+                <section className="eq-ai-history-drawer__panel" aria-label={t.aiSavedChatsLabel}>
                 <div className="flex items-center justify-between text-xs font-black text-slate-500 uppercase tracking-wider px-1">
                   <span className="flex items-center gap-1">
-                    <FolderKanban className="w-3.5 h-3.5 text-blue-500" /> {lang === 'kk' ? `Пайдаланушының сақталған чаттары: ${user.username}` : lang === 'en' ? `Saved chats for ${user.username}` : `Сохраненные чаты пользователя ${user.username}`}
+                    <History className="w-3.5 h-3.5 text-blue-500" /> {t.chatsCount}
                   </span>
                   <button
                     onClick={() => setShowSessionsDrawer(false)}
@@ -1175,6 +1045,30 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                 <div className="text-center text-xs font-bold text-slate-400">
                   {lang === 'kk' ? 'Хабарлар жүктелуде…' : lang === 'en' ? 'Loading messages…' : 'Загрузка сообщений…'}
                 </div>
+              )}
+              {messages.length === 0 && !loading && !loadingMessageSessions.has(activeSessionId) && (
+                <section className="eq-ai-empty mx-auto flex min-h-full w-full max-w-2xl flex-col items-center justify-center px-2 py-6 text-center" aria-labelledby="ai-empty-title">
+                  <h3 id="ai-empty-title" className={`text-lg font-extrabold ${isFullscreen ? 'text-white' : 'text-slate-900'}`}>{t.aiEmptyTitle}</h3>
+                  <p className={`mt-1 text-sm ${isFullscreen ? 'text-slate-400' : 'text-slate-500'}`}>{t.aiEmptyBody}</p>
+                  <div className="mt-5 w-full" aria-label={t.aiExamples}>
+                    <p className={`mb-2 text-xs font-bold uppercase tracking-wide ${isFullscreen ? 'text-slate-500' : 'text-slate-400'}`}>{t.aiExamples}</p>
+                    <div className="flex flex-wrap justify-center gap-2">
+                      {(PRESET_KEYS[selectedModule] ?? PRESET_KEYS.tutor).map((key) => t[key]).map((preset) => (
+                        <button
+                          key={preset}
+                          type="button"
+                          onClick={() => {
+                            setPromptText(preset);
+                            handleSendPrompt(preset);
+                          }}
+                          className={`eq-ai-prompt rounded-full border px-3 py-2 text-left text-xs font-bold transition ${isFullscreen ? 'border-slate-700 bg-slate-900 text-slate-200 hover:border-slate-500' : 'border-slate-200 bg-white text-slate-700 hover:border-blue-400 hover:text-blue-700'}`}
+                        >
+                          {preset}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </section>
               )}
               {messages.map((msg) => {
                 const isUser = msg.sender === 'user';
@@ -1355,8 +1249,8 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                     }
                   }}
                   rows={1}
-                  placeholder={lang === 'kk' ? 'Есепті, бастапқы деректерді немесе инженерлік сұрақты сипаттаңыз…' : lang === 'en' ? 'Describe the problem, given data, or engineering question…' : 'Опишите задачу, исходные данные или инженерный вопрос…'}
-                  aria-label={lang === 'kk' ? 'ЖИ-ге хабарлама' : lang === 'en' ? 'Message AI Tutor' : 'Сообщение ИИ-тьютору'}
+                  placeholder={t.aiComposerPlaceholder}
+                  aria-label={t.aiComposerLabel}
                   className={`min-h-11 min-w-0 flex-1 p-3 rounded-xl border outline-none text-xs sm:text-sm font-medium transition-all resize-none ${
                     isFullscreen
                       ? 'bg-slate-950 border-slate-800 text-slate-100 focus:border-blue-500'
@@ -1365,12 +1259,14 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                 />
 
                 <button
+                  type="button"
                   onClick={() => handleSendPrompt()}
                   disabled={loading || !promptText.trim()}
+                  aria-label={t.aiSend}
                   className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-black px-3 sm:px-4 py-3 rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 text-xs shrink-0 min-h-[44px]"
                 >
                   <Send className="w-4 h-4" />
-                  <span className="hidden sm:inline">{lang === 'kk' ? 'Жіберу' : lang === 'en' ? 'Send' : 'Отправить'}</span>
+                  <span className="hidden sm:inline">{t.aiSend}</span>
                 </button>
               </div>
             </div>
@@ -1388,7 +1284,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={lang === 'kk' ? 'Сақталғандардан іздеу...' : lang === 'en' ? 'Search saved...' : 'Поиск по сохраненным...'}
+                placeholder={t.aiSearchSaved}
                 className="w-full pl-9 pr-4 py-2 rounded-2xl border border-slate-200 text-xs font-medium focus:border-blue-600 outline-none transition-all"
               />
             </div>
@@ -1430,19 +1326,19 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                 <Bookmark className="w-6 h-6" />
               </div>
               <h3 className="font-extrabold text-slate-900 text-base">
-                {savedNotes.length === 0 ? 'Нет сохраненных решений' : 'Ничего не найдено'}
+                {savedNotes.length === 0 ? t.aiSavedEmptyTitle : t.aiSavedNoMatches}
               </h3>
               <p className="text-xs text-slate-500 font-medium max-w-md mx-auto">
                 {savedNotes.length === 0
-                  ? 'Сохраняйте полезные ответы ИИ, нажав кнопку «Сохранить решение» в чате, чтобы обращаться к ним в любой момент.'
-                  : 'Попробуйте изменить поисковый запрос или сбросить фильтр по модулям.'}
+                  ? t.aiSavedEmptyBody
+                  : t.aiSavedNoMatchesBody}
               </p>
               {savedNotes.length === 0 && (
                 <button
                   onClick={() => setActiveSubView('chat')}
                   className="bg-blue-600 text-white text-xs font-extrabold px-5 py-2.5 rounded-2xl shadow-md shadow-blue-500/20"
                 >
-                  Задать вопрос ИИ
+                  {t.aiAskQuestion}
                 </button>
               )}
             </div>
@@ -1477,7 +1373,8 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                         <button
                           onClick={() => handleCopyText(note.response, note.id)}
                           className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 transition-all"
-                          title="Скопировать ответ"
+                          title={t.aiCopyAnswer}
+                          aria-label={t.aiCopyAnswer}
                         >
                           {copiedId === note.id ? (
                             <Check className="w-4 h-4 text-emerald-600" />
@@ -1489,7 +1386,8 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                         <button
                           onClick={() => handleDownloadNote(note)}
                           className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 transition-all"
-                          title="Скачать файл .txt"
+                          title={t.aiDownloadAnswer}
+                          aria-label={t.aiDownloadAnswer}
                         >
                           <Download className="w-4 h-4" />
                         </button>
@@ -1497,7 +1395,8 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                         <button
                           onClick={() => handleDeleteSavedNote(note.id)}
                           className="p-1.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 transition-all"
-                          title="Удалить из сохраненных"
+                          title={t.aiDeleteSaved}
+                          aria-label={t.aiDeleteSaved}
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -1506,7 +1405,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
 
                     {/* Question */}
                     <div className="bg-slate-50 rounded-2xl p-3 border border-slate-200/60 text-xs font-bold text-slate-800">
-                      <span className="text-blue-600 uppercase text-[10px] block font-black mb-0.5">Вопрос:</span>
+                      <span className="text-blue-600 uppercase text-[10px] block font-black mb-0.5">{t.aiQuestionLabel}:</span>
                       {note.query}
                     </div>
 

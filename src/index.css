@@ -1891,6 +1891,7 @@ button.eq-home-link:hover { background: var(--color-surface-subtle); }
 .eq-ai-refined .eq-ai-message pre { border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface-subtle); padding: 0.75rem; }
 .eq-ai-refined .eq-ai-message code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9em; }
 .eq-ai-refined .eq-ai-transcript { scroll-padding-block: 1rem 5.5rem; }
+.eq-ai-refined .eq-ai-empty .eq-ai-prompt { min-width: 0; flex: 0 1 auto; justify-content: center; padding: 0.5rem 0.75rem; border: 1px solid var(--color-border); border-radius: 999px; }
 .eq-ai-refined .eq-ai-composer { padding-block: 0.7rem; }
 .eq-ai-refined .eq-ai-composer textarea { line-height: 1.45; }
 .eq-ai-refined .eq-context-chip { max-width: min(100%, 18rem); }
