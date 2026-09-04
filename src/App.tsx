@@ -488,20 +488,20 @@ export default function App() {
 
       </main>
 
-      <footer className="mt-auto border-t border-slate-200/80 bg-white px-4 py-6 pb-28 lg:pb-8">
-        <div className="mx-auto max-w-7xl text-center text-xs font-semibold text-slate-600 space-y-2">
-          <p>© 2026 Engineerus Quest • AI Learning Platform for Kazakhstan Engineering Students</p>
-          <p className="text-[11px] text-slate-500 font-medium">
+      <footer className={`eq-footer${activeTab === 'ai' ? ' eq-footer--workspace' : ''}`}>
+        <div className="eq-footer__inner">
+          <p className="eq-footer__product">© 2026 Engineerus Quest • AI Learning Platform for Kazakhstan Engineering Students</p>
+          <p className="eq-footer__institutions">
             Satbayev University • Nazarbayev University • AUES • KazNU • ENU • KBTU
           </p>
-          <div className="pt-2 space-y-1">
-            <p className="text-xs sm:text-sm text-slate-800 font-bold">
+          <div className="eq-footer__credits">
+            <p>
               {t.foundedBy}
             </p>
-            <p className="text-[11px] text-slate-500 font-normal">
+            <p>
               {t.attributionCaption}
             </p>
-            {auth.user && <button type="button" onClick={() => setFeedbackOpen(true)} className="mt-2 text-[11px] font-bold text-blue-700 hover:underline">
+            {auth.user && <button type="button" onClick={() => setFeedbackOpen(true)}>
               {lang === 'ru' ? 'Сообщить о проблеме или отправить бета-отзыв' : lang === 'kk' ? 'Мәселе туралы хабарлау немесе бета-пікір жіберу' : 'Report a problem or send beta feedback'}
             </button>}
           </div>
