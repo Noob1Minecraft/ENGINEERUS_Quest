@@ -61,12 +61,12 @@ const PRESET_KEYS: Record<string, string[]> = {
   engi_match: ['aiExampleMatchRoles', 'aiExampleMatchEquity', 'aiExampleMatchEmbedded'],
 };
 
-const MODULE_CONFIG: Record<string, { label: string; icon: React.FC<{ className?: string }>; color: string; badgeBg: string }> = {
-  tutor: { label: 'TUTOR AI', icon: GraduationCap, color: 'text-blue-600', badgeBg: 'bg-blue-600' },
-  material: { label: 'MaterialSwap', icon: Layers, color: 'text-emerald-600', badgeBg: 'bg-emerald-600' },
-  patent: { label: 'PatentCraft', icon: Cpu, color: 'text-purple-600', badgeBg: 'bg-purple-600' },
-  engi_legal: { label: 'EngiLegal', icon: ShieldCheck, color: 'text-amber-600', badgeBg: 'bg-amber-600' },
-  engi_match: { label: 'EngiMatch', icon: Users, color: 'text-indigo-600', badgeBg: 'bg-indigo-600' },
+const MODULE_CONFIG: Record<string, { label: string; navLabelKey: string; navSubtitleKey: string; icon: React.FC<{ className?: string }>; color: string; badgeBg: string }> = {
+  tutor: { label: 'TUTOR AI', navLabelKey: 'aiNavTutor', navSubtitleKey: 'aiNavTutorSubtitle', icon: GraduationCap, color: 'text-blue-600', badgeBg: 'bg-blue-600' },
+  material: { label: 'MaterialSwap', navLabelKey: 'aiNavMaterials', navSubtitleKey: 'aiNavMaterialsSubtitle', icon: Layers, color: 'text-emerald-600', badgeBg: 'bg-emerald-600' },
+  patent: { label: 'PatentCraft', navLabelKey: 'aiNavPatents', navSubtitleKey: 'aiNavPatentsSubtitle', icon: Cpu, color: 'text-purple-600', badgeBg: 'bg-purple-600' },
+  engi_legal: { label: 'EngiLegal', navLabelKey: 'aiNavStandards', navSubtitleKey: 'aiNavStandardsSubtitle', icon: ShieldCheck, color: 'text-amber-600', badgeBg: 'bg-amber-600' },
+  engi_match: { label: 'EngiMatch', navLabelKey: 'aiNavTeam', navSubtitleKey: 'aiNavTeamSubtitle', icon: Users, color: 'text-indigo-600', badgeBg: 'bg-indigo-600' },
 };
 
 type PageResponse<T> = { items: T[]; next_cursor: string | null };
@@ -861,22 +861,19 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                   key={key}
                   type="button"
                   aria-pressed={isSelected}
+                  aria-current={isSelected ? 'page' : undefined}
+                  aria-label={`${t[config.navLabelKey]} — ${t[config.navSubtitleKey]}`}
                   onClick={() => setSelectedModule(key)}
-                  className={`eq-ai-module p-3 sm:p-3.5 border text-left transition-all ${
-                    isSelected
-                      ? 'border-blue-500 bg-blue-50/90 shadow-md ring-2 ring-blue-500/20 text-slate-900'
-                      : isFullscreen
-                      ? 'border-slate-800 bg-slate-900 hover:border-slate-700 text-slate-200'
-                      : 'border-slate-200 bg-white hover:border-slate-300 text-slate-900 shadow-2xs'
-                  }`}
+                  className={`eq-ai-module text-left transition-all ${isSelected ? 'is-active' : ''} ${isFullscreen ? 'is-fullscreen' : ''}`}
                 >
                   <div
                     className={`w-7 h-7 rounded-xl ${config.badgeBg} text-white flex items-center justify-center font-bold mb-1.5 shadow-2xs`}
                   >
                     <IconComp className="w-3.5 h-3.5" />
                   </div>
-                  <div className="font-extrabold text-xs whitespace-normal leading-tight">
-                    {config.label}
+                  <div className="eq-ai-module__copy">
+                    <span className="eq-ai-module__label">{t[config.navLabelKey]}</span>
+                    <span className="eq-ai-module__subtitle">{t[config.navSubtitleKey]}</span>
                   </div>
                 </button>
               );

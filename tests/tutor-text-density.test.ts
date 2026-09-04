@@ -18,6 +18,9 @@ const tutorKeys = [
   'aiExampleMatchRoles', 'aiExampleMatchEquity', 'aiExampleMatchEmbedded',
   'aiSearchSaved', 'aiSavedEmptyTitle', 'aiSavedNoMatches', 'aiSavedEmptyBody', 'aiSavedNoMatchesBody',
   'aiAskQuestion', 'aiCopyAnswer', 'aiDownloadAnswer', 'aiDeleteSaved', 'aiQuestionLabel',
+  'aiNavTutor', 'aiNavTutorSubtitle', 'aiNavMaterials', 'aiNavMaterialsSubtitle',
+  'aiNavPatents', 'aiNavPatentsSubtitle', 'aiNavStandards', 'aiNavStandardsSubtitle',
+  'aiNavTeam', 'aiNavTeamSubtitle',
 ] as const;
 
 for (const language of ['ru', 'kk', 'en'] as Language[]) {
@@ -54,6 +57,23 @@ test('composer and accessibility labels follow runtime language state', () => {
   assert.match(assistant, /aria-label=\{t\.aiSend\}/u);
   assert.match(assistant, /placeholder=\{t\.aiSearchSaved\}/u);
   assert.doesNotMatch(assistant, /Нет сохраненных решений|Задать вопрос ИИ|Скопировать ответ/u);
+});
+
+test('module navigation uses consistent localized labels with short descriptions', () => {
+  assert.deepEqual(
+    ['aiNavTutor', 'aiNavMaterials', 'aiNavPatents', 'aiNavStandards', 'aiNavTeam'].map((key) => TRANSLATIONS.ru[key]),
+    ['Тьютор', 'Материалы', 'Патенты', 'Нормы', 'Команда'],
+  );
+  assert.deepEqual(
+    ['aiNavTutor', 'aiNavMaterials', 'aiNavPatents', 'aiNavStandards', 'aiNavTeam'].map((key) => TRANSLATIONS.en[key]),
+    ['Tutor', 'Materials', 'Patents', 'Standards', 'Team'],
+  );
+  assert.match(assistant, /navLabelKey[\s\S]*navSubtitleKey/u);
+  assert.match(assistant, /aria-current=\{isSelected \? 'page' : undefined\}/u);
+  assert.match(assistant, /eq-ai-module__label[\s\S]*eq-ai-module__subtitle/u);
+  assert.match(css, /eq-ai-modules[^}]*grid-template-columns:\s*repeat\(5, minmax\(0, 1fr\)\)[^}]*overflow:\s*visible/su);
+  assert.match(css, /eq-ai-module\.is-active[^}]*inset 0 -2px var\(--color-ai\)/su);
+  assert.match(css, /@media \(max-width: 30rem\)[\s\S]*eq-ai-module__subtitle \{ display: none;/u);
 });
 
 test('analytics and backend request behavior remain outside the polish diff', () => {
