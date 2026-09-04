@@ -48,12 +48,14 @@ app.use(createDocumentsRouter(
   authenticatedRateLimit,
   createDocumentUploadRateLimit(),
   documentRepository,
+  betaRepository.recordEvent,
 ));
 app.use(createImagesRouter(
   requireAuth,
   authenticatedRateLimit,
   createImageUploadRateLimit(),
   imageRepository,
+  betaRepository.recordEvent,
 ));
 
 const detectLanguage = resolveResponseLanguage;

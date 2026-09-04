@@ -38,7 +38,9 @@ export function createDirectChatsRouter(
     try {
       const parsed = createSchema.safeParse(request.body);
       if (!parsed.success) throw new PersistenceError(400, "invalid_direct_conversation", "A valid target profile is required.");
-      response.status(201).json(await repository.getOrCreate(response.locals.auth.accessToken, parsed.data.target_profile_id, parsed.data.project_id));
+      const result = await repository.getOrCreate(response.locals.auth.accessToken, parsed.data.target_profile_id, parsed.data.project_id);
+      await trackProductEvent(recordEvent, response.locals.auth.userId, "direct_chat_started", {}, result.conversation_id);
+      response.status(201).json(result);
     } catch (error) { sendPersistenceError(response, error); }
   });
   router.get("/api/direct-conversations", authenticate, readRateLimit, async (request, response) => {

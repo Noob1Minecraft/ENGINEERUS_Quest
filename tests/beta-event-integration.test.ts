@@ -8,9 +8,13 @@ const read = (file: string) => readFileSync(path.resolve(file), 'utf8');
 
 test('controlled beta event allowlist covers only the documented product journey', () => {
   assert.deepEqual(PRODUCT_EVENT_NAMES, [
-    'onboarding_started', 'onboarding_completed', 'ai_session_started', 'ai_message_sent',
-    'quest_completed', 'project_created', 'project_applied', 'engimatch_viewed',
-    'direct_chat_opened', 'direct_message_sent', 'feedback_submitted',
+    'signup_completed', 'login_completed', 'onboarding_started', 'onboarding_completed',
+    'first_meaningful_action', 'ai_session_started', 'ai_message_sent',
+    'quest_completed', 'learning_resource_opened', 'project_created',
+    'project_application_submitted', 'project_applied', 'project_invitation_accepted',
+    'engimatch_viewed', 'engimatch_action_taken', 'document_uploaded', 'image_uploaded',
+    'direct_chat_started', 'direct_chat_opened', 'direct_message_sent',
+    'invite_link_created', 'invite_link_opened', 'invited_user_registered', 'feedback_submitted',
     'daily_quest_completed', 'weekly_quest_completed', 'achievement_unlocked',
     'level_up', 'quest_chain_completed',
   ]);

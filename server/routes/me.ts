@@ -5,6 +5,8 @@ import {
   type CanonicalUser,
   type DailyActivity,
 } from "../persistence/profiles";
+import type { ProductEventRecorder } from "../persistence/beta";
+import { trackProductEvent } from "../beta/trackProductEvent";
 
 export type { CanonicalUser } from "../persistence/profiles";
 
@@ -28,13 +30,19 @@ export function createMeRouter(
   rateLimiter: RequestHandler,
   loadCanonicalUser: LoadCanonicalUser,
   recordDailyActivity: RecordDailyActivity,
+  recordEvent?: ProductEventRecorder,
 ): Router {
   const router = Router();
 
   router.get("/api/me", authenticate, rateLimiter, async (_request, response) => {
     try {
-      const { userId, accessToken } = response.locals.auth;
+      const { userId, accessToken, claims } = response.locals.auth;
       const user = await loadCanonicalUser(userId, accessToken);
+      const sessionId = typeof claims.session_id === "string" ? claims.session_id : null;
+      const dedupeKey = sessionId
+        ? `session:${sessionId}`
+        : `daily:${new Date().toISOString().slice(0, 10)}`;
+      await trackProductEvent(recordEvent, userId, "login_completed", {}, dedupeKey, { sessionId });
       response.json(user);
     } catch {
       response.status(503).json({

@@ -130,6 +130,8 @@ export function createAiRouter(
         await trackProductEvent(dependencies.recordEvent, userId, "ai_message_sent", {
           module: moduleName,
           language: detectedLanguage,
+          has_document: Boolean(documentId),
+          image_count: imageIds?.length ?? 0,
         }, started.assistantMessage.id);
         response.json({
           status: "ok",
@@ -319,6 +321,8 @@ export function createAiRouter(
         await trackProductEvent(dependencies.recordEvent, userId, "ai_message_sent", {
           module: moduleName,
           language: detectedLanguage,
+          has_document: Boolean(documentId),
+          image_count: imageIds?.length ?? 0,
         }, completed.assistantMessage.id);
       }
 
