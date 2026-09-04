@@ -943,7 +943,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
       </div>
 
       {activeSubView === 'chat' ? (
-        <div className={`flex flex-col gap-4 ${isFullscreen ? 'flex-1 min-h-0' : ''}`}>
+        <div className={`eq-ai-chat-column flex flex-col gap-4 ${isFullscreen ? 'flex-1 min-h-0' : ''}`}>
           {/* Module Selectors Row */}
           <nav className="eq-ai-modules grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 shrink-0" aria-label={lang === 'kk' ? 'Инженерлік модуль' : lang === 'en' ? 'Engineering module' : 'Инженерный модуль'}>
             {Object.entries(MODULE_CONFIG).map(([key, config]) => {
@@ -1014,7 +1014,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
           {/* Main Chat Interface Window with Multi-Chat Drawer */}
           <div
             className={`eq-ai-chat-frame relative bg-white border border-slate-200/80 overflow-hidden flex flex-col ${
-              isFullscreen ? 'flex-1 min-h-0 bg-slate-900 border-slate-800 text-slate-100' : 'min-h-[420px] max-h-[650px]'
+              isFullscreen ? 'flex-1 min-h-0 bg-slate-900 border-slate-800 text-slate-100' : 'eq-ai-chat-frame--embedded'
             }`}
           >
             <aside className={`eq-ai-history hidden min-h-0 w-64 flex-col border-r lg:flex ${isFullscreen ? 'border-slate-800 bg-slate-950' : 'border-slate-200 bg-slate-50'}`} aria-label={lang === 'kk' ? 'Сақталған чаттар' : lang === 'en' ? 'Saved conversations' : 'Сохранённые чаты'}>
@@ -1081,10 +1081,12 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
             {/* Multi-Chat Drawer Overlay (Slide Down / Expand) */}
             {showSessionsDrawer && (
               <div
-                className={`p-3 border-b space-y-2 animate-fade-in lg:hidden ${
+                className={`eq-ai-history-drawer animate-fade-in lg:hidden ${
                   isFullscreen ? 'bg-slate-950 border-slate-800' : 'bg-slate-100/95 border-slate-200'
                 }`}
               >
+                <button type="button" className="eq-ai-history-drawer__backdrop" onClick={() => setShowSessionsDrawer(false)} aria-label={lang === 'kk' ? 'Чаттар тізімін жабу' : lang === 'en' ? 'Close conversation history' : 'Закрыть историю диалогов'} />
+                <section className="eq-ai-history-drawer__panel" aria-label={lang === 'kk' ? 'Сақталған чаттар' : lang === 'en' ? 'Saved conversations' : 'Сохранённые чаты'}>
                 <div className="flex items-center justify-between text-xs font-black text-slate-500 uppercase tracking-wider px-1">
                   <span className="flex items-center gap-1">
                     <FolderKanban className="w-3.5 h-3.5 text-blue-500" /> {lang === 'kk' ? `Пайдаланушының сақталған чаттары: ${user.username}` : lang === 'en' ? `Saved chats for ${user.username}` : `Сохраненные чаты пользователя ${user.username}`}
@@ -1145,6 +1147,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                       : (lang === 'kk' ? 'Ескі чаттарды жүктеу' : lang === 'en' ? 'Load older chats' : 'Загрузить старые чаты')}
                   </button>
                 )}
+                </section>
               </div>
             )}
 

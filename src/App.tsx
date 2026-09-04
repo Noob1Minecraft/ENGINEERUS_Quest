@@ -310,9 +310,9 @@ export default function App() {
       <div className="eq-app__body">
         <AppSidebar activeTab={activeTab} language={lang} onSelectTab={setActiveTab} />
         <div className="eq-app__column">
-      <main className="eq-app__main space-y-5 md:space-y-8">
+      <main className={`eq-app__main space-y-5 md:space-y-8${activeTab === 'ai' ? ' eq-app__main--workspace' : ''}`}>
         {/* User Profile Stats Header Bar (Incorporating exact design from screenshot) */}
-        {activeTab !== 'profile' && activeTab !== 'home' && activeTab !== 'messages' && (
+        {activeTab !== 'profile' && activeTab !== 'home' && activeTab !== 'messages' && activeTab !== 'ai' && (
           <Suspense fallback={<LoadingState label={featureLoadingLabel} />}>
             <ProfileStats user={user} lang={lang} onNavigateToQuest={handleNavigateToQuest} />
           </Suspense>

@@ -3,6 +3,7 @@ import { BriefcaseBusiness, LayoutGrid, Menu, MessageCircle, Sparkles, X } from 
 import type { Language } from '../types';
 import { APP_NAVIGATION_ITEMS, getNavigationItem } from './appNavigation';
 import { useDialogFocus } from '../hooks/useDialogFocus';
+import { BrandLogo } from './BrandLogo';
 
 interface BottomNavProps {
   activeTab: string;
@@ -36,7 +37,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onSelectTab, la
           <button type="button" className="eq-mobile-menu__backdrop" onClick={() => setMoreOpen(false)} aria-label={lang === 'ru' ? 'Закрыть меню' : lang === 'kk' ? 'Мәзірді жабу' : 'Close menu'} />
           <section ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="mobile-menu-title" className="eq-mobile-menu__sheet">
             <div className="eq-mobile-menu__header">
-              <div><small>Engineerus Quest</small><h2 id="mobile-menu-title">{lang === 'ru' ? 'Все разделы' : lang === 'kk' ? 'Барлық бөлімдер' : 'All areas'}</h2></div>
+              <div className="eq-mobile-menu__identity"><BrandLogo decorative /><h2 id="mobile-menu-title">{lang === 'ru' ? 'Все разделы' : lang === 'kk' ? 'Барлық бөлімдер' : 'All areas'}</h2></div>
               <button ref={closeButton} type="button" className="eq-icon-button" onClick={() => setMoreOpen(false)} aria-label={lang === 'ru' ? 'Закрыть' : lang === 'kk' ? 'Жабу' : 'Close'}><X aria-hidden="true" /></button>
             </div>
             <nav className="eq-mobile-menu__grid" aria-label={lang === 'ru' ? 'Дополнительная навигация' : lang === 'kk' ? 'Қосымша навигация' : 'More navigation'}>

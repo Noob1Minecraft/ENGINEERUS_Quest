@@ -4,6 +4,7 @@ import type { Language, UserProfile } from '../types';
 import { TRANSLATIONS } from '../data';
 import { verifySystemIntegrity } from '../utils/integrity';
 import { getNavigationLabel } from './appNavigation';
+import { BrandLogo } from './BrandLogo';
 
 interface HeaderProps {
   user: UserProfile;
@@ -46,8 +47,7 @@ export const Header: React.FC<HeaderProps> = ({ user, lang, onSetLang, activeTab
     <header className="eq-header">
       <div className="eq-header__inner">
         <button type="button" className="eq-brand" onClick={() => onSelectTab('home')} aria-label={t.logoTitle}>
-          <span className="eq-brand__mark" aria-hidden="true">EQ</span>
-          <span className="eq-brand__copy"><strong>ENGINEERUS <em>Quest</em></strong><small>Engineering workspace</small></span>
+          <BrandLogo decorative eager className="eq-brand__logo" />
         </button>
 
         <div className="eq-header__page" aria-live="polite"><span>{getNavigationLabel(activeTab, lang)}</span></div>
