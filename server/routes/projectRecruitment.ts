@@ -118,6 +118,7 @@ export function createProjectRecruitmentRouter(
         input.note ?? "",
       );
       await trackProductEvent(recordEvent, response.locals.auth.userId, "project_applied", {}, application.id);
+      await trackProductEvent(recordEvent, response.locals.auth.userId, "project_application_submitted", {}, application.id);
       response.status(201).json({ application });
     } catch (error) {
       sendPersistenceError(response, error);
@@ -180,6 +181,9 @@ export function createProjectRecruitmentRouter(
         input.note ?? "",
         input.expires_at,
       );
+      await trackProductEvent(recordEvent, response.locals.auth.userId, "engimatch_action_taken", {
+        action: "project_invitation_created",
+      }, invitation.id);
       response.status(201).json({ invitation });
     } catch (error) {
       sendPersistenceError(response, error);
@@ -207,7 +211,9 @@ export function createProjectRecruitmentRouter(
   router.post("/api/project-invitations/:invitationId/accept", authenticate, rateLimiter, async (request, response) => {
     try {
       const id = parseId(request.params.invitationId, "invalid_project_invitation_id");
-      response.json({ invitation: await repository.acceptInvitation(response.locals.auth.accessToken, id) });
+      const invitation = await repository.acceptInvitation(response.locals.auth.accessToken, id);
+      await trackProductEvent(recordEvent, response.locals.auth.userId, "project_invitation_accepted", {}, invitation.id);
+      response.json({ invitation });
     } catch (error) {
       sendPersistenceError(response, error);
     }

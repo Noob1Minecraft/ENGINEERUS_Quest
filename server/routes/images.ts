@@ -12,6 +12,8 @@ import {
 import type { ImageCursor, ImageRepository } from "../persistence/images";
 import { PersistenceError, sendPersistenceError } from "../persistence/errors";
 import { securityLogger } from "../security/structuredLogger";
+import type { ProductEventRecorder } from "../persistence/beta";
+import { trackProductEvent } from "../beta/trackProductEvent";
 
 const imageIdSchema = z.string().uuid();
 const cursorSchema = z.object({ createdAt: z.string().datetime({ offset: true }), id: z.string().uuid() });
@@ -69,6 +71,7 @@ export function createImagesRouter(
   readRateLimiter: RequestHandler,
   uploadRateLimiter: RequestHandler,
   repository: ImageRepository,
+  recordEvent?: ProductEventRecorder,
 ): Router {
   const router = Router();
 
@@ -93,6 +96,10 @@ export function createImagesRouter(
       await repository.createProcessingImage({ id: imageId, userId, image: normalized, storagePath });
       await repository.uploadObject(storagePath, normalized);
       const image = await repository.completeProcessing(userId, imageId);
+      await trackProductEvent(recordEvent, userId, "image_uploaded", {
+        format: normalized.format,
+        size_bucket: sizeBucket(image.size_bytes),
+      }, imageId);
       securityLogger.info("image_processed", {
         image_id: imageId,
         mime_category: normalized.format,

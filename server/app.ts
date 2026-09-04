@@ -99,6 +99,7 @@ export function createApp(env: ServerEnv, options: {
     rateLimiter,
     profiles.loadCanonicalUser,
     profiles.recordDailyActivity,
+    beta.recordEvent,
   ));
   app.use(createProfilesRouter(authenticate, rateLimiter, profiles));
   app.use(createBetaRouter(authenticate, rateLimiter, beta));

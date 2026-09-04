@@ -1,28 +1,12 @@
 import type { ServerEnv } from "../config/env";
 import { createSupabaseAdminClient } from "../lib/supabaseAdmin";
+import { ANALYTICS_EVENT_NAMES, type AnalyticsEventName, type AnalyticsEventRecorder, type SafeAnalyticsMetadata } from "../analytics/events";
+import { createAnalyticsRepository } from "./analytics";
 import { PersistenceError } from "./errors";
 
-export const PRODUCT_EVENT_NAMES = [
-  "onboarding_started",
-  "onboarding_completed",
-  "ai_session_started",
-  "ai_message_sent",
-  "quest_completed",
-  "project_created",
-  "project_applied",
-  "engimatch_viewed",
-  "direct_chat_opened",
-  "direct_message_sent",
-  "feedback_submitted",
-  "daily_quest_completed",
-  "weekly_quest_completed",
-  "achievement_unlocked",
-  "level_up",
-  "quest_chain_completed",
-] as const;
-
-export type ProductEventName = typeof PRODUCT_EVENT_NAMES[number];
-export type SafeEventMetadata = Record<string, string | number | boolean | null>;
+export const PRODUCT_EVENT_NAMES = ANALYTICS_EVENT_NAMES;
+export type ProductEventName = AnalyticsEventName;
+export type SafeEventMetadata = SafeAnalyticsMetadata;
 
 export type BetaParticipant = {
   status: "active" | "paused" | "completed";
@@ -47,6 +31,7 @@ function unavailable(): never {
 
 export function createBetaRepository(env: ServerEnv) {
   const client = () => createSupabaseAdminClient(env);
+  const analytics = createAnalyticsRepository(env);
 
   async function ensureParticipant(userId: string): Promise<BetaParticipant> {
     const admin = client();
@@ -61,20 +46,7 @@ export function createBetaRepository(env: ServerEnv) {
     return result.data as BetaParticipant;
   }
 
-  async function recordEvent(
-    userId: string,
-    eventName: ProductEventName,
-    metadata: SafeEventMetadata,
-    dedupeKey: string,
-  ): Promise<void> {
-    const result = await client().from("product_events").upsert({
-      user_id: userId,
-      event_name: eventName,
-      metadata,
-      dedupe_key: dedupeKey,
-    }, { onConflict: "user_id,event_name,dedupe_key", ignoreDuplicates: true });
-    if (result.error) unavailable();
-  }
+  const recordEvent = analytics.recordEvent;
 
   return {
     ensureParticipant,
@@ -119,4 +91,4 @@ export function createBetaRepository(env: ServerEnv) {
 }
 
 export type BetaRepository = ReturnType<typeof createBetaRepository>;
-export type ProductEventRecorder = BetaRepository["recordEvent"];
+export type ProductEventRecorder = AnalyticsEventRecorder;

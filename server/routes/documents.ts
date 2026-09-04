@@ -13,6 +13,8 @@ import {
 import type { DocumentRepository } from "../persistence/documents";
 import { PersistenceError, sendPersistenceError } from "../persistence/errors";
 import { securityLogger } from "../security/structuredLogger";
+import type { ProductEventRecorder } from "../persistence/beta";
+import { trackProductEvent } from "../beta/trackProductEvent";
 
 const documentIdSchema = z.string().uuid();
 const upload = multer({
@@ -57,6 +59,7 @@ export function createDocumentsRouter(
   readRateLimiter: RequestHandler,
   uploadRateLimiter: RequestHandler,
   repository: DocumentRepository,
+  recordEvent?: ProductEventRecorder,
 ): Router {
   const router = Router();
 
@@ -93,6 +96,10 @@ export function createDocumentsRouter(
       const extracted = await extractDocumentText(file.buffer, validated.fileType);
       const chunks = createDocumentChunks(extracted);
       const document = await repository.completeProcessing(userId, documentId, extracted, chunks);
+      await trackProductEvent(recordEvent, userId, "document_uploaded", {
+        file_type: validated.fileType,
+        size_bucket: sizeBucket(file.size),
+      }, documentId);
       securityLogger.info("document_processed", {
         document_id: documentId,
         type: validated.fileType,
