@@ -1697,6 +1697,10 @@ button.eq-home-link:hover { background: var(--color-surface-subtle); }
 .eq-ai-workspace .eq-ai-intro p { max-width: 50rem; }
 .eq-ai-chat-column { min-height: 0; flex: 1; gap: 0.65rem; }
 .eq-ai-chat-frame--embedded { min-height: 0; flex: 1; }
+.eq-ai-workspace .eq-ai-prompts { max-height: 6rem; overflow: hidden; }
+.eq-ai-refined .eq-ai-prompts > div:last-child { display: flex; overflow-x: auto; }
+.eq-ai-refined .eq-ai-prompt { min-width: 14rem; flex: 1 1 0; }
+.eq-ai-refined .eq-ai-history { width: 100%; }
 .eq-ai-refined .eq-ai-transcript { overscroll-behavior: contain; scrollbar-gutter: stable; }
 .eq-ai-refined .eq-ai-composer { padding-bottom: max(0.75rem, env(safe-area-inset-bottom)); }
 .eq-ai-refined .eq-ai-message.bg-blue-700 { background: var(--color-primary) !important; }
