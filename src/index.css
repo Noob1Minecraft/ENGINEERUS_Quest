@@ -1432,7 +1432,7 @@ button.eq-home-link:hover { background: var(--color-surface-subtle); }
 .eq-ai-refined .eq-ai-intro { padding-inline: 0; border-top: 0; background: transparent; }
 .eq-ai-refined .eq-ai-view-switcher { gap: 0; padding: 0; border: 0; border-bottom: 1px solid var(--color-border); border-radius: 0; background: transparent; }
 .eq-ai-refined .eq-ai-view-switcher > button { border-bottom: 2px solid transparent; border-radius: 0; background: transparent; box-shadow: none; }
-.eq-ai-refined .eq-ai-view-switcher > button[class*="bg-blue"] { border-bottom-color: var(--color-primary); color: var(--color-primary); }
+.eq-ai-refined .eq-ai-view-switcher > button[class*="bg-blue"] { border-bottom-color: var(--color-primary); color: white; }
 .eq-ai-refined .eq-ai-modules { overflow-x: auto; border-width: 1px 0; border-radius: 0; background: transparent; }
 .eq-ai-refined .eq-ai-module { min-width: 8.5rem; padding-inline: 0.85rem; border-right: 1px solid var(--color-border); background: transparent; box-shadow: none; }
 .eq-ai-refined .eq-ai-module:last-child { border-right: 0; }

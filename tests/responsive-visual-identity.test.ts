@@ -41,6 +41,7 @@ test('Tutor is a viewport workspace with independent transcript scrolling and a 
   assert.match(css, /eq-ai-transcript[^}]*overscroll-behavior:\s*contain/su);
   assert.match(css, /eq-ai-history-drawer__panel[^}]*height:\s*100%/su);
   assert.match(css, /grid-template-columns:\s*clamp\(16\.25rem, 22vw, 19rem\) minmax\(0, 1fr\)/u);
+  assert.match(css, /eq-ai-view-switcher[^}]*button\[class\*="bg-blue"\][^}]*color:\s*white/su);
 });
 
 test('responsive rules cover phone, tablet, and constrained laptop table layouts', () => {
