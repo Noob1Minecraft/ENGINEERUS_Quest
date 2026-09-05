@@ -156,7 +156,7 @@ function one<T>(value: Embedded<T>): T | null {
   return Array.isArray(value) ? value[0] ?? null : value;
 }
 
-function recruitmentFailure(
+export function recruitmentFailure(
   error: { code?: string; message?: string } | null,
   fallbackCode = "project_recruitment_unavailable",
   fallbackMessage = "Project recruiting is temporarily unavailable.",

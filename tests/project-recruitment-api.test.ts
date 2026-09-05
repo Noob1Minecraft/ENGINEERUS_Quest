@@ -7,6 +7,7 @@ import type {
   ProjectRecruitmentRepository,
   ProjectRole,
 } from '../server/persistence/projectRecruitment';
+import { recruitmentFailure } from '../server/persistence/projectRecruitment';
 import { createProjectRecruitmentRouter } from '../server/routes/projectRecruitment';
 import { withServer } from './helpers';
 
@@ -117,6 +118,32 @@ test('application action endpoints expose only explicit lifecycle transitions', 
     }
   });
   assert.deepEqual(calls, ['create', 'accept', 'reject', 'withdraw']);
+});
+
+test('private-role oracle outcomes map identically to nonexistent roles over HTTP', async () => {
+  const inaccessibleCases = [
+    'nonexistent',
+    'private-open',
+    'private-closed',
+    'private-filled',
+    'private-draft-project',
+    'private-archived-project',
+  ];
+
+  for (const scenario of inaccessibleCases) {
+    const repo = repository({
+      createApplication: async () => recruitmentFailure({ code: 'P0001', message: 'project_role_not_found' }),
+    });
+    await withServer(appFor(repo), async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/api/project-roles/${ROLE_ID}/applications`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ note: scenario }),
+      });
+      assert.equal(response.status, 404, scenario);
+      assert.deepEqual(await response.json(), {
+        error: { code: 'project_role_not_found', message: 'The requested project resource was not found.' },
+      }, scenario);
+    });
+  }
 });
 
 test('invitation endpoints use verified auth context and explicit accept/reject/cancel actions', async () => {
