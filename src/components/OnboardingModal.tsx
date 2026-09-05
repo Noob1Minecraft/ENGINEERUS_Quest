@@ -72,7 +72,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
           ref={closeButtonRef}
           type="button"
           onClick={onClose}
-          aria-label="Close onboarding"
+          aria-label={lang === 'kk' ? 'Танысу терезесін жабу' : lang === 'en' ? 'Close onboarding' : 'Закрыть окно знакомства'}
           className="eq-dialog__close eq-auth-dialog__close"
         >
           <X className="w-4 h-4" />

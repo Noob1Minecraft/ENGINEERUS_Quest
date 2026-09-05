@@ -15,19 +15,19 @@ export const BetaOnboardingCard: React.FC<Props> = ({ lang, completing, onNaviga
     description: 'Engineerus Quest инженерлік оқуды, квесттерді және нақты командалық жобаларды бір жерде біріктіреді.',
     profile: 'Профильді толтырыңыз', ai: 'ИИ-Тьюторға бірінші сұрақ қойыңыз',
     progress: 'Квесттер XP мен прогресті арттырады', match: 'Projects және EngiMatch арқылы команда табыңыз',
-    done: 'Бастау тізімін аяқтау', saving: 'Сақталуда…',
+    done: 'Бастау тізімін аяқтау', saving: 'Сақталуда…', beta: 'Жабық бета', aria: 'Жабық бетаға кіріспе',
   } : lang === 'en' ? {
     title: 'Start your beta journey here',
     description: 'Engineerus Quest combines engineering learning, quests, and real team projects in one workspace.',
     profile: 'Complete your profile', ai: 'Ask your first AI Tutor question',
     progress: 'Quests build XP and progress', match: 'Use Projects and EngiMatch to find a team',
-    done: 'Complete getting started', saving: 'Saving…',
+    done: 'Complete getting started', saving: 'Saving…', beta: 'Controlled beta', aria: 'Controlled beta onboarding',
   } : {
     title: 'Начните бета-тестирование здесь',
     description: 'Engineerus Quest объединяет инженерное обучение, квесты и реальные командные проекты в одном пространстве.',
     profile: 'Заполните профиль', ai: 'Задайте первый вопрос ИИ-Тьютору',
     progress: 'Квесты развивают XP и прогресс', match: 'Ищите команду через Projects и EngiMatch',
-    done: 'Завершить знакомство', saving: 'Сохраняем…',
+    done: 'Завершить знакомство', saving: 'Сохраняем…', beta: 'Закрытая бета', aria: 'Знакомство с закрытой бетой',
   };
 
   const actions = [
@@ -37,10 +37,10 @@ export const BetaOnboardingCard: React.FC<Props> = ({ lang, completing, onNaviga
     { label: copy.match, tab: 'projects', icon: UsersRound },
   ];
 
-  return <section aria-label="Controlled beta onboarding" className="rounded-2xl border border-blue-200 bg-blue-50/70 p-5 shadow-xs">
+  return <section aria-label={copy.aria} className="rounded-2xl border border-blue-200 bg-blue-50/70 p-5 shadow-xs">
     <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
       <div className="space-y-1">
-        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-600">Controlled Beta</p>
+        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-600">{copy.beta}</p>
         <h2 className="text-base font-black text-slate-950">{copy.title}</h2>
         <p className="max-w-2xl text-xs font-medium leading-relaxed text-slate-600">{copy.description}</p>
       </div>

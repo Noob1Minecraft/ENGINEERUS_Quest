@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useState, useEffect, useRef } from 'react';
+import React, { lazy, Suspense, useState, useEffect, useRef, useCallback } from 'react';
 import { UserProfile, Language, Quest, CanonicalUser } from './types';
 import { TRANSLATIONS, QUESTS } from './data';
 import { verifySystemIntegrity } from './utils/integrity';
@@ -87,11 +87,13 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<string>('home');
   const [isAuthOpen, setIsAuthOpen] = useState<boolean>(false);
   const [betaParticipant, setBetaParticipant] = useState<BetaParticipant | null>(null);
+  const [betaParticipantStatus, setBetaParticipantStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [betaCompleting, setBetaCompleting] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [aiDocument, setAiDocument] = useState<{ id: string; name: string } | null>(null);
   const [aiImages, setAiImages] = useState<Array<{ id: string; name: string }>>([]);
   const trackedBetaViews = useRef(new Set<string>());
+  const betaLoadAttempt = useRef(0);
 
   const [user, setUser] = useState<UserProfile>(GUEST_USER);
   const [account, setAccount] = useState<CanonicalUser | null>(null);
@@ -181,23 +183,34 @@ export default function App() {
     return () => { active = false; };
   }, [auth.loading, auth.user]);
 
+  const loadBetaParticipant = useCallback(async () => {
+    const attempt = ++betaLoadAttempt.current;
+    setBetaParticipantStatus('loading');
+    try {
+      let participant = await loadBetaState();
+      if (!participant.onboarding_started_at && !participant.onboarding_completed_at) {
+        participant = await startBetaOnboarding();
+      }
+      if (betaLoadAttempt.current !== attempt) return;
+      setBetaParticipant(participant);
+      setBetaParticipantStatus('ready');
+    } catch {
+      if (betaLoadAttempt.current === attempt) setBetaParticipantStatus('error');
+    }
+  }, []);
+
   useEffect(() => {
     if (auth.loading) return;
     if (!auth.user) {
+      betaLoadAttempt.current += 1;
       setBetaParticipant(null);
+      setBetaParticipantStatus('idle');
       trackedBetaViews.current.clear();
       return;
     }
-    let active = true;
-    loadBetaState()
-      .then(async (participant) => {
-        if (participant.onboarding_started_at || participant.onboarding_completed_at) return participant;
-        return startBetaOnboarding();
-      })
-      .then((participant) => { if (active) setBetaParticipant(participant); })
-      .catch(() => { if (active) setBetaParticipant(null); });
-    return () => { active = false; };
-  }, [auth.loading, auth.user]);
+    void loadBetaParticipant();
+    return () => { betaLoadAttempt.current += 1; };
+  }, [auth.loading, auth.user, loadBetaParticipant]);
 
   useEffect(() => {
     if (!auth.user) return;
@@ -328,9 +341,19 @@ export default function App() {
               description={lang === 'ru' ? 'Основные разделы доступны. Обновите страницу, чтобы повторить попытку.' : lang === 'kk' ? 'Негізгі бөлімдер қолжетімді. Қайталап көру үшін бетті жаңартыңыз.' : 'Core features remain available. Refresh the page to try again.'}
             />}
             {auth.user && <div className="eq-beta-note">
-              <span><strong>Controlled Beta.</strong> {lang === 'ru' ? 'Доступ ограничен, функции могут меняться — ваши отзывы помогают улучшать продукт.' : lang === 'kk' ? 'Қолжетімділік шектеулі, функциялар өзгеруі мүмкін — пікіріңіз өнімді жақсартады.' : 'Access is limited and features may change—your feedback helps improve the product.'}</span>
+              <span><strong>{lang === 'ru' ? 'Закрытая бета.' : lang === 'kk' ? 'Жабық бета.' : 'Controlled beta.'}</strong> {lang === 'ru' ? 'Доступ ограничен, функции могут меняться — ваши отзывы помогают улучшать продукт.' : lang === 'kk' ? 'Қолжетімділік шектеулі, функциялар өзгеруі мүмкін — пікіріңіз өнімді жақсартады.' : 'Access is limited and features may change—your feedback helps improve the product.'}</span>
               <button type="button" onClick={() => setFeedbackOpen(true)}>{lang === 'ru' ? 'Отправить отзыв' : lang === 'kk' ? 'Пікір жіберу' : 'Send feedback'}</button>
             </div>}
+            {auth.user && betaParticipantStatus === 'loading' && !betaParticipant && <LoadingState
+              label={lang === 'ru' ? 'Загружаем шаги знакомства…' : lang === 'kk' ? 'Танысу қадамдары жүктелуде…' : 'Loading getting-started steps…'}
+            />}
+            {auth.user && betaParticipantStatus === 'error' && <ErrorState
+              title={lang === 'ru' ? 'Не удалось загрузить знакомство с продуктом' : lang === 'kk' ? 'Өніммен танысу қадамдарын жүктеу мүмкін болмады' : 'Could not load getting-started steps'}
+              description={lang === 'ru' ? 'Ваш прогресс не изменён. Повторите загрузку, когда соединение восстановится.' : lang === 'kk' ? 'Прогресіңіз өзгерген жоқ. Байланыс қалпына келгенде қайта жүктеп көріңіз.' : 'Your progress was not changed. Try loading again when the connection recovers.'}
+              action={<button type="button" className="eq-button eq-button--secondary" onClick={() => void loadBetaParticipant()}>
+                {lang === 'ru' ? 'Повторить' : lang === 'kk' ? 'Қайталау' : 'Retry'}
+              </button>}
+            />}
             {auth.user && betaParticipant && !betaParticipant.onboarding_completed_at && <BetaOnboardingCard
               lang={lang} completing={betaCompleting} onNavigate={setActiveTab} onComplete={completeOnboarding}
             />}

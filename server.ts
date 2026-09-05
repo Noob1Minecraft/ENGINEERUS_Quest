@@ -15,7 +15,7 @@ import { resolveResponseLanguage } from "./server/ai/languagePolicy";
 import { createKazStandardClient } from "./server/standards/kazStandardClient";
 import { createStandardsService } from "./server/standards/standardsService";
 import { apiErrorHandler } from "./server/middleware/apiErrorHandler";
-import { mountProductionFrontend } from "./server/staticFrontend";
+import { mountApiNotFound, mountProductionFrontend } from "./server/staticFrontend";
 import { InMemoryAiCapacityStore } from "./server/security/securityControlStore";
 import { securityLogger } from "./server/security/structuredLogger";
 import { createBetaRepository } from "./server/persistence/beta";
@@ -91,6 +91,7 @@ app.use(createAiRouter(requireAuth, aiRateLimit, {
 app.get("/api/leaderboard", (req, res) => res.json({ leaderboard: LEADERBOARD_SEED, total: LEADERBOARD_SEED.length }));
 
 async function startServer() {
+  mountApiNotFound(app);
   if (env.NODE_ENV !== "production") {
     const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
     app.use(vite.middlewares);

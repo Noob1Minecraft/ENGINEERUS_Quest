@@ -39,6 +39,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     : lang === 'en'
       ? 'Authentication failed. Check your details and try again.'
       : 'Ошибка авторизации. Проверьте данные и повторите попытку.';
+  const closeAccountLabel = lang === 'kk' ? 'Аккаунт терезесін жабу' : lang === 'en' ? 'Close account' : 'Закрыть окно аккаунта';
+  const closeAuthLabel = lang === 'kk' ? 'Кіру терезесін жабу' : lang === 'en' ? 'Close authentication' : 'Закрыть окно входа';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -97,7 +99,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     return (
       <div className="eq-dialog-backdrop">
         <div ref={dialogRef} tabIndex={-1} className="eq-dialog eq-auth-dialog" role="dialog" aria-modal="true" aria-labelledby="auth-account-title">
-          <button type="button" onClick={onClose} aria-label="Close account" className="eq-dialog__close eq-auth-dialog__close">
+          <button type="button" onClick={onClose} aria-label={closeAccountLabel} className="eq-dialog__close eq-auth-dialog__close">
             <X className="w-4 h-4" />
           </button>
           <BrandLogo decorative eager className="eq-auth-dialog__logo" />
@@ -126,7 +128,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         <button
           type="button"
           onClick={onClose}
-          aria-label="Close authentication"
+          aria-label={closeAuthLabel}
           className="eq-dialog__close eq-auth-dialog__close"
         >
           <X className="w-4 h-4" />

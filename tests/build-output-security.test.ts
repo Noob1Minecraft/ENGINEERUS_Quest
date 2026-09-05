@@ -7,6 +7,7 @@ import { createHealthRouter } from "../server/routes/health";
 import {
   FRONTEND_BUILD_DIRECTORY,
   getFrontendStaticRoot,
+  mountApiNotFound,
   mountProductionFrontend,
 } from "../server/staticFrontend";
 import { withServer } from "./helpers";
@@ -42,6 +43,7 @@ test("production static mounting serves only the browser root while health and A
   const app = express();
   app.use(createHealthRouter());
   app.get("/api/focused-build-check", (_request, response) => response.json({ ok: true }));
+  mountApiNotFound(app);
   const staticRoot = mountProductionFrontend(app);
 
   assert.equal(staticRoot, path.join(process.cwd(), "dist"));
@@ -56,9 +58,23 @@ test("production static mounting serves only the browser root while health and A
     assert.equal(api.status, 200);
     assert.deepEqual(await api.json(), { ok: true });
 
+    for (const method of ["GET", "POST"]) {
+      const missingApi = await fetch(`${baseUrl}/api/not-a-real-route`, { method });
+      assert.equal(missingApi.status, 404);
+      assert.equal(missingApi.headers.get("content-type")?.startsWith("application/json"), true);
+      assert.deepEqual(await missingApi.json(), {
+        error: { code: "api_route_not_found", message: "The requested API route was not found." },
+      });
+    }
+
     const index = await fetch(baseUrl);
     assert.equal(index.status, 200);
     assert.match(await index.text(), /<div id="root"><\/div>/);
+
+    const spaRoute = await fetch(`${baseUrl}/projects/example`);
+    assert.equal(spaRoute.status, 200);
+    assert.equal(spaRoute.headers.get("content-type")?.startsWith("text/html"), true);
+    assert.match(await spaRoute.text(), /<div id="root"><\/div>/);
 
     const backendArtifactUrl = await fetch(`${baseUrl}/server.cjs`);
     assert.equal(backendArtifactUrl.headers.get("content-type")?.startsWith("text/html"), true);
@@ -81,4 +97,12 @@ test("package scripts build and start the backend outside the public directory w
   assert.doesNotMatch(manifest.scripts.build, /--sourcemap/);
   assert.doesNotMatch(manifest.scripts.build, /--outfile=dist\/server\.cjs/);
   assert.equal(manifest.scripts.start, "node server-dist/server.cjs");
+});
+
+test("server mounts the API not-found boundary before development or production frontend fallbacks", () => {
+  const serverSource = readFileSync(path.resolve("server.ts"), "utf8");
+  const apiBoundary = serverSource.indexOf("mountApiNotFound(app)");
+  const environmentBranch = serverSource.indexOf('if (env.NODE_ENV !== "production")');
+  assert.ok(apiBoundary > 0);
+  assert.ok(environmentBranch > apiBoundary);
 });

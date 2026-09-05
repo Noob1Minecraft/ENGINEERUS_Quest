@@ -23,6 +23,15 @@ test('first-run onboarding is a small actionable checklist', () => {
   assert.match(markup, /ИИ-Тьютору/);
   assert.match(markup, /Квесты развивают XP/);
   assert.match(markup, /Projects и EngiMatch/);
+  assert.match(markup, /Закрытая бета/);
+  assert.match(markup, /aria-label="Знакомство с закрытой бетой"/);
+});
+
+test('onboarding labels switch between Russian, Kazakh, and English', () => {
+  const render = (lang: 'ru' | 'kk' | 'en') => renderToStaticMarkup(React.createElement(BetaOnboardingCard, { lang, completing: false, onNavigate: () => undefined, onComplete: () => undefined }));
+  assert.match(render('ru'), /Закрытая бета/);
+  assert.match(render('kk'), /Жабық бета/);
+  assert.match(render('en'), /Controlled beta/);
 });
 
 test('feedback UI warns against sensitive data and exposes bounded fields', () => {
@@ -30,6 +39,36 @@ test('feedback UI warns against sensitive data and exposes bounded fields', () =
   assert.match(markup, /Do not include passwords, tokens, or private messages/);
   assert.match(markup, /maxLength="2000"/);
   assert.match(markup, /beta coordinator/);
+  assert.match(markup, /Product area/);
+  assert.match(markup, /Projects/);
+});
+
+test('feedback categories, product areas, and close labels are localized', () => {
+  const render = (lang: 'ru' | 'kk' | 'en') => renderToStaticMarkup(React.createElement(BetaFeedbackModal, { open: true, lang, productArea: 'authentication', onClose: () => undefined }));
+  const russian = render('ru');
+  const kazakh = render('kk');
+  const english = render('en');
+  assert.match(russian, /Непонятный интерфейс/);
+  assert.match(russian, /Вход и регистрация/);
+  assert.match(russian, /aria-label="Закрыть форму отзыва"/);
+  assert.match(kazakh, /Түсініксіз интерфейс/);
+  assert.match(kazakh, /Кіру және тіркелу/);
+  assert.match(kazakh, /aria-label="Пікір терезесін жабу"/);
+  assert.match(english, /Confusing UX/);
+  assert.match(english, /Authentication/);
+});
+
+test('auth accessibility labels and feedback touch targets remain localized and usable', () => {
+  const authSource = readFileSync(path.resolve('src/components/AuthModal.tsx'), 'utf8');
+  const onboardingSource = readFileSync(path.resolve('src/components/OnboardingModal.tsx'), 'utf8');
+  const css = readFileSync(path.resolve('src/index.css'), 'utf8');
+  assert.match(authSource, /Закрыть окно аккаунта/);
+  assert.match(authSource, /Аккаунт терезесін жабу/);
+  assert.match(authSource, /Закрыть окно входа/);
+  assert.match(onboardingSource, /Закрыть окно знакомства/);
+  assert.match(onboardingSource, /Танысу терезесін жабу/);
+  assert.match(css, /\.eq-beta-note button \{[^}]*min-height: 2rem/su);
+  assert.match(css, /\.eq-footer__credits button \{[^}]*min-height: 2rem/su);
 });
 
 test('App persists account onboarding and does not use the legacy global seen flag', () => {
@@ -37,6 +76,12 @@ test('App persists account onboarding and does not use the legacy global seen fl
   assert.match(source, /loadBetaState/);
   assert.match(source, /completeBetaOnboarding/);
   assert.match(source, /!betaParticipant\.onboarding_completed_at/);
+  assert.match(source, /betaParticipantStatus === 'error'/);
+  assert.match(source, /betaParticipantStatus === 'loading'/);
+  assert.match(source, /loadBetaParticipant/);
+  assert.match(source, /Повторить/);
+  assert.match(source, /setBetaParticipantStatus\('error'\)/);
+  assert.doesNotMatch(source, /setInterval\(/);
   assert.doesNotMatch(source, /hasSeenOnboarding/);
   assert.doesNotMatch(source, /OnboardingModal/);
 });

@@ -29,6 +29,8 @@ values
   ('public.handle_new_auth_user()'::regprocedure, 'TRIGGER_ONLY'),
   ('public.handle_new_user_progress()'::regprocedure, 'TRIGGER_ONLY'),
   ('public.handle_new_beta_participant()'::regprocedure, 'TRIGGER_ONLY'),
+  ('public.record_profile_signup_analytics()'::regprocedure, 'TRIGGER_ONLY'),
+  ('public.record_first_meaningful_action_analytics()'::regprocedure, 'TRIGGER_ONLY'),
   ('public.guard_project_member()'::regprocedure, 'TRIGGER_ONLY'),
   ('public.record_daily_activity()'::regprocedure, 'AUTH_RPC'),
   ('public.replace_my_profile_relations(jsonb,jsonb,jsonb,jsonb)'::regprocedure, 'AUTH_RPC'),
@@ -60,7 +62,7 @@ values
 
 select is(
   (select count(*)::integer from expected_security_definers),
-  31,
+  33,
   'the SECURITY DEFINER classification inventory contains every application function'
 );
 
@@ -86,7 +88,7 @@ select is(
     where function_schema.nspname = 'public'
       and function_record.prosecdef
   ),
-  31,
+  33,
   'the public schema has no unclassified SECURITY DEFINER function'
 );
 
@@ -97,7 +99,7 @@ select is(
     join pg_proc function_record on function_record.oid = expected.function_oid
     where function_record.prosecdef
   ),
-  31,
+  33,
   'every classified function remains SECURITY DEFINER'
 );
 
@@ -108,7 +110,7 @@ select is(
     join pg_proc function_record on function_record.oid = expected.function_oid
     where function_record.proconfig @> array['search_path=""']::text[]
   ),
-  31,
+  33,
   'every classified SECURITY DEFINER function fixes search_path to empty'
 );
 
@@ -119,14 +121,14 @@ select is(
     join pg_proc function_record on function_record.oid = expected.function_oid
     where pg_get_userbyid(function_record.proowner) = 'postgres'
   ),
-  31,
+  33,
   'function ownership remains postgres'
 );
 
 select is(
   (select count(*)::integer from expected_security_definers where classification = 'TRIGGER_ONLY'),
-  4,
-  'four SECURITY DEFINER functions are trigger-only'
+  6,
+  'six SECURITY DEFINER functions are trigger-only'
 );
 
 select is(
@@ -139,7 +141,7 @@ select is(
      and trigger_record.tgenabled <> 'D'
     where expected.classification = 'TRIGGER_ONLY'
   ),
-  4,
+  6,
   'each trigger-only function is referenced by one enabled application trigger'
 );
 
