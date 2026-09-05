@@ -29,15 +29,22 @@ values
 insert into public.projects (id, owner_id, title, status, visibility)
 values
   ('9b100000-0000-4000-8000-000000000001', '9a100000-0000-4000-8000-000000000001', 'Private authorization fixture', 'open', 'private'),
-  ('9b100000-0000-4000-8000-000000000002', '9a100000-0000-4000-8000-000000000001', 'Visible authorization fixture', 'open', 'authenticated');
+  ('9b100000-0000-4000-8000-000000000002', '9a100000-0000-4000-8000-000000000001', 'Visible authorization fixture', 'open', 'authenticated'),
+  ('9b100000-0000-4000-8000-000000000003', '9a100000-0000-4000-8000-000000000001', 'Private draft fixture', 'draft', 'private'),
+  ('9b100000-0000-4000-8000-000000000004', '9a100000-0000-4000-8000-000000000001', 'Private archived fixture', 'archived', 'private');
 
 insert into public.project_roles (id, project_id, title, positions_total, status)
 values
   ('9c100000-0000-4000-8000-000000000001', '9b100000-0000-4000-8000-000000000001', 'Private open role', 4, 'open'),
-  ('9c100000-0000-4000-8000-000000000002', '9b100000-0000-4000-8000-000000000002', 'Visible open role', 4, 'open');
+  ('9c100000-0000-4000-8000-000000000002', '9b100000-0000-4000-8000-000000000002', 'Visible open role', 4, 'open'),
+  ('9c100000-0000-4000-8000-000000000003', '9b100000-0000-4000-8000-000000000001', 'Private closed role', 1, 'closed'),
+  ('9c100000-0000-4000-8000-000000000004', '9b100000-0000-4000-8000-000000000001', 'Private filled role', 1, 'filled'),
+  ('9c100000-0000-4000-8000-000000000005', '9b100000-0000-4000-8000-000000000003', 'Private role on draft project', 1, 'open'),
+  ('9c100000-0000-4000-8000-000000000006', '9b100000-0000-4000-8000-000000000004', 'Private role on archived project', 1, 'open');
 
 insert into public.project_members (project_id, user_id, role_id)
-values ('9b100000-0000-4000-8000-000000000001', '9a100000-0000-4000-8000-000000000004', '9c100000-0000-4000-8000-000000000001');
+values
+  ('9b100000-0000-4000-8000-000000000001', '9a100000-0000-4000-8000-000000000004', '9c100000-0000-4000-8000-000000000001');
 
 set local request.jwt.claim.sub = '9a100000-0000-4000-8000-000000000001';
 set local request.jwt.claim.role = 'authenticated';
@@ -82,6 +89,26 @@ select is(
   public._private_application_error('9c100000-0000-4000-8000-000000000001', 'Known private role'),
   'project_role_not_found',
   'known private role UUID does not authorize an unrelated application'
+);
+select is(
+  public._private_application_error('9c100000-0000-4000-8000-000000000003', 'Known private closed role'),
+  'project_role_not_found',
+  'private closed role is indistinguishable from an unknown role'
+);
+select is(
+  public._private_application_error('9c100000-0000-4000-8000-000000000004', 'Known private filled role'),
+  'project_role_not_found',
+  'private filled role is indistinguishable from an unknown role'
+);
+select is(
+  public._private_application_error('9c100000-0000-4000-8000-000000000005', 'Private draft project role'),
+  'project_role_not_found',
+  'private role on a draft project is indistinguishable from an unknown role'
+);
+select is(
+  public._private_application_error('9c100000-0000-4000-8000-000000000006', 'Private archived project role'),
+  'project_role_not_found',
+  'private role on an archived project is indistinguishable from an unknown role'
 );
 select is(
   (select count(*)::integer from public.project_applications where applicant_id = '9a100000-0000-4000-8000-000000000003'),
