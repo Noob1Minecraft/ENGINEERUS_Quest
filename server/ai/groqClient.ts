@@ -7,7 +7,7 @@ const VISION_CAPABLE_MODELS = new Set(["qwen/qwen3.6-27b"]);
 const MODEL_FALLBACK_STATUSES = new Set([400, 404]);
 const CREDENTIAL_FALLBACK_STATUSES = new Set([401, 403]);
 
-export type AiProviderFailureCategory = "authentication" | "invalid_response" | "model" | "network" | "provider" | "rate_limit" | "vision_unavailable";
+export type AiProviderFailureCategory = "aborted" | "authentication" | "invalid_response" | "model" | "network" | "provider" | "rate_limit" | "timeout" | "vision_unavailable";
 
 export type AiVisionImage = {
   id: string;
@@ -33,6 +33,7 @@ type GroqResponderOptions = {
   secondaryApiKey?: string;
   model: string;
   fetchImpl?: Fetch;
+  timeoutMs?: number;
 };
 
 function fallbackResponse(prompt: string, language: "ru" | "kk" | "en", demoMode: boolean): string {
@@ -63,6 +64,7 @@ export function createGroqResponder(options: GroqResponderOptions) {
     language: SupportedLanguage = "ru",
     additionalSystemPolicy?: string,
     images: readonly AiVisionImage[] = [],
+    signal?: AbortSignal,
   ): Promise<string> {
     if (apiKeys.length === 0) return fallbackResponse(prompt, language, true);
 
@@ -98,6 +100,14 @@ export function createGroqResponder(options: GroqResponderOptions) {
         });
 
         let response: Response;
+        const providerAbort = new AbortController();
+        let timedOut = false;
+        const abortProvider = () => providerAbort.abort();
+        signal?.addEventListener("abort", abortProvider, { once: true });
+        const timeout = setTimeout(() => {
+          timedOut = true;
+          providerAbort.abort();
+        }, options.timeoutMs ?? 45_000);
         try {
           response = await fetchImpl("https://api.groq.com/openai/v1/chat/completions", {
             method: "POST",
@@ -118,14 +128,23 @@ export function createGroqResponder(options: GroqResponderOptions) {
               max_tokens: 600,
               reasoning_effort: "none",
             }),
+            signal: providerAbort.signal,
           });
         } catch {
+          const category: AiProviderFailureCategory = signal?.aborted
+            ? "aborted"
+            : timedOut
+              ? "timeout"
+              : "network";
           securityLogger.error("ai_provider_failure", {
             provider: "groq",
             model,
-            error_category: "network",
+            error_category: category,
           });
-          throw new AiProviderError("network", fallbackResponse(prompt, language, false));
+          throw new AiProviderError(category, fallbackResponse(prompt, language, false));
+        } finally {
+          clearTimeout(timeout);
+          signal?.removeEventListener("abort", abortProvider);
         }
 
         if (!response.ok) {

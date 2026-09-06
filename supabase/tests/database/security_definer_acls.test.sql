@@ -32,6 +32,7 @@ values
   ('public.record_profile_signup_analytics()'::regprocedure, 'TRIGGER_ONLY'),
   ('public.record_first_meaningful_action_analytics()'::regprocedure, 'TRIGGER_ONLY'),
   ('public.guard_project_member()'::regprocedure, 'TRIGGER_ONLY'),
+  ('public.enforce_authenticated_abuse_budget()'::regprocedure, 'TRIGGER_ONLY'),
   ('public.record_daily_activity()'::regprocedure, 'AUTH_RPC'),
   ('public.replace_my_profile_relations(jsonb,jsonb,jsonb,jsonb)'::regprocedure, 'AUTH_RPC'),
   ('public.create_project_role(uuid,text,text,uuid,integer,uuid[],text[],integer[])'::regprocedure, 'AUTH_RPC'),
@@ -58,11 +59,14 @@ values
   ('public.complete_ai_exchange(uuid,uuid,text,text,text,integer)'::regprocedure, 'SERVICE_INTERNAL'),
   ('public.complete_quest(uuid,text,text)'::regprocedure, 'SERVICE_INTERNAL'),
   ('public.refresh_gamification(uuid,timestamptz)'::regprocedure, 'SERVICE_INTERNAL'),
+  ('public.consume_abuse_budget(uuid,text)'::regprocedure, 'SERVICE_INTERNAL'),
+  ('public.acquire_ai_capacity(uuid,uuid)'::regprocedure, 'SERVICE_INTERNAL'),
+  ('public.release_ai_capacity(uuid,uuid)'::regprocedure, 'SERVICE_INTERNAL'),
   ('public.direct_chat_shared_project(uuid,uuid,uuid)'::regprocedure, 'INTERNAL_HELPER');
 
 select is(
   (select count(*)::integer from expected_security_definers),
-  33,
+  37,
   'the SECURITY DEFINER classification inventory contains every application function'
 );
 
@@ -88,7 +92,7 @@ select is(
     where function_schema.nspname = 'public'
       and function_record.prosecdef
   ),
-  33,
+  37,
   'the public schema has no unclassified SECURITY DEFINER function'
 );
 
@@ -99,7 +103,7 @@ select is(
     join pg_proc function_record on function_record.oid = expected.function_oid
     where function_record.prosecdef
   ),
-  33,
+  37,
   'every classified function remains SECURITY DEFINER'
 );
 
@@ -110,7 +114,7 @@ select is(
     join pg_proc function_record on function_record.oid = expected.function_oid
     where function_record.proconfig @> array['search_path=""']::text[]
   ),
-  33,
+  37,
   'every classified SECURITY DEFINER function fixes search_path to empty'
 );
 
@@ -121,19 +125,19 @@ select is(
     join pg_proc function_record on function_record.oid = expected.function_oid
     where pg_get_userbyid(function_record.proowner) = 'postgres'
   ),
-  33,
+  37,
   'function ownership remains postgres'
 );
 
 select is(
   (select count(*)::integer from expected_security_definers where classification = 'TRIGGER_ONLY'),
-  6,
-  'six SECURITY DEFINER functions are trigger-only'
+  7,
+  'seven SECURITY DEFINER functions are trigger-only'
 );
 
 select is(
   (
-    select count(*)::integer
+    select count(distinct expected.function_oid)::integer
     from expected_security_definers expected
     join pg_trigger trigger_record
       on trigger_record.tgfoid = expected.function_oid
@@ -141,8 +145,8 @@ select is(
      and trigger_record.tgenabled <> 'D'
     where expected.classification = 'TRIGGER_ONLY'
   ),
-  6,
-  'each trigger-only function is referenced by one enabled application trigger'
+  7,
+  'each trigger-only function is referenced by an enabled application trigger'
 );
 
 select ok(

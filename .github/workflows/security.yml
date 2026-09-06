@@ -55,8 +55,8 @@ jobs:
         run: npm run build
       - name: Focused security tests
         run: npm run test:security
-      - name: Critical production dependency audit
-        run: npm audit --omit=dev --audit-level=critical
+      - name: High and critical production dependency audit
+        run: npm audit --omit=dev --audit-level=high
       - name: Generate production CycloneDX SBOM
         run: |
           mkdir -p artifacts

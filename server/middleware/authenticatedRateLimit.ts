@@ -1,6 +1,6 @@
 import { ipKeyGenerator, rateLimit, type Options } from "express-rate-limit";
 import type { RequestHandler } from "express";
-import type { AiCapacityStore, RateLimitStoreFactory } from "../security/securityControlStore";
+import type { AbuseControlStore, AiCapacityStore, RateLimitStoreFactory } from "../security/securityControlStore";
 
 const WINDOW_MS = 15 * 60 * 1000;
 
@@ -48,6 +48,42 @@ export function createAiRateLimit(factory?: RateLimitStoreFactory, limit = 20) {
   });
 }
 
+export function createAuthoritativeAiRateLimit(
+  store: AbuseControlStore,
+  operation: "ai_request" | "ai_vision" = "ai_request",
+): RequestHandler {
+  return async (request, response, next) => {
+    if (operation === "ai_vision"
+      && (!Array.isArray(request.body?.image_ids) || request.body.image_ids.length === 0)) {
+      next();
+      return;
+    }
+    try {
+      const result = await store.consume(response.locals.auth.userId as string, operation);
+      response.setHeader("RateLimit-Limit", String(result.limit));
+      response.setHeader("RateLimit-Remaining", String(result.remaining));
+      response.setHeader("RateLimit-Reset", String(Math.max(0, Math.ceil((result.resetAt.getTime() - Date.now()) / 1000))));
+      if (!result.allowed) {
+        response.setHeader("Retry-After", String(Math.max(1, Math.ceil((result.resetAt.getTime() - Date.now()) / 1000))));
+        response.status(429).json({
+          error: {
+            code: operation === "ai_vision" ? "vision_rate_limit_exceeded" : "ai_rate_limit_exceeded",
+            message: operation === "ai_vision"
+              ? "Vision request budget exceeded. Try again later."
+              : "AI request budget exceeded. Try again later.",
+          },
+        });
+        return;
+      }
+      next();
+    } catch {
+      response.status(503).json({
+        error: { code: "abuse_control_unavailable", message: "Request protection is temporarily unavailable." },
+      });
+    }
+  };
+}
+
 export function createAiConcurrencyGuard(store: AiCapacityStore): RequestHandler {
   return (request, response, next) => {
     const userId = response.locals.auth.userId as string;
@@ -60,17 +96,20 @@ export function createAiConcurrencyGuard(store: AiCapacityStore): RequestHandler
           });
           return;
         }
-        let released = false;
-        const release = () => {
-          if (released) return;
-          released = true;
-          void lease.release();
-        };
-        response.once("finish", release);
-        response.once("close", release);
+        const abortController = new AbortController();
+        request.once("aborted", () => abortController.abort());
+        response.once("close", () => {
+          if (!response.writableEnded) abortController.abort();
+        });
+        response.locals.aiCapacityLease = lease;
+        response.locals.aiAbortSignal = abortController.signal;
         next();
       })
-      .catch(next);
+      .catch(() => {
+        response.status(503).json({
+          error: { code: "abuse_control_unavailable", message: "Request protection is temporarily unavailable." },
+        });
+      });
   };
 }
 

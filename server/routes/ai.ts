@@ -73,6 +73,7 @@ type AiDependencies = {
     language: SupportedLanguage,
     additionalSystemPolicy?: string,
     images?: readonly AiVisionImage[],
+    signal?: AbortSignal,
   ) => Promise<string>;
   lookupStandards?: StandardsLookup;
   loadDocumentContext?: (
@@ -218,9 +219,11 @@ export function createAiRouter(
           detectedLanguage,
           baseSystemPolicy,
           imageContext,
+          response.locals.aiAbortSignal as AbortSignal | undefined,
         );
       } catch (error) {
         if (!(error instanceof AiProviderError)) throw error;
+        if (error.category === "aborted") return;
         providerFailureCategory = error.category;
         providerStatus = error.providerStatus;
         generatedResponse = error.fallbackContent;
@@ -264,6 +267,7 @@ export function createAiRouter(
             detectedLanguage,
             retrySystemPolicy,
             imageContext,
+            response.locals.aiAbortSignal as AbortSignal | undefined,
           );
           finalGuardResult = guardStandardsResponse({
             content: sanitizeAssistantContent(regeneratedResponse),
@@ -275,6 +279,7 @@ export function createAiRouter(
           rejectedDesignations.push(...(finalGuardResult.rejectedDesignations ?? []));
         } catch (error) {
           if (!(error instanceof AiProviderError)) throw error;
+          if (error.category === "aborted") return;
           providerFailureCategory = error.category;
           providerStatus = error.providerStatus;
         }
@@ -347,22 +352,44 @@ export function createAiRouter(
     }
   }
 
-  router.post("/api/ai", authenticate, rateLimiter, visionRateLimiter, concurrencyGuard, safeAsync(async (request, response) => {
-    const parsed = baseAiRequestSchema.safeParse(request.body);
-    if (!parsed.success) {
-      sendInvalidAiRequest(response);
-      return;
+  async function runWithCapacity(response: import("express").Response, work: () => Promise<void>) {
+    try {
+      await work();
+    } finally {
+      const lease = response.locals.aiCapacityLease as { release(): void | Promise<void> } | undefined;
+      delete response.locals.aiCapacityLease;
+      if (lease) {
+        try {
+          await lease.release();
+        } catch {
+          // The authoritative lease has a bounded TTL. A transient cleanup
+          // failure must not replace an already completed user response.
+          securityLogger.warn("ai_capacity_release_failed", {});
+        }
+      }
     }
-    await handle(request, response, "tutor", 10, parsed.data);
+  }
+
+  router.post("/api/ai", authenticate, rateLimiter, visionRateLimiter, concurrencyGuard, safeAsync(async (request, response) => {
+    await runWithCapacity(response, async () => {
+      const parsed = baseAiRequestSchema.safeParse(request.body);
+      if (!parsed.success) {
+        sendInvalidAiRequest(response);
+        return;
+      }
+      await handle(request, response, "tutor", 10, parsed.data);
+    });
   }));
 
   router.post("/api/module", authenticate, rateLimiter, visionRateLimiter, concurrencyGuard, safeAsync(async (request, response) => {
-    const parsed = moduleAiRequestSchema.safeParse(request.body);
-    if (!parsed.success) {
-      sendInvalidAiRequest(response, true);
-      return;
-    }
-    await handle(request, response, parsed.data.module, 15, parsed.data);
+    await runWithCapacity(response, async () => {
+      const parsed = moduleAiRequestSchema.safeParse(request.body);
+      if (!parsed.success) {
+        sendInvalidAiRequest(response, true);
+        return;
+      }
+      await handle(request, response, parsed.data.module, 15, parsed.data);
+    });
   }));
 
   return router;

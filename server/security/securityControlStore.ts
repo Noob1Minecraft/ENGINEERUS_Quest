@@ -13,6 +13,17 @@ export type AiCapacityLease = {
   release(): void | Promise<void>;
 };
 
+export type AbuseBudgetResult = {
+  allowed: boolean;
+  limit: number;
+  remaining: number;
+  resetAt: Date;
+};
+
+export interface AbuseControlStore {
+  consume(userId: string, operation: "ai_request" | "ai_vision"): Promise<AbuseBudgetResult>;
+}
+
 export interface AiCapacityStore {
   tryAcquire(
     userId: string,

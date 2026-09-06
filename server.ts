@@ -4,7 +4,7 @@ import { createApp } from "./server/app";
 import { loadServerEnv } from "./server/config/env";
 import { createSupabaseAccessTokenVerifier } from "./server/auth/supabaseJwt";
 import { createRequireAuth } from "./server/middleware/requireAuth";
-import { createAiConcurrencyGuard, createAiRateLimit, createAuthenticatedRateLimit, createDocumentUploadRateLimit, createImageUploadRateLimit, createVisionAiRateLimit } from "./server/middleware/authenticatedRateLimit";
+import { createAiConcurrencyGuard, createAuthoritativeAiRateLimit, createAuthenticatedRateLimit, createDocumentUploadRateLimit, createImageUploadRateLimit } from "./server/middleware/authenticatedRateLimit";
 import { createChatRepository } from "./server/persistence/chats";
 import { createQuestRepository } from "./server/persistence/quests";
 import { createChatsRouter } from "./server/routes/chats";
@@ -16,7 +16,8 @@ import { createKazStandardClient } from "./server/standards/kazStandardClient";
 import { createStandardsService } from "./server/standards/standardsService";
 import { apiErrorHandler } from "./server/middleware/apiErrorHandler";
 import { mountApiNotFound, mountProductionFrontend } from "./server/staticFrontend";
-import { InMemoryAiCapacityStore } from "./server/security/securityControlStore";
+import { createSupabaseAdminClient } from "./server/lib/supabaseAdmin";
+import { SupabaseAbuseControlStore } from "./server/security/supabaseAbuseControls";
 import { securityLogger } from "./server/security/structuredLogger";
 import { createBetaRepository } from "./server/persistence/beta";
 import { createDocumentRepository } from "./server/persistence/documents";
@@ -33,8 +34,9 @@ const app = createApp(env);
 const PORT = env.PORT;
 const requireAuth = createRequireAuth(createSupabaseAccessTokenVerifier(env));
 const authenticatedRateLimit = createAuthenticatedRateLimit();
-const aiRateLimit = createAiRateLimit();
-const aiConcurrencyGuard = createAiConcurrencyGuard(new InMemoryAiCapacityStore());
+const abuseControls = new SupabaseAbuseControlStore(createSupabaseAdminClient(env));
+const aiRateLimit = createAuthoritativeAiRateLimit(abuseControls);
+const aiConcurrencyGuard = createAiConcurrencyGuard(abuseControls);
 const chatRepository = createChatRepository(env);
 const questRepository = createQuestRepository(env);
 const betaRepository = createBetaRepository(env);
@@ -86,7 +88,7 @@ app.use(createAiRouter(requireAuth, aiRateLimit, {
   recordEvent: betaRepository.recordEvent,
   loadDocumentContext: documentRepository.loadAiContext,
   loadImageContext: imageRepository.loadAiImages,
-}, createVisionAiRateLimit()));
+}, createAuthoritativeAiRateLimit(abuseControls, "ai_vision")));
 
 app.get("/api/leaderboard", (req, res) => res.json({ leaderboard: LEADERBOARD_SEED, total: LEADERBOARD_SEED.length }));
 

@@ -46,6 +46,9 @@ type ConversationRow = {
 
 function failure(error: { code?: string; message?: string } | null): never {
   const code = error?.message?.split("\n")[0]?.trim() || "direct_chat_unavailable";
+  if (code === "abuse_rate_limit_exceeded") {
+    throw new PersistenceError(429, code, "Too many messaging actions. Try again later.");
+  }
   if (code.includes("not_found") || error?.code === "P0002") {
     throw new PersistenceError(404, code, "The direct conversation was not found.");
   }

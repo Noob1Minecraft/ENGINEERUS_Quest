@@ -162,6 +162,9 @@ export function recruitmentFailure(
   fallbackMessage = "Project recruiting is temporarily unavailable.",
 ): never {
   const databaseMessage = error?.message?.split("\n")[0]?.trim() ?? "";
+  if (databaseMessage === "abuse_rate_limit_exceeded") {
+    throw new PersistenceError(429, databaseMessage, "Too many recruiting actions. Try again later.");
+  }
   if (error?.code === "23505") {
     throw new PersistenceError(409, "duplicate_project_request", "A matching pending project request already exists.");
   }

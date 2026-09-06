@@ -265,3 +265,36 @@ test("local fallback responses use the supplied resolved language", async () => 
   assert.match(await respond("Arduino-ға sensor қалай қосамын?", "tutor", "kk"), /Демо режим/);
   assert.match(await respond("How should I calculate нагрузка?", "tutor", "en"), /Demo Mode/);
 });
+
+test("Groq requests abort at the provider timeout with a typed sanitized error", async () => {
+  const respond = createGroqResponder({
+    apiKey: "test-placeholder",
+    model: "test-model",
+    timeoutMs: 5,
+    fetchImpl: async (_input, init) => new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")), { once: true });
+    }),
+  });
+  await assert.rejects(
+    respond("Что такое момент?", "tutor", "ru"),
+    (error: unknown) => error instanceof AiProviderError && error.category === "timeout",
+  );
+});
+
+test("caller cancellation aborts Groq work and is distinguished from timeout", async () => {
+  const controller = new AbortController();
+  const respond = createGroqResponder({
+    apiKey: "test-placeholder",
+    model: "test-model",
+    timeoutMs: 1_000,
+    fetchImpl: async (_input, init) => new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")), { once: true });
+    }),
+  });
+  const pending = respond("Что такое момент?", "tutor", "ru", undefined, [], controller.signal);
+  controller.abort();
+  await assert.rejects(
+    pending,
+    (error: unknown) => error instanceof AiProviderError && error.category === "aborted",
+  );
+});

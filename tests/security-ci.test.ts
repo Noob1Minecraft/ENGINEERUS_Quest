@@ -11,7 +11,7 @@ test("security workflow is least privilege and contains the required non-deploym
   assert.doesNotMatch(workflow, /(?:contents|packages|deployments|pull-requests): write/u);
   assert.doesNotMatch(workflow, /pull_request_target/u);
   assert.doesNotMatch(workflow, /npm publish|git push|supabase db push|vercel deploy|render deploy/iu);
-  for (const required of ["npm ci", "npm run typecheck", "npm run build", "npm run test:security", "npm audit --omit=dev --audit-level=critical", "npm sbom --sbom-format cyclonedx --omit dev"]) {
+  for (const required of ["npm ci", "npm run typecheck", "npm run build", "npm run test:security", "npm audit --omit=dev --audit-level=high", "npm sbom --sbom-format cyclonedx --omit dev"]) {
     assert.match(workflow, new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "u"));
   }
   assert.match(workflow, /gitleaks\/gitleaks-action@[0-9a-f]{40}/u);

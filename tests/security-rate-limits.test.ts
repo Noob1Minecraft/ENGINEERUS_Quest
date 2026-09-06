@@ -6,12 +6,14 @@ import express, { type RequestHandler } from "express";
 import { MemoryStore } from "express-rate-limit";
 import {
   createAiConcurrencyGuard,
+  createAuthoritativeAiRateLimit,
   createAiRateLimit,
   createAuthenticatedRateLimit,
   createDirectChatReadRateLimit,
   createPreAuthRateLimit,
 } from "../server/middleware/authenticatedRateLimit";
 import {
+  type AbuseControlStore,
   InMemoryAiCapacityStore,
   type RateLimitStoreFactory,
 } from "../server/security/securityControlStore";
@@ -77,6 +79,7 @@ test("AI concurrency allows one request per user, rejects overlap, and releases 
       entered();
       await canFinish;
     }
+    await response.locals.aiCapacityLease.release();
     response.json({ ok: true });
   });
 
@@ -91,6 +94,51 @@ test("AI concurrency allows one request per user, rejects overlap, and releases 
     assert.equal((await firstRequest).status, 200);
     assert.equal((await fetch(`${baseUrl}/api/ai`, { method: "POST" })).status, 200);
   });
+});
+
+test("authoritative AI budgets return 429 and fail closed when shared storage is unavailable", async () => {
+  let calls = 0;
+  const store: AbuseControlStore = {
+    async consume() {
+      calls += 1;
+      if (calls === 1) return { allowed: true, limit: 1, remaining: 0, resetAt: new Date(Date.now() + 60_000) };
+      if (calls === 2) return { allowed: false, limit: 1, remaining: 0, resetAt: new Date(Date.now() + 60_000) };
+      throw new Error("database unavailable");
+    },
+  };
+  const app = express();
+  app.post("/api/ai", authenticate, createAuthoritativeAiRateLimit(store), (_request, response) => response.json({ ok: true }));
+
+  await withServer(app, async (baseUrl) => {
+    assert.equal((await fetch(`${baseUrl}/api/ai`, { method: "POST" })).status, 200);
+    const limited = await fetch(`${baseUrl}/api/ai`, { method: "POST" });
+    assert.equal(limited.status, 429);
+    assert.equal((await limited.json() as { error: { code: string } }).error.code, "ai_rate_limit_exceeded");
+    const unavailable = await fetch(`${baseUrl}/api/ai`, { method: "POST" });
+    assert.equal(unavailable.status, 503);
+    assert.equal((await unavailable.json() as { error: { code: string } }).error.code, "abuse_control_unavailable");
+  });
+});
+
+test("closing a client connection aborts provider work but does not release capacity early", async () => {
+  const request = new (await import("node:events")).EventEmitter() as unknown as import("express").Request;
+  const response = new (await import("node:events")).EventEmitter() as unknown as import("express").Response;
+  (response as any).locals = { auth: { userId: USER_ID, accessToken: "test", claims: {} } };
+  Object.defineProperty(response, "writableEnded", { value: false, configurable: true });
+  let releases = 0;
+  const store = {
+    async tryAcquire() {
+      return { release: () => { releases += 1; } };
+    },
+  };
+  await new Promise<void>((resolve, reject) => {
+    createAiConcurrencyGuard(store)(request, response, (error?: unknown) => error ? reject(error) : resolve());
+  });
+  response.emit("close");
+  assert.equal((response.locals.aiAbortSignal as AbortSignal).aborted, true);
+  assert.equal(releases, 0, "capacity remains held until route/provider termination");
+  await response.locals.aiCapacityLease.release();
+  assert.equal(releases, 1);
 });
 
 test("in-memory AI capacity enforces both per-user and global bounds", async () => {
@@ -131,8 +179,9 @@ test("the application wires pre-auth protection and dedicated AI controls", () =
   const appSource = readFileSync(path.resolve("server/app.ts"), "utf8");
   const serverSource = readFileSync(path.resolve("server.ts"), "utf8");
   assert.match(appSource, /app\.use\("\/api", createPreAuthRateLimit/);
-  assert.match(serverSource, /const aiRateLimit = createAiRateLimit\(\)/);
-  assert.match(serverSource, /createAiConcurrencyGuard\(new InMemoryAiCapacityStore\(\)\)/);
+  assert.match(serverSource, /const aiRateLimit = createAuthoritativeAiRateLimit\(abuseControls\)/);
+  assert.match(serverSource, /createAiConcurrencyGuard\(abuseControls\)/);
+  assert.match(serverSource, /new SupabaseAbuseControlStore/);
   assert.match(serverSource, /createAiRouter\(requireAuth, aiRateLimit/);
   assert.doesNotMatch(serverSource, /createAiRouter\(requireAuth, authenticatedRateLimit/);
 });
