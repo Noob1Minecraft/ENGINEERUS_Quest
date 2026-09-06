@@ -111,6 +111,8 @@ test('recovery UI is localized, accessible, and never renders raw provider error
   assert.match(source, /If an account exists for that address/);
   assert.match(source, /autoComplete="email"/);
   assert.match(source, /autoComplete="new-password"/);
+  assert.match(source, /htmlFor="auth-password"/);
+  assert.match(source, /id="auth-password"/);
   assert.match(source, /aria-live="polite"/);
   assert.match(source, /newPasswordInputRef\.current\?\.focus\(\)/);
   assert.match(source, /confirmPasswordInputRef\.current\?\.focus\(\)/);
