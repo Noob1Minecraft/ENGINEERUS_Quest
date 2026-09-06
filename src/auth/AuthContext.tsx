@@ -14,6 +14,17 @@ import type {
 } from "@supabase/supabase-js";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
 import { setApiAccessToken } from "../utils/api";
+import {
+  hasPasswordRecoveryCallbackError,
+  hasPasswordRecoveryIntent,
+  readPasswordRecoveryMarker,
+  removeAuthCallbackArtifacts,
+  requestPasswordRecovery,
+  resolvePasswordRecoveryStatus,
+  updateRecoveredPassword,
+  writePasswordRecoveryMarker,
+  type PasswordRecoveryStatus,
+} from "./passwordRecovery";
 
 type AuthSnapshot = {
   session: Session | null;
@@ -32,17 +43,18 @@ type AuthClient = {
 
 export async function restoreAuthSession(
   client: AuthClient,
-  onSnapshot: (snapshot: AuthSnapshot) => void,
+  onSnapshot: (snapshot: AuthSnapshot, event: AuthChangeEvent | null) => void,
 ): Promise<() => void> {
   let authEventReceived = false;
   const publishSnapshot = (snapshot: AuthSnapshot) => {
     setApiAccessToken(snapshot.session?.access_token ?? null);
-    onSnapshot(snapshot);
+    onSnapshot(snapshot, null);
   };
 
-  const { data: listener } = client.auth.onAuthStateChange((_event, session) => {
+  const { data: listener } = client.auth.onAuthStateChange((event, session) => {
     authEventReceived = true;
-    publishSnapshot({ session, user: session?.user ?? null, loading: false });
+    setApiAccessToken(session?.access_token ?? null);
+    onSnapshot({ session, user: session?.user ?? null, loading: false }, event);
   });
 
   const { data, error } = await client.auth.getSession();
@@ -85,9 +97,13 @@ export async function signOutAuthSession(
 
 type AuthContextValue = AuthSnapshot & {
   configured: boolean;
+  passwordRecoveryStatus: PasswordRecoveryStatus;
   signUp: (email: string, password: string, username: string) => Promise<SignUpResult>;
   signInWithPassword: (email: string, password: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
+  requestPasswordRecovery: (email: string) => Promise<void>;
+  updateRecoveredPassword: (password: string) => Promise<void>;
+  dismissPasswordRecovery: () => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -106,6 +122,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
     user: null,
     loading: isSupabaseConfigured,
   });
+  const [passwordRecoveryStatus, setPasswordRecoveryStatus] = useState<PasswordRecoveryStatus>(() => {
+    if (!isSupabaseConfigured || typeof window === 'undefined') return 'idle';
+    if (hasPasswordRecoveryCallbackError(window.location)) return 'invalid';
+    return hasPasswordRecoveryIntent(window.location)
+      || readPasswordRecoveryMarker(window.sessionStorage)
+      ? 'verifying'
+      : 'idle';
+  });
 
   useEffect(() => {
     if (!supabase) {
@@ -116,8 +140,22 @@ export function AuthProvider({ children }: PropsWithChildren) {
     let active = true;
     let unsubscribe: (() => void) | undefined;
 
-    restoreAuthSession(supabase, (nextSnapshot) => {
-      if (active) setSnapshot(nextSnapshot);
+    restoreAuthSession(supabase, (nextSnapshot, event) => {
+      if (!active) return;
+      setSnapshot(nextSnapshot);
+
+      const markerPresent = readPasswordRecoveryMarker(window.sessionStorage);
+      const nextRecoveryStatus = resolvePasswordRecoveryStatus({
+        event,
+        session: nextSnapshot.session,
+        intentPresent: hasPasswordRecoveryIntent(window.location),
+        callbackErrorPresent: hasPasswordRecoveryCallbackError(window.location),
+        markerPresent,
+      });
+      if (nextRecoveryStatus !== 'idle') {
+        writePasswordRecoveryMarker(window.sessionStorage, nextRecoveryStatus === 'ready');
+        setPasswordRecoveryStatus(nextRecoveryStatus);
+      }
     })
       .then((cleanup) => {
         if (active) unsubscribe = cleanup;
@@ -136,6 +174,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const value = useMemo<AuthContextValue>(() => ({
     ...snapshot,
     configured: isSupabaseConfigured,
+    passwordRecoveryStatus,
     async signUp(email, password, username) {
       const client = requireSupabase();
       const normalizedUsername = username.trim();
@@ -168,13 +207,38 @@ export function AuthProvider({ children }: PropsWithChildren) {
       });
       if (error) throw error;
     },
+    async requestPasswordRecovery(email) {
+      const client = requireSupabase();
+      await requestPasswordRecovery(client, email, window.location.origin);
+    },
+    async updateRecoveredPassword(password) {
+      const client = requireSupabase();
+      await updateRecoveredPassword(client, password);
+      writePasswordRecoveryMarker(window.sessionStorage, false);
+      removeAuthCallbackArtifacts(window.location, window.history);
+      setPasswordRecoveryStatus('updated');
+    },
+    async dismissPasswordRecovery() {
+      const client = requireSupabase();
+      if (passwordRecoveryStatus === 'ready'
+        || (passwordRecoveryStatus === 'verifying' && snapshot.session)) {
+        await signOutAuthSession(client, () => {
+          setSnapshot({ session: null, user: null, loading: false });
+        });
+      }
+      writePasswordRecoveryMarker(window.sessionStorage, false);
+      removeAuthCallbackArtifacts(window.location, window.history);
+      setPasswordRecoveryStatus('idle');
+    },
     async signOut() {
       const client = requireSupabase();
       await signOutAuthSession(client, () => {
         setSnapshot({ session: null, user: null, loading: false });
       });
+      writePasswordRecoveryMarker(window.sessionStorage, false);
+      setPasswordRecoveryStatus('idle');
     },
-  }), [snapshot]);
+  }), [passwordRecoveryStatus, snapshot]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

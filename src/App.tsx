@@ -537,7 +537,7 @@ export default function App() {
 
       {/* Modals */}
       <AuthModal
-        isOpen={isAuthOpen}
+        isOpen={isAuthOpen || auth.passwordRecoveryStatus !== 'idle'}
         onClose={() => setIsAuthOpen(false)}
         lang={lang}
       />

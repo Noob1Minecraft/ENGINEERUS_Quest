@@ -47,7 +47,7 @@ test('legacy dialogs share the current modal and form treatment', () => {
   assert.match(sources, /eq-dialog-backdrop/u);
   assert.match(sources, /aria-modal="true"/u);
   assert.equal((sources.match(/useDialogFocus\(/gu) ?? []).length, 3);
-  assert.equal((sources.match(/tabIndex=\{-1\}/gu) ?? []).length, 4);
+  assert.equal((sources.match(/tabIndex=\{-1\}/gu) ?? []).length, 5);
   assert.match(focusHook, /requestAnimationFrame/u);
   assert.match(focusHook, /event\.key === 'Escape'/u);
   assert.match(focusHook, /event\.key !== 'Tab'/u);
@@ -63,9 +63,9 @@ test('affected dialogs choose visible meaningful initial focus targets', () => {
   const onboarding = source('src/components/OnboardingModal.tsx');
   assert.match(feedback, /initialFocusRef: categoryRef/u);
   assert.match(feedback, /<select ref=\{categoryRef\}/u);
-  assert.match(auth, /initialFocusRef: emailInputRef/u);
+  assert.match(auth, /initialFocusRef: auth\.passwordRecoveryStatus === 'ready' \? newPasswordInputRef : emailInputRef/u);
   assert.match(auth, /ref=\{emailInputRef\}[\s\S]*type="email"/u);
-  assert.match(auth, /type="email"[\s\S]*aria-label="Email"/u);
+  assert.match(auth, /type="email"[\s\S]*aria-label=\{copy\.email\}/u);
   assert.match(onboarding, /initialFocusRef: closeButtonRef/u);
   assert.match(onboarding, /ref=\{closeButtonRef\}/u);
 });
