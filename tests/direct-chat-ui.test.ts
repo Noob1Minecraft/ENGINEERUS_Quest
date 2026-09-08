@@ -4,7 +4,7 @@ import path from 'node:path';
 import test from 'node:test';
 import {
   blockDirectChatUser, createDirectConversation, listDirectConversations, listDirectMessages,
-  markDirectConversationRead, sendDirectMessage, unblockDirectChatUser, type DirectChatFetcher,
+  listDirectChatEligibleContacts, markDirectConversationRead, sendDirectMessage, unblockDirectChatUser, type DirectChatFetcher,
 } from '../src/directChat/directChatApi';
 import { directChatPollDelay } from '../src/directChat/pollingPolicy';
 
@@ -12,11 +12,11 @@ const CONVERSATION='97100000-0000-4000-8000-000000000001', PROFILE='97000000-000
 test('direct chat helpers use only the dedicated REST surface',async()=>{
   const calls:Array<{endpoint:string;method?:string;body?:string}>=[];
   const fetcher:DirectChatFetcher=async<T>(endpoint,options)=>{calls.push({endpoint,method:options?.method,body:options?.body as string|undefined});return ({conversation_id:CONVERSATION,conversations:[],messages:[],next_cursor:null,message:{},read_at:''}) as T;};
-  await createDirectConversation(PROFILE,null,fetcher); await listDirectConversations(null,fetcher);
+  await listDirectChatEligibleContacts(fetcher); await createDirectConversation(PROFILE,null,fetcher); await listDirectConversations(null,fetcher);
   await listDirectMessages(CONVERSATION,null,fetcher); await sendDirectMessage(CONVERSATION,'hello','97200000-0000-4000-8000-000000000001',fetcher);
   await markDirectConversationRead(CONVERSATION,fetcher); await blockDirectChatUser(PROFILE,fetcher); await unblockDirectChatUser(PROFILE,fetcher);
   assert.deepEqual(calls.map(({endpoint,method})=>[method??'GET',endpoint]),[
-    ['POST','/api/direct-conversations'],['GET','/api/direct-conversations?limit=25'],
+    ['GET','/api/direct-chat/eligible-contacts'],['POST','/api/direct-conversations'],['GET','/api/direct-conversations?limit=25'],
     ['GET',`/api/direct-conversations/${CONVERSATION}/messages?limit=50`],['POST',`/api/direct-conversations/${CONVERSATION}/messages`],
     ['POST',`/api/direct-conversations/${CONVERSATION}/read`],['POST',`/api/direct-chat/blocks/${PROFILE}`],['DELETE',`/api/direct-chat/blocks/${PROFILE}`],
   ]);
@@ -54,12 +54,10 @@ test('Messages navigation and eligible recruitment actions are present without p
   assert.doesNotMatch(profile,/createDirectConversation|direct-chat/i);
 });
 
-test('Start conversation derives candidates only from accepted project relationships',()=>{
+test('Start conversation uses the relationship-authorized eligible-contact projection',()=>{
   const source=readFileSync(path.resolve('src/components/DirectChatTab.tsx'),'utf8');
-  assert.match(source,/listMyProjectApplications/);
-  assert.match(source,/listMyProjectInvitations/);
-  assert.match(source,/application\.status !== 'accepted'/);
-  assert.match(source,/invitation\.status !== 'accepted'/);
+  assert.match(source,/listDirectChatEligibleContacts/);
+  assert.doesNotMatch(source,/listMyProjectApplications|listMyProjectInvitations/);
   assert.match(source,/createDirectConversation\(candidate\.profileId, candidate\.projectId\)/);
   assert.match(source,/role="dialog"/);
   assert.match(source,/useDialogFocus\(\{ open: startOpen/);

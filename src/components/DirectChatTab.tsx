@@ -1,17 +1,18 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, MessageCircle, Plus, Send, UsersRound, X } from 'lucide-react';
-import type { Language, ProjectApplication, ProjectInvitation } from '../types';
+import type { Language } from '../types';
 import {
   createDirectConversation,
+  listDirectChatEligibleContacts,
   listDirectConversations,
   listDirectMessages,
   markDirectConversationRead,
   sendDirectMessage,
+  type DirectChatEligibleContact,
   type DirectConversation,
   type DirectMessage,
 } from '../directChat/directChatApi';
 import { directChatPollDelay } from '../directChat/pollingPolicy';
-import { listMyProjectApplications, listMyProjectInvitations } from '../projects/projectApi';
 import { Button, EmptyState, LoadingState } from './ui';
 import { useDialogFocus } from '../hooks/useDialogFocus';
 
@@ -52,19 +53,16 @@ function errorText(_error: unknown, lang: Language) {
   return TEXT[lang].error;
 }
 
-function acceptedCandidates(applications: ProjectApplication[], invitations: ProjectInvitation[], lang: Language): ConversationCandidate[] {
+function eligibleCandidates(contacts: DirectChatEligibleContact[], lang: Language): ConversationCandidate[] {
   const copy = TEXT[lang];
-  const rows: ConversationCandidate[] = [];
-  for (const application of applications) {
-    const project = application.role?.project;
-    if (application.status !== 'accepted' || !project) continue;
-    rows.push({ key: `application-${application.id}`, profileId: project.owner_id, projectId: application.project_id, name: copy.owner, project: project.title, context: application.role?.title ?? copy.collaborator });
-  }
-  for (const invitation of invitations) {
-    const project = invitation.role?.project;
-    if (invitation.status !== 'accepted' || !project || !invitation.inviter) continue;
-    rows.push({ key: `invitation-${invitation.id}`, profileId: invitation.inviter.id, projectId: invitation.project_id, name: invitation.inviter.display_name || invitation.inviter.username || copy.collaborator, project: project.title, context: invitation.role?.title ?? copy.collaborator });
-  }
+  const rows = contacts.map((contact): ConversationCandidate => ({
+    key: `${contact.profile.id}:${contact.project_id}`,
+    profileId: contact.profile.id,
+    projectId: contact.project_id,
+    name: contact.profile.display_name || contact.profile.username || copy.collaborator,
+    project: contact.project_title,
+    context: contact.relationship_kind === 'owner' ? copy.owner : contact.role_title || copy.collaborator,
+  }));
   return [...new Map(rows.map((row) => [`${row.profileId}:${row.projectId}`, row])).values()];
 }
 
@@ -150,8 +148,8 @@ export function DirectChatTab({ authenticated, currentUserId, lang, initialConve
   async function openStartConversation(): Promise<void> {
     setStartOpen(true); setStartLoading(true); setError('');
     try {
-      const [applications, invitations] = await Promise.all([listMyProjectApplications(), listMyProjectInvitations()]);
-      setCandidates(acceptedCandidates(applications, invitations, lang));
+      const { contacts } = await listDirectChatEligibleContacts();
+      setCandidates(eligibleCandidates(contacts, lang));
     } catch (requestError) { setError(errorText(requestError, lang)); }
     finally { setStartLoading(false); }
   }

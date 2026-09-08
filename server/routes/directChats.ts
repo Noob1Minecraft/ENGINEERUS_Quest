@@ -34,6 +34,12 @@ export function createDirectChatsRouter(
   recordEvent?: ProductEventRecorder,
 ): Router {
   const router = Router();
+  router.get("/api/direct-chat/eligible-contacts", authenticate, readRateLimit, async (_request, response) => {
+    try {
+      const contacts = await repository.listEligibleContacts(response.locals.auth.accessToken);
+      response.json({ contacts });
+    } catch (error) { sendPersistenceError(response, error); }
+  });
   router.post("/api/direct-conversations", authenticate, createRateLimit, async (request, response) => {
     try {
       const parsed = createSchema.safeParse(request.body);

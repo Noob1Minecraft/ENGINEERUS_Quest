@@ -53,6 +53,7 @@ values
   ('public.mark_direct_conversation_read(uuid)'::regprocedure, 'AUTH_RPC'),
   ('public.block_direct_chat_user(uuid)'::regprocedure, 'AUTH_RPC'),
   ('public.unblock_direct_chat_user(uuid)'::regprocedure, 'AUTH_RPC'),
+  ('public.list_direct_chat_eligible_contacts()'::regprocedure, 'AUTH_RPC'),
   ('public.award_xp(uuid,integer,text,text,text,text,jsonb)'::regprocedure, 'SERVICE_INTERNAL'),
   ('public.record_user_progress(uuid,integer,integer,integer,text)'::regprocedure, 'SERVICE_INTERNAL'),
   ('public.begin_ai_exchange(uuid,uuid,text,text,text)'::regprocedure, 'SERVICE_INTERNAL'),
@@ -66,7 +67,7 @@ values
 
 select is(
   (select count(*)::integer from expected_security_definers),
-  37,
+  38,
   'the SECURITY DEFINER classification inventory contains every application function'
 );
 
@@ -92,7 +93,7 @@ select is(
     where function_schema.nspname = 'public'
       and function_record.prosecdef
   ),
-  37,
+  38,
   'the public schema has no unclassified SECURITY DEFINER function'
 );
 
@@ -103,7 +104,7 @@ select is(
     join pg_proc function_record on function_record.oid = expected.function_oid
     where function_record.prosecdef
   ),
-  37,
+  38,
   'every classified function remains SECURITY DEFINER'
 );
 
@@ -114,7 +115,7 @@ select is(
     join pg_proc function_record on function_record.oid = expected.function_oid
     where function_record.proconfig @> array['search_path=""']::text[]
   ),
-  37,
+  38,
   'every classified SECURITY DEFINER function fixes search_path to empty'
 );
 
@@ -125,7 +126,7 @@ select is(
     join pg_proc function_record on function_record.oid = expected.function_oid
     where pg_get_userbyid(function_record.proowner) = 'postgres'
   ),
-  37,
+  38,
   'function ownership remains postgres'
 );
 

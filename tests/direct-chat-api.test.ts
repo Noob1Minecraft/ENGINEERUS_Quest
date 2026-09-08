@@ -11,6 +11,7 @@ const NOW='2026-08-24T08:00:00.000Z';
 const message: DirectMessage={ id:MESSAGE,conversation_id:CONVERSATION,sender_id:USER,client_message_id:'96300000-0000-4000-8000-000000000001',content:'Hello',created_at:NOW,edited_at:null };
 
 function repository(overrides: Partial<DirectChatRepository>={}): DirectChatRepository { return {
+  listEligibleContacts:async()=>[],
   getOrCreate:async()=>({conversation_id:CONVERSATION}), list:async()=>({conversations:[],next_cursor:null}),
   listMessages:async()=>({messages:[message],next_cursor:null}), send:async()=>message,
   markRead:async()=>({read_at:NOW}), block:async()=>{}, unblock:async()=>{}, ...overrides,
@@ -23,6 +24,22 @@ test('conversation creation forwards only verified token and target relationship
   let call:unknown; const repo=repository({getOrCreate:async(token,target,project)=>{call={token,target,project};return {conversation_id:CONVERSATION};}});
   await withServer(appFor(repo),async base=>{const response=await fetch(`${base}/api/direct-conversations`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({target_profile_id:TARGET,project_id:null})});assert.equal(response.status,201);});
   assert.deepEqual(call,{token:'safe-token',target:TARGET,project:null});
+});
+
+test('eligible contacts use the authenticated relationship projection and expose only safe peer fields', async()=>{
+  let tokenReceived='';
+  const repo=repository({listEligibleContacts:async(token)=>{tokenReceived=token;return [{
+    profile:{id:TARGET,username:'peer',display_name:'Peer Engineer',avatar_url:null},
+    project_id:'96400000-0000-4000-8000-000000000001',project_title:'Safe project',
+    role_title:'Mechanical engineer',relationship_kind:'member',
+  }];}});
+  await withServer(appFor(repo),async base=>{
+    const response=await fetch(`${base}/api/direct-chat/eligible-contacts`);
+    assert.equal(response.status,200);
+    const body=await response.json() as Record<string,unknown>;
+    assert.doesNotMatch(JSON.stringify(body),/email|phone|telegram|private_settings|oauth|auth_metadata/i);
+  });
+  assert.equal(tokenReceived,'safe-token');
 });
 
 test('client cannot supply sender, members, timestamps, or arbitrary conversation identity',async()=>{

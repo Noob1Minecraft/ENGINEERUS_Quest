@@ -11,6 +11,17 @@ export type DirectConversation = {
   id: string; other_user: DirectChatProfile | null; created_from_project_id: string | null;
   created_at: string; updated_at: string; last_message: DirectMessagePreview | null; unread_count: number;
 };
+export type DirectChatEligibleContact = {
+  profile: DirectChatProfile;
+  project_id: string;
+  project_title: string;
+  role_title: string | null;
+  relationship_kind: 'owner' | 'member';
+};
+
+export async function listDirectChatEligibleContacts(fetcher: DirectChatFetcher = apiFetch) {
+  return fetcher<{ contacts: DirectChatEligibleContact[] }>('/api/direct-chat/eligible-contacts');
+}
 
 export async function createDirectConversation(targetProfileId: string, projectId?: string | null, fetcher: DirectChatFetcher = apiFetch) {
   return fetcher<{ conversation_id: string }>('/api/direct-conversations', {

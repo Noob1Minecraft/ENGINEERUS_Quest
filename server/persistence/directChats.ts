@@ -31,6 +31,22 @@ export type DirectConversation = {
   unread_count: number;
 };
 
+export type DirectChatEligibleContact = {
+  profile: DirectChatProfile;
+  project_id: string;
+  project_title: string;
+  role_title: string | null;
+  relationship_kind: "owner" | "member";
+};
+
+type EligibleContactRow = DirectChatProfile & {
+  profile_id: string;
+  project_id: string;
+  project_title: string;
+  role_title: string | null;
+  relationship_kind: "owner" | "member";
+};
+
 type ConversationRow = {
   id: string;
   other_user_id: string;
@@ -69,6 +85,7 @@ export type ConversationCursor = { updatedAt: string; id: string };
 export type MessageCursor = { createdAt: string; id: string };
 
 export type DirectChatRepository = {
+  listEligibleContacts(accessToken: string): Promise<DirectChatEligibleContact[]>;
   getOrCreate(accessToken: string, targetProfileId: string, projectId?: string | null): Promise<{ conversation_id: string }>;
   list(accessToken: string, limit: number, cursor?: ConversationCursor): Promise<{ conversations: DirectConversation[]; next_cursor: ConversationCursor | null }>;
   listMessages(accessToken: string, conversationId: string, limit: number, cursor?: MessageCursor): Promise<{ messages: DirectMessage[]; next_cursor: MessageCursor | null }>;
@@ -81,6 +98,24 @@ export type DirectChatRepository = {
 export function createDirectChatRepository(env: ServerEnv): DirectChatRepository {
   const admin = createSupabaseAdminClient(env);
   return {
+    async listEligibleContacts(accessToken) {
+      const client = createSupabaseUserClient(env, accessToken);
+      const { data, error } = await client.rpc("list_direct_chat_eligible_contacts");
+      if (error) failure(error);
+      return ((data ?? []) as EligibleContactRow[]).map((row) => ({
+        profile: {
+          id: row.profile_id,
+          username: row.username,
+          display_name: row.display_name,
+          avatar_url: row.avatar_url,
+        },
+        project_id: row.project_id,
+        project_title: row.project_title,
+        role_title: row.role_title,
+        relationship_kind: row.relationship_kind,
+      }));
+    },
+
     async getOrCreate(accessToken, targetProfileId, projectId = null) {
       const client = createSupabaseUserClient(env, accessToken);
       const { data, error } = await client.rpc("get_or_create_direct_conversation", {

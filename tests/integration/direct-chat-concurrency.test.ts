@@ -35,9 +35,11 @@ test('concurrent conversation creation and message retry remain single-row idemp
       p_skill_ids: [], p_skill_requirements: [], p_skill_weights: [],
     });
     if (role.error) throw role.error;
-    const application = await member.client.rpc('create_project_application', { p_role_id: role.data, p_note: '' });
-    if (application.error) throw application.error;
-    const accepted = await owner.client.rpc('accept_project_application', { p_application_id: application.data });
+    const invitation = await owner.client.rpc('create_project_invitation', {
+      p_role_id: role.data, p_invitee_id: member.id, p_note: '', p_expires_at: null,
+    });
+    if (invitation.error) throw invitation.error;
+    const accepted = await member.client.rpc('accept_project_invitation', { p_invitation_id: invitation.data });
     if (accepted.error) throw accepted.error;
 
     const attempts = await Promise.all([
