@@ -9,18 +9,20 @@ interface BottomNavProps {
   activeTab: string;
   onSelectTab: (tab: string) => void;
   lang: Language;
+  showAdmin?: boolean;
 }
 
 const PRIMARY_IDS = ['home', 'ai', 'projects', 'messages'] as const;
 const PRIMARY_ICONS = { home: LayoutGrid, ai: Sparkles, projects: BriefcaseBusiness, messages: MessageCircle };
-const MORE_IDS = APP_NAVIGATION_ITEMS.map((item) => item.id).filter((id) => !PRIMARY_IDS.includes(id as typeof PRIMARY_IDS[number]));
-
-export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onSelectTab, lang }) => {
+export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onSelectTab, lang, showAdmin = false }) => {
+  const moreIds = APP_NAVIGATION_ITEMS.map((item) => item.id)
+    .filter((id) => !PRIMARY_IDS.includes(id as typeof PRIMARY_IDS[number]))
+    .filter((id) => id !== 'admin' || showAdmin);
   const [moreOpen, setMoreOpen] = useState(false);
   const moreButton = useRef<HTMLButtonElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLElement>(null);
-  const moreActive = MORE_IDS.includes(activeTab);
+  const moreActive = moreIds.includes(activeTab);
   const moreLabel = lang === 'ru' ? 'Ещё' : lang === 'kk' ? 'Тағы' : 'More';
 
   useDialogFocus({ open: moreOpen, onClose: () => setMoreOpen(false), dialogRef, initialFocusRef: closeButton });
@@ -41,7 +43,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onSelectTab, la
               <button ref={closeButton} type="button" className="eq-icon-button" onClick={() => setMoreOpen(false)} aria-label={lang === 'ru' ? 'Закрыть' : lang === 'kk' ? 'Жабу' : 'Close'}><X aria-hidden="true" /></button>
             </div>
             <nav className="eq-mobile-menu__grid" aria-label={lang === 'ru' ? 'Дополнительная навигация' : lang === 'kk' ? 'Қосымша навигация' : 'More navigation'}>
-              {MORE_IDS.map((id) => {
+              {moreIds.map((id) => {
                 const item = getNavigationItem(id)!;
                 const Icon = item.icon;
                 const active = activeTab === id;

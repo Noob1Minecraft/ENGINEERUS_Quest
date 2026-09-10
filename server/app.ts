@@ -25,6 +25,8 @@ import { createBetaRepository } from "./persistence/beta";
 import { createBetaRouter } from "./routes/beta";
 import { createGamificationRepository } from "./persistence/gamification";
 import { createGamificationRouter } from "./routes/gamification";
+import { createAdminRepository } from "./persistence/admin";
+import { createAdminRouter } from "./routes/admin";
 
 const DEPLOYED_ALLOWED_ORIGINS = [
   "https://engineerus-quest.vercel.app",
@@ -94,6 +96,7 @@ export function createApp(env: ServerEnv, options: {
   const directChats = createDirectChatRepository(env);
   const beta = createBetaRepository(env);
   const gamification = createGamificationRepository(env);
+  const admin = createAdminRepository(env);
   app.use(createMeRouter(
     authenticate,
     rateLimiter,
@@ -104,6 +107,7 @@ export function createApp(env: ServerEnv, options: {
   app.use(createProfilesRouter(authenticate, rateLimiter, profiles));
   app.use(createBetaRouter(authenticate, rateLimiter, beta));
   app.use(createGamificationRouter(authenticate, rateLimiter, gamification));
+  app.use(createAdminRouter(authenticate, rateLimiter, admin));
   app.use(createProjectsRouter(authenticate, rateLimiter, projects, beta.recordEvent));
   app.use(createProjectRecruitmentRouter(authenticate, rateLimiter, projectRecruitment, beta.recordEvent));
   app.use(createEngiMatchRouter(authenticate, createEngiMatchRateLimit(options.rateLimitStoreFactory), engimatch, beta.recordEvent));

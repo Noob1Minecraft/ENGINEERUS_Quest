@@ -8,9 +8,10 @@ type AppSidebarProps = {
   activeTab: string;
   language: Language;
   onSelectTab: (tab: string) => void;
+  showAdmin?: boolean;
 };
 
-export function AppSidebar({ activeTab, language, onSelectTab }: AppSidebarProps) {
+export function AppSidebar({ activeTab, language, onSelectTab, showAdmin = false }: AppSidebarProps) {
   return (
     <aside className="eq-sidebar" aria-label={language === 'ru' ? 'Основная навигация' : language === 'kk' ? 'Негізгі навигация' : 'Primary navigation'}>
       <button
@@ -26,7 +27,7 @@ export function AppSidebar({ activeTab, language, onSelectTab }: AppSidebarProps
           <section key={group.id} className="eq-sidebar__group" aria-labelledby={`nav-group-${group.id}`}>
             <h2 id={`nav-group-${group.id}`} className="eq-sidebar__label">{group.labels[language]}</h2>
             <nav className="eq-sidebar__nav">
-              {group.items.map((item) => {
+              {group.items.filter((item) => item.id !== 'admin' || showAdmin).map((item) => {
                 const Icon = item.icon;
                 const active = item.id === activeTab;
                 return (

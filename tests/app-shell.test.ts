@@ -28,14 +28,18 @@ const user: UserProfile = {
 
 test('navigation registry preserves every existing product destination', () => {
   assert.deepEqual(APP_NAVIGATION_ITEMS.map(({ id }) => id).sort(), [
-    'ai', 'documents', 'engimatch', 'home', 'leaderboard', 'messages', 'profile', 'projects', 'quests', 'roadmap',
+    'admin', 'ai', 'documents', 'engimatch', 'home', 'leaderboard', 'messages', 'profile', 'projects', 'quests', 'roadmap',
   ]);
   assert.equal(new Set(APP_NAVIGATION_ITEMS.map(({ id }) => id)).size, APP_NAVIGATION_ITEMS.length);
 });
 
 test('desktop shell navigation exposes groups and a semantic active destination', () => {
-  const markup = renderToStaticMarkup(React.createElement(AppSidebar, {
+  const normalMarkup = renderToStaticMarkup(React.createElement(AppSidebar, {
     activeTab: 'documents', language: 'ru', onSelectTab: () => undefined,
+  }));
+  assert.doesNotMatch(normalMarkup, /Администрирование/);
+  const markup = renderToStaticMarkup(React.createElement(AppSidebar, {
+    activeTab: 'documents', language: 'ru', onSelectTab: () => undefined, showAdmin: true,
   }));
   for (const item of APP_NAVIGATION_ITEMS) assert.match(markup, new RegExp(item.labels.ru));
   assert.match(markup, /aria-current="page"[^>]*class="[^"]*is-active[^"]*"[^>]*>[^<]*<svg[^>]*>[\s\S]*Документы и изображения/);

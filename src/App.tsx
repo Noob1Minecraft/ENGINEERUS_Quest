@@ -18,6 +18,7 @@ import { GamificationPanel } from './components/GamificationPanel';
 import { loadGamification, type GamificationState } from './gamification/gamificationApi';
 import { ErrorState, LoadingState } from './components/ui';
 import { resolveStoredLanguage, syncDocumentLanguage } from './language';
+import { loadAdminAccess } from './admin/adminApi';
 import {
   completeBetaOnboarding,
   loadBetaState,
@@ -37,6 +38,7 @@ const ProjectsTab = lazy(() => import('./components/ProjectsTab').then(({ Projec
 const EngiMatchTab = lazy(() => import('./components/EngiMatchTab').then(({ EngiMatchTab: component }) => ({ default: component })));
 const DirectChatTab = lazy(() => import('./components/DirectChatTab').then(({ DirectChatTab: component }) => ({ default: component })));
 const DocumentsTab = lazy(() => import('./components/DocumentsTab').then(({ DocumentsTab: component }) => ({ default: component })));
+const AdminTab = lazy(() => import('./components/AdminTab').then(({ AdminTab: component }) => ({ default: component })));
 
 const GUEST_USER: UserProfile = {
   id: 'guest',
@@ -84,16 +86,18 @@ export default function App() {
   const auth = useAuth();
   const [lang, setLang] = useState<Language>(() => resolveStoredLanguage(localStorage.getItem('lang')));
 
-  const [activeTab, setActiveTab] = useState<string>('home');
+  const [activeTab, setActiveTab] = useState<string>(() => window.location.pathname === '/admin' ? 'admin' : 'home');
   const [isAuthOpen, setIsAuthOpen] = useState<boolean>(false);
   const [betaParticipant, setBetaParticipant] = useState<BetaParticipant | null>(null);
   const [betaParticipantStatus, setBetaParticipantStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [betaCompleting, setBetaCompleting] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [adminAccess, setAdminAccess] = useState<'idle' | 'loading' | 'allowed' | 'denied' | 'error'>('idle');
   const [aiDocument, setAiDocument] = useState<{ id: string; name: string } | null>(null);
   const [aiImages, setAiImages] = useState<Array<{ id: string; name: string }>>([]);
   const trackedBetaViews = useRef(new Set<string>());
   const betaLoadAttempt = useRef(0);
+  const adminAccessAttempt = useRef(0);
 
   const [user, setUser] = useState<UserProfile>(GUEST_USER);
   const [account, setAccount] = useState<CanonicalUser | null>(null);
@@ -113,6 +117,20 @@ export default function App() {
     syncDocumentLanguage(lang);
     localStorage.setItem('lang', lang);
   }, [lang]);
+
+  useEffect(() => {
+    const handlePopState = () => setActiveTab(window.location.pathname === '/admin' ? 'admin' : 'home');
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'admin' && window.location.pathname !== '/admin') {
+      window.history.pushState(null, '', '/admin');
+    } else if (activeTab !== 'admin' && window.location.pathname === '/admin') {
+      window.history.pushState(null, '', '/');
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     // Mandatory attribution token verification check
@@ -182,6 +200,23 @@ export default function App() {
 
     return () => { active = false; };
   }, [auth.loading, auth.user]);
+
+  const checkAdminAccess = useCallback(async () => {
+    const attempt = ++adminAccessAttempt.current;
+    if (!auth.user) {
+      setAdminAccess('idle');
+      return;
+    }
+    setAdminAccess('loading');
+    try {
+      const allowed = await loadAdminAccess();
+      if (adminAccessAttempt.current === attempt) setAdminAccess(allowed ? 'allowed' : 'denied');
+    } catch {
+      if (adminAccessAttempt.current === attempt) setAdminAccess('error');
+    }
+  }, [auth.user]);
+
+  useEffect(() => { if (!auth.loading) void checkAdminAccess(); }, [auth.loading, checkAdminAccess]);
 
   const loadBetaParticipant = useCallback(async () => {
     const attempt = ++betaLoadAttempt.current;
@@ -267,7 +302,7 @@ export default function App() {
 
   const betaProductArea: BetaFeedbackInput['product_area'] = activeTab === 'home' ? 'dashboard'
     : activeTab === 'ai' ? 'ai_tutor'
-    : activeTab === 'leaderboard' || activeTab === 'roadmap' ? 'other'
+    : activeTab === 'leaderboard' || activeTab === 'roadmap' || activeTab === 'admin' ? 'other'
     : activeTab as BetaFeedbackInput['product_area'];
 
   const handleCompleteQuest = async (questId: string) => {
@@ -321,7 +356,7 @@ export default function App() {
       />
 
       <div className="eq-app__body">
-        <AppSidebar activeTab={activeTab} language={lang} onSelectTab={setActiveTab} />
+        <AppSidebar activeTab={activeTab} language={lang} onSelectTab={setActiveTab} showAdmin={adminAccess === 'allowed'} />
         <div className="eq-app__column">
       <main className={`eq-app__main space-y-5 md:space-y-8${activeTab === 'ai' ? ' eq-app__main--workspace' : ''}`}>
         {/* User Profile Stats Header Bar (Incorporating exact design from screenshot) */}
@@ -507,6 +542,14 @@ export default function App() {
             onUseWithTutor={(document: AiDocument) => { setAiDocument({ id: document.id, name: document.original_filename }); setSelectedAiModule('tutor'); setActiveTab('ai'); }}
             onUseImagesWithTutor={(images: AiImage[]) => { setAiImages(images.map((image) => ({ id: image.id, name: image.original_filename }))); setSelectedAiModule('tutor'); setActiveTab('ai'); }} />
         )}
+
+        {activeTab === 'admin' && (
+          !auth.user ? <ErrorState title={lang === 'ru' ? 'Войдите в аккаунт' : lang === 'kk' ? 'Аккаунтқа кіріңіз' : 'Sign in required'} description={lang === 'ru' ? 'Административная панель доступна только после входа.' : lang === 'kk' ? 'Әкімшілік панельге кіру үшін аккаунтқа кіріңіз.' : 'The admin panel is available only after sign-in.'} action={<button type="button" className="eq-button eq-button--primary" onClick={() => setIsAuthOpen(true)}>{lang === 'ru' ? 'Войти' : lang === 'kk' ? 'Кіру' : 'Sign in'}</button>} />
+            : adminAccess === 'loading' || adminAccess === 'idle' ? <LoadingState label={lang === 'ru' ? 'Проверяем доступ…' : lang === 'kk' ? 'Қолжетімділік тексерілуде…' : 'Checking access…'} />
+              : adminAccess === 'allowed' ? <AdminTab lang={lang} currentUserId={auth.user.id} />
+                : adminAccess === 'error' ? <ErrorState title={lang === 'ru' ? 'Не удалось проверить доступ' : lang === 'kk' ? 'Қолжетімділікті тексеру мүмкін болмады' : 'Could not verify access'} action={<button type="button" className="eq-button eq-button--secondary" onClick={() => void checkAdminAccess()}>{lang === 'ru' ? 'Повторить' : lang === 'kk' ? 'Қайталау' : 'Try again'}</button>} />
+                  : <ErrorState title={lang === 'ru' ? 'Нет доступа' : lang === 'kk' ? 'Қолжетімділік жоқ' : 'Access denied'} description={lang === 'ru' ? 'Для этого раздела нужна роль администратора.' : lang === 'kk' ? 'Бұл бөлім үшін әкімші рөлі қажет.' : 'An administrator role is required for this area.'} />
+        )}
         </Suspense>
 
       </main>
@@ -533,7 +576,7 @@ export default function App() {
         </div>
       </div>
 
-      <BottomNav activeTab={activeTab} onSelectTab={setActiveTab} lang={lang} />
+      <BottomNav activeTab={activeTab} onSelectTab={setActiveTab} lang={lang} showAdmin={adminAccess === 'allowed'} />
 
       {/* Modals */}
       <AuthModal

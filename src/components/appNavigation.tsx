@@ -7,6 +7,7 @@ import {
   Flag,
   LayoutDashboard,
   MessageCircle,
+  ShieldCheck,
   Trophy,
   UserRound,
   UsersRound,
@@ -58,6 +59,7 @@ export const APP_NAVIGATION_GROUPS: AppNavigationGroup[] = [
     items: [
       { id: 'leaderboard', icon: Trophy, labels: { ru: 'Таблица лидеров', kk: 'Көшбасшылар', en: 'Leaderboard' } },
       { id: 'profile', icon: UserRound, labels: { ru: 'Профиль', kk: 'Профиль', en: 'Profile' } },
+      { id: 'admin', icon: ShieldCheck, labels: { ru: 'Администрирование', kk: 'Әкімшілендіру', en: 'Administration' } },
     ],
   },
 ];
