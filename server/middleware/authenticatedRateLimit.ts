@@ -1,6 +1,6 @@
 import { ipKeyGenerator, rateLimit, type Options } from "express-rate-limit";
 import type { RequestHandler } from "express";
-import type { AbuseControlStore, AiCapacityStore, RateLimitStoreFactory } from "../security/securityControlStore";
+import type { AbuseBudgetOperation, AbuseControlStore, AiCapacityStore, RateLimitStoreFactory } from "../security/securityControlStore";
 
 const WINDOW_MS = 15 * 60 * 1000;
 
@@ -48,9 +48,19 @@ export function createAiRateLimit(factory?: RateLimitStoreFactory, limit = 20) {
   });
 }
 
-export function createAuthoritativeAiRateLimit(
+const authoritativeResponses: Record<AbuseBudgetOperation, { code: string; message: string }> = {
+  ai_request: { code: "ai_rate_limit_exceeded", message: "AI request budget exceeded. Try again later." },
+  ai_vision: { code: "vision_rate_limit_exceeded", message: "Vision request budget exceeded. Try again later." },
+  engimatch: { code: "engimatch_rate_limit_exceeded", message: "Too many matching requests. Try again later." },
+  document_upload: { code: "document_upload_rate_limit_exceeded", message: "Too many document uploads. Try again later." },
+  image_upload: { code: "image_upload_rate_limit_exceeded", message: "Too many image uploads. Try again later." },
+  beta_feedback: { code: "beta_feedback_rate_limit_exceeded", message: "Too much feedback was submitted. Try again later." },
+  admin_mutation: { code: "admin_mutation_rate_limit_exceeded", message: "Too many administrative changes. Try again later." },
+};
+
+export function createAuthoritativeRateLimit(
   store: AbuseControlStore,
-  operation: "ai_request" | "ai_vision" = "ai_request",
+  operation: AbuseBudgetOperation,
 ): RequestHandler {
   return async (request, response, next) => {
     if (operation === "ai_vision"
@@ -64,14 +74,10 @@ export function createAuthoritativeAiRateLimit(
       response.setHeader("RateLimit-Remaining", String(result.remaining));
       response.setHeader("RateLimit-Reset", String(Math.max(0, Math.ceil((result.resetAt.getTime() - Date.now()) / 1000))));
       if (!result.allowed) {
+        const error = authoritativeResponses[operation];
         response.setHeader("Retry-After", String(Math.max(1, Math.ceil((result.resetAt.getTime() - Date.now()) / 1000))));
         response.status(429).json({
-          error: {
-            code: operation === "ai_vision" ? "vision_rate_limit_exceeded" : "ai_rate_limit_exceeded",
-            message: operation === "ai_vision"
-              ? "Vision request budget exceeded. Try again later."
-              : "AI request budget exceeded. Try again later.",
-          },
+          error,
         });
         return;
       }
@@ -82,6 +88,13 @@ export function createAuthoritativeAiRateLimit(
       });
     }
   };
+}
+
+export function createAuthoritativeAiRateLimit(
+  store: AbuseControlStore,
+  operation: "ai_request" | "ai_vision" = "ai_request",
+): RequestHandler {
+  return createAuthoritativeRateLimit(store, operation);
 }
 
 export function createAiConcurrencyGuard(store: AiCapacityStore): RequestHandler {

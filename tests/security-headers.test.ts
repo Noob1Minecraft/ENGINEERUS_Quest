@@ -7,8 +7,10 @@ import { loadServerEnv } from "../server/config/env";
 import {
   CONTENT_SECURITY_POLICY_HEADER,
   PREVIEW_API_ORIGIN,
+  PREVIEW_SUPABASE_ORIGIN,
   PREVIEW_CSP_VALUE,
   PRODUCTION_API_ORIGIN,
+  PRODUCTION_SUPABASE_ORIGIN,
   PRODUCTION_CSP_VALUE,
   createContentSecurityPolicyDirectives,
   createFrontendContentSecurityPolicyDirectives,
@@ -37,8 +39,8 @@ test("production CSP is restrictive and contains the required Engineerus origins
   assert.deepEqual(directives["form-action"], ["'self'"]);
   assert.ok(directives["connect-src"].includes(PRODUCTION_API_ORIGIN));
   assert.equal(directives["connect-src"].includes(PREVIEW_API_ORIGIN), false);
-  assert.ok(directives["connect-src"].includes("https://gsudtcyoaknehfixaxha.supabase.co"));
-  assert.ok(directives["connect-src"].includes("wss://gsudtcyoaknehfixaxha.supabase.co"));
+  assert.ok(directives["connect-src"].includes(PRODUCTION_SUPABASE_ORIGIN));
+  assert.ok(directives["connect-src"].includes(PRODUCTION_SUPABASE_ORIGIN.replace("https://", "wss://")));
   assert.equal(PRODUCTION_CSP_VALUE.includes("groq"), false);
   assert.equal(PRODUCTION_CSP_VALUE.includes("unsafe-eval"), false);
   assert.equal(PRODUCTION_CSP_VALUE.includes("data:"), false);
@@ -54,8 +56,12 @@ test("Preview CSP allows only the Preview API while production allows only the p
 
   assert.ok(preview.includes(PREVIEW_API_ORIGIN));
   assert.equal(preview.includes(PRODUCTION_API_ORIGIN), false);
+  assert.ok(preview.includes(PREVIEW_SUPABASE_ORIGIN));
+  assert.equal(preview.includes(PRODUCTION_SUPABASE_ORIGIN), false);
   assert.ok(production.includes(PRODUCTION_API_ORIGIN));
   assert.equal(production.includes(PREVIEW_API_ORIGIN), false);
+  assert.ok(production.includes(PRODUCTION_SUPABASE_ORIGIN));
+  assert.equal(production.includes(PREVIEW_SUPABASE_ORIGIN), false);
   assert.equal(PREVIEW_CSP_VALUE.includes("*"), false);
   assert.equal(PRODUCTION_CSP_VALUE.includes("*"), false);
 });
@@ -70,7 +76,7 @@ test("development-only connection origins do not leak into the production policy
   assert.equal(production.some((source) => source.includes("127.0.0.1")), false);
 });
 
-test("Express emits the CSP in Report-Only mode without weakening Helmet headers", async () => {
+test("Express emits an enforcing CSP without weakening Helmet headers", async () => {
   await withServer(createApp(env), async (baseUrl) => {
     const response = await fetch(`${baseUrl}/health`);
     assert.equal(response.status, 200);
@@ -78,13 +84,13 @@ test("Express emits the CSP in Report-Only mode without weakening Helmet headers
       normalizeCsp(response.headers.get(CONTENT_SECURITY_POLICY_HEADER) ?? ""),
       normalizeCsp(PRODUCTION_CSP_VALUE),
     );
-    assert.equal(response.headers.get("content-security-policy"), null);
+    assert.equal(response.headers.get("content-security-policy-report-only"), null);
     assert.equal(response.headers.get("x-content-type-options"), "nosniff");
     assert.equal(response.headers.get("x-powered-by"), null);
   });
 });
 
-test("Vercel deploys host-scoped Report-Only CSP values and browser-only output directory", () => {
+test("Vercel deploys host-scoped enforcing CSP values and browser-only output directory", () => {
   const config = JSON.parse(readFileSync(path.resolve("vercel.json"), "utf8")) as {
     outputDirectory: string;
     headers: Array<{
@@ -99,7 +105,7 @@ test("Vercel deploys host-scoped Report-Only CSP values and browser-only output 
   assert.equal(config.outputDirectory, "dist");
   assert.equal(cspForHost("equest.kz"), PRODUCTION_CSP_VALUE);
   assert.equal(
-    cspForHost("engineerus-quest-git-feat-supabase-foundation-enginnerus.vercel.app"),
+    cspForHost("engineerus-quest-git-feat-security-hardening-c330f1-enginnerus.vercel.app"),
     PREVIEW_CSP_VALUE,
   );
   assert.equal(cspForHost("equest.kz")?.includes(PREVIEW_API_ORIGIN), false);
@@ -117,6 +123,6 @@ test("Vercel emits the two requested headers once without conflicting values", (
 
   assert.deepEqual(valuesFor("X-Content-Type-Options"), ["nosniff"]);
   assert.deepEqual(valuesFor("Referrer-Policy"), ["no-referrer"]);
-  assert.equal(valuesFor("Content-Security-Policy").length, 0);
+  assert.equal(valuesFor("Content-Security-Policy-Report-Only").length, 0);
   assert.equal(valuesFor(CONTENT_SECURITY_POLICY_HEADER).length > 0, true);
 });

@@ -1,8 +1,10 @@
-export const CONTENT_SECURITY_POLICY_HEADER = "Content-Security-Policy-Report-Only";
+export const CONTENT_SECURITY_POLICY_HEADER = "Content-Security-Policy";
 export const PRODUCTION_API_ORIGIN = "https://api.equest.kz";
 export const PREVIEW_API_ORIGIN = "https://engineerus-quest-supabase.onrender.com";
+export const PRODUCTION_SUPABASE_ORIGIN = "https://gsudtcyoaknehfixaxha.supabase.co";
+export const PREVIEW_SUPABASE_ORIGIN = "https://avalndchkvkoqxsnrvxm.supabase.co";
 
-const createDirectiveEntries = (apiOrigin: string) => [
+const createDirectiveEntries = (apiOrigin: string, supabaseOrigin: string) => [
   ["default-src", ["'self'"]],
   ["script-src", ["'self'"]],
   // React currently renders two progress indicators with style attributes.
@@ -14,8 +16,8 @@ const createDirectiveEntries = (apiOrigin: string) => [
   ["connect-src", [
     "'self'",
     apiOrigin,
-    "https://gsudtcyoaknehfixaxha.supabase.co",
-    "wss://gsudtcyoaknehfixaxha.supabase.co",
+    supabaseOrigin,
+    supabaseOrigin.replace("https://", "wss://"),
   ]],
   ["frame-ancestors", ["'none'"]],
   ["object-src", ["'none'"]],
@@ -28,19 +30,20 @@ const serializeDirectives = (entries: ReturnType<typeof createDirectiveEntries>)
   .join("; ");
 
 export const PRODUCTION_CSP_VALUE = serializeDirectives(
-  createDirectiveEntries(PRODUCTION_API_ORIGIN),
+  createDirectiveEntries(PRODUCTION_API_ORIGIN, PRODUCTION_SUPABASE_ORIGIN),
 );
 
 export const PREVIEW_CSP_VALUE = serializeDirectives(
-  createDirectiveEntries(PREVIEW_API_ORIGIN),
+  createDirectiveEntries(PREVIEW_API_ORIGIN, PREVIEW_SUPABASE_ORIGIN),
 );
 
 export function createFrontendContentSecurityPolicyDirectives(
   environment: "production" | "preview",
 ): Record<string, string[]> {
   const apiOrigin = environment === "production" ? PRODUCTION_API_ORIGIN : PREVIEW_API_ORIGIN;
+  const supabaseOrigin = environment === "production" ? PRODUCTION_SUPABASE_ORIGIN : PREVIEW_SUPABASE_ORIGIN;
   return Object.fromEntries(
-    createDirectiveEntries(apiOrigin).map(([directive, values]) => [directive, [...values]]),
+    createDirectiveEntries(apiOrigin, supabaseOrigin).map(([directive, values]) => [directive, [...values]]),
   ) as Record<string, string[]>;
 }
 

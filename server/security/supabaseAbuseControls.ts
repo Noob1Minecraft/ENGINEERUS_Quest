@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   AbuseBudgetResult,
+  AbuseBudgetOperation,
   AbuseControlStore,
   AiCapacityLease,
   AiCapacityStore,
@@ -16,7 +17,7 @@ type BudgetRow = {
 export class SupabaseAbuseControlStore implements AbuseControlStore, AiCapacityStore {
   constructor(private readonly client: SupabaseClient) {}
 
-  async consume(userId: string, operation: "ai_request" | "ai_vision"): Promise<AbuseBudgetResult> {
+  async consume(userId: string, operation: AbuseBudgetOperation): Promise<AbuseBudgetResult> {
     const { data, error } = await this.client.rpc("consume_abuse_budget", {
       p_actor_id: userId,
       p_operation: operation,

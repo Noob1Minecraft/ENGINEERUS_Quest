@@ -7,6 +7,7 @@ import { MemoryStore } from "express-rate-limit";
 import {
   createAiConcurrencyGuard,
   createAuthoritativeAiRateLimit,
+  createAuthoritativeRateLimit,
   createAiRateLimit,
   createAuthenticatedRateLimit,
   createDirectChatReadRateLimit,
@@ -120,6 +121,43 @@ test("authoritative AI budgets return 429 and fail closed when shared storage is
   });
 });
 
+test("authoritative endpoint budgets preserve operation-specific 429 responses", async () => {
+  const operations = [
+    ["engimatch", "engimatch_rate_limit_exceeded"],
+    ["document_upload", "document_upload_rate_limit_exceeded"],
+    ["image_upload", "image_upload_rate_limit_exceeded"],
+    ["beta_feedback", "beta_feedback_rate_limit_exceeded"],
+    ["admin_mutation", "admin_mutation_rate_limit_exceeded"],
+  ] as const;
+
+  for (const [operation, expectedCode] of operations) {
+    const store: AbuseControlStore = {
+      async consume(_userId, actualOperation) {
+        assert.equal(actualOperation, operation);
+        return { allowed: false, limit: 1, remaining: 0, resetAt: new Date(Date.now() + 60_000) };
+      },
+    };
+    const app = express();
+    app.post("/protected", authenticate, createAuthoritativeRateLimit(store, operation), (_request, response) => response.json({ ok: true }));
+    await withServer(app, async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/protected`, { method: "POST" });
+      assert.equal(response.status, 429);
+      assert.equal((await response.json() as { error: { code: string } }).error.code, expectedCode);
+    });
+  }
+});
+
+test("authoritative endpoint budgets fail closed when shared storage is unavailable", async () => {
+  const store: AbuseControlStore = { async consume() { throw new Error("database unavailable"); } };
+  const app = express();
+  app.post("/protected", authenticate, createAuthoritativeRateLimit(store, "engimatch"), (_request, response) => response.json({ ok: true }));
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/protected`, { method: "POST" });
+    assert.equal(response.status, 503);
+    assert.equal((await response.json() as { error: { code: string } }).error.code, "abuse_control_unavailable");
+  });
+});
+
 test("closing a client connection aborts provider work but does not release capacity early", async () => {
   const request = new (await import("node:events")).EventEmitter() as unknown as import("express").Request;
   const response = new (await import("node:events")).EventEmitter() as unknown as import("express").Response;
@@ -182,6 +220,12 @@ test("the application wires pre-auth protection and dedicated AI controls", () =
   assert.match(serverSource, /const aiRateLimit = createAuthoritativeAiRateLimit\(abuseControls\)/);
   assert.match(serverSource, /createAiConcurrencyGuard\(abuseControls\)/);
   assert.match(serverSource, /new SupabaseAbuseControlStore/);
+  assert.match(serverSource, /createApp\(env, \{ abuseControlStore: abuseControls \}\)/);
+  assert.match(serverSource, /createAuthoritativeRateLimit\(abuseControls, "document_upload"\)/);
+  assert.match(serverSource, /createAuthoritativeRateLimit\(abuseControls, "image_upload"\)/);
+  assert.match(appSource, /authoritative\?\.\("engimatch"\)/);
+  assert.match(appSource, /authoritative\?\.\("beta_feedback"\)/);
+  assert.match(appSource, /authoritative\?\.\("admin_mutation"\)/);
   assert.match(serverSource, /createAiRouter\(requireAuth, aiRateLimit/);
   assert.doesNotMatch(serverSource, /createAiRouter\(requireAuth, authenticatedRateLimit/);
 });

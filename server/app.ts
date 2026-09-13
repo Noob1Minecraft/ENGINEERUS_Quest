@@ -5,7 +5,7 @@ import type { ServerEnv } from "./config/env";
 import { createHealthRouter } from "./routes/health";
 import { createSupabaseAccessTokenVerifier } from "./auth/supabaseJwt";
 import { createRequireAuth } from "./middleware/requireAuth";
-import { createAuthenticatedRateLimit, createDirectChatCreateRateLimit, createDirectChatReadRateLimit, createDirectChatWriteRateLimit, createEngiMatchRateLimit, createPreAuthRateLimit } from "./middleware/authenticatedRateLimit";
+import { createAuthenticatedRateLimit, createAuthoritativeRateLimit, createDirectChatCreateRateLimit, createDirectChatReadRateLimit, createDirectChatWriteRateLimit, createEngiMatchRateLimit, createPreAuthRateLimit } from "./middleware/authenticatedRateLimit";
 import { createMeRouter } from "./routes/me";
 import { createProfilesRouter } from "./routes/profiles";
 import { createProfileRepository } from "./persistence/profiles";
@@ -18,7 +18,7 @@ import { createEngiMatchRouter } from "./routes/engimatch";
 import { createDirectChatRepository } from "./persistence/directChats";
 import { createDirectChatsRouter } from "./routes/directChats";
 import { createContentSecurityPolicyDirectives } from "./security/contentSecurityPolicy";
-import type { RateLimitStoreFactory } from "./security/securityControlStore";
+import type { AbuseControlStore, RateLimitStoreFactory } from "./security/securityControlStore";
 import { createRequestContext } from "./middleware/requestContext";
 import { securityLogger, type StructuredLogger } from "./security/structuredLogger";
 import { createBetaRepository } from "./persistence/beta";
@@ -29,9 +29,7 @@ import { createAdminRepository } from "./persistence/admin";
 import { createAdminRouter } from "./routes/admin";
 
 const DEPLOYED_ALLOWED_ORIGINS = [
-  "https://engineerus-quest.vercel.app",
-  "https://engineerus-quest-git-main-enginnerus.vercel.app",
-  "https://engineerus-quest-git-feat-supabase-foundation-enginnerus.vercel.app",
+  "https://equest.kz",
 ];
 
 const DEVELOPMENT_ALLOWED_ORIGINS = [
@@ -55,6 +53,7 @@ export function createAllowedOrigins(env: ServerEnv): Set<string> {
 
 export function createApp(env: ServerEnv, options: {
   rateLimitStoreFactory?: RateLimitStoreFactory;
+  abuseControlStore?: AbuseControlStore;
   logger?: StructuredLogger;
 } = {}): Express {
   const app = express();
@@ -68,7 +67,7 @@ export function createApp(env: ServerEnv, options: {
     contentSecurityPolicy: {
       useDefaults: false,
       directives: createContentSecurityPolicyDirectives(env.NODE_ENV),
-      reportOnly: true,
+      reportOnly: false,
     },
   }));
   app.use(express.json({ limit: "1mb" }));
@@ -97,6 +96,9 @@ export function createApp(env: ServerEnv, options: {
   const beta = createBetaRepository(env);
   const gamification = createGamificationRepository(env);
   const admin = createAdminRepository(env);
+  const authoritative = options.abuseControlStore
+    ? (operation: Parameters<typeof createAuthoritativeRateLimit>[1]) => createAuthoritativeRateLimit(options.abuseControlStore!, operation)
+    : undefined;
   app.use(createMeRouter(
     authenticate,
     rateLimiter,
@@ -105,12 +107,17 @@ export function createApp(env: ServerEnv, options: {
     beta.recordEvent,
   ));
   app.use(createProfilesRouter(authenticate, rateLimiter, profiles));
-  app.use(createBetaRouter(authenticate, rateLimiter, beta));
+  app.use(createBetaRouter(authenticate, rateLimiter, beta, authoritative?.("beta_feedback")));
   app.use(createGamificationRouter(authenticate, rateLimiter, gamification));
-  app.use(createAdminRouter(authenticate, rateLimiter, admin));
+  app.use(createAdminRouter(authenticate, rateLimiter, admin, authoritative?.("admin_mutation")));
   app.use(createProjectsRouter(authenticate, rateLimiter, projects, beta.recordEvent));
   app.use(createProjectRecruitmentRouter(authenticate, rateLimiter, projectRecruitment, beta.recordEvent));
-  app.use(createEngiMatchRouter(authenticate, createEngiMatchRateLimit(options.rateLimitStoreFactory), engimatch, beta.recordEvent));
+  app.use(createEngiMatchRouter(
+    authenticate,
+    authoritative?.("engimatch") ?? createEngiMatchRateLimit(options.rateLimitStoreFactory),
+    engimatch,
+    beta.recordEvent,
+  ));
   app.use(createDirectChatsRouter(
     authenticate,
     createDirectChatReadRateLimit(options.rateLimitStoreFactory),

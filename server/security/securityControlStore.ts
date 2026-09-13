@@ -20,8 +20,17 @@ export type AbuseBudgetResult = {
   resetAt: Date;
 };
 
+export type AbuseBudgetOperation =
+  | "ai_request"
+  | "ai_vision"
+  | "engimatch"
+  | "document_upload"
+  | "image_upload"
+  | "beta_feedback"
+  | "admin_mutation";
+
 export interface AbuseControlStore {
-  consume(userId: string, operation: "ai_request" | "ai_vision"): Promise<AbuseBudgetResult>;
+  consume(userId: string, operation: AbuseBudgetOperation): Promise<AbuseBudgetResult>;
 }
 
 export interface AiCapacityStore {

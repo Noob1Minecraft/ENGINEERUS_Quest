@@ -23,7 +23,7 @@
       "source": "/(.*)",
       "has": [{ "type": "host", "value": "equest.kz" }],
       "headers": [{
-        "key": "Content-Security-Policy-Report-Only",
+        "key": "Content-Security-Policy",
         "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https:; font-src 'self'; connect-src 'self' https://api.equest.kz https://gsudtcyoaknehfixaxha.supabase.co wss://gsudtcyoaknehfixaxha.supabase.co; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'"
       }]
     },
@@ -31,7 +31,7 @@
       "source": "/(.*)",
       "has": [{ "type": "host", "value": "www.equest.kz" }],
       "headers": [{
-        "key": "Content-Security-Policy-Report-Only",
+        "key": "Content-Security-Policy",
         "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https:; font-src 'self'; connect-src 'self' https://api.equest.kz https://gsudtcyoaknehfixaxha.supabase.co wss://gsudtcyoaknehfixaxha.supabase.co; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'"
       }]
     },
@@ -39,7 +39,7 @@
       "source": "/(.*)",
       "has": [{ "type": "host", "value": "engineerus-quest.vercel.app" }],
       "headers": [{
-        "key": "Content-Security-Policy-Report-Only",
+        "key": "Content-Security-Policy",
         "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https:; font-src 'self'; connect-src 'self' https://api.equest.kz https://gsudtcyoaknehfixaxha.supabase.co wss://gsudtcyoaknehfixaxha.supabase.co; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'"
       }]
     },
@@ -47,7 +47,7 @@
       "source": "/(.*)",
       "has": [{ "type": "host", "value": "engineerus-quest-enginnerus.vercel.app" }],
       "headers": [{
-        "key": "Content-Security-Policy-Report-Only",
+        "key": "Content-Security-Policy",
         "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https:; font-src 'self'; connect-src 'self' https://api.equest.kz https://gsudtcyoaknehfixaxha.supabase.co wss://gsudtcyoaknehfixaxha.supabase.co; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'"
       }]
     },
@@ -55,16 +55,16 @@
       "source": "/(.*)",
       "has": [{ "type": "host", "value": "engineerus-quest-git-main-enginnerus.vercel.app" }],
       "headers": [{
-        "key": "Content-Security-Policy-Report-Only",
+        "key": "Content-Security-Policy",
         "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https:; font-src 'self'; connect-src 'self' https://api.equest.kz https://gsudtcyoaknehfixaxha.supabase.co wss://gsudtcyoaknehfixaxha.supabase.co; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'"
       }]
     },
     {
       "source": "/(.*)",
-      "has": [{ "type": "host", "value": "engineerus-quest-git-feat-supabase-foundation-enginnerus.vercel.app" }],
+      "has": [{ "type": "host", "value": "engineerus-quest-git-feat-security-hardening-c330f1-enginnerus.vercel.app" }],
       "headers": [{
-        "key": "Content-Security-Policy-Report-Only",
-        "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https:; font-src 'self'; connect-src 'self' https://engineerus-quest-supabase.onrender.com https://gsudtcyoaknehfixaxha.supabase.co wss://gsudtcyoaknehfixaxha.supabase.co; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'"
+        "key": "Content-Security-Policy",
+        "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https:; font-src 'self'; connect-src 'self' https://engineerus-quest-supabase.onrender.com https://avalndchkvkoqxsnrvxm.supabase.co wss://avalndchkvkoqxsnrvxm.supabase.co; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'"
       }]
     }
   ]

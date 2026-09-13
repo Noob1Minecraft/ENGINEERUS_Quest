@@ -4,7 +4,7 @@ import { createApp } from "./server/app";
 import { loadServerEnv } from "./server/config/env";
 import { createSupabaseAccessTokenVerifier } from "./server/auth/supabaseJwt";
 import { createRequireAuth } from "./server/middleware/requireAuth";
-import { createAiConcurrencyGuard, createAuthoritativeAiRateLimit, createAuthenticatedRateLimit, createDocumentUploadRateLimit, createImageUploadRateLimit } from "./server/middleware/authenticatedRateLimit";
+import { createAiConcurrencyGuard, createAuthoritativeAiRateLimit, createAuthoritativeRateLimit, createAuthenticatedRateLimit } from "./server/middleware/authenticatedRateLimit";
 import { createChatRepository } from "./server/persistence/chats";
 import { createQuestRepository } from "./server/persistence/quests";
 import { createChatsRouter } from "./server/routes/chats";
@@ -30,11 +30,11 @@ import { createImagesRouter } from "./server/routes/images";
 dotenv.config();
 
 const env = loadServerEnv(process.env);
-const app = createApp(env);
 const PORT = env.PORT;
 const requireAuth = createRequireAuth(createSupabaseAccessTokenVerifier(env));
 const authenticatedRateLimit = createAuthenticatedRateLimit();
 const abuseControls = new SupabaseAbuseControlStore(createSupabaseAdminClient(env));
+const app = createApp(env, { abuseControlStore: abuseControls });
 const aiRateLimit = createAuthoritativeAiRateLimit(abuseControls);
 const aiConcurrencyGuard = createAiConcurrencyGuard(abuseControls);
 const chatRepository = createChatRepository(env);
@@ -48,14 +48,14 @@ app.use(createQuestsRouter(requireAuth, authenticatedRateLimit, questRepository,
 app.use(createDocumentsRouter(
   requireAuth,
   authenticatedRateLimit,
-  createDocumentUploadRateLimit(),
+  createAuthoritativeRateLimit(abuseControls, "document_upload"),
   documentRepository,
   betaRepository.recordEvent,
 ));
 app.use(createImagesRouter(
   requireAuth,
   authenticatedRateLimit,
-  createImageUploadRateLimit(),
+  createAuthoritativeRateLimit(abuseControls, "image_upload"),
   imageRepository,
   betaRepository.recordEvent,
 ));

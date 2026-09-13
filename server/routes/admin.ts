@@ -47,10 +47,12 @@ export function createAdminRouter(
   authenticate: RequestHandler,
   rateLimiter: RequestHandler,
   repository: AdminRepository,
+  mutationRateLimiter?: RequestHandler,
 ): Router {
   const router = Router();
   const requireAdmin = createRequireAdmin(repository);
   const protectedRoute = [authenticate, rateLimiter, requireAdmin];
+  const protectedMutation = mutationRateLimiter ? [...protectedRoute, mutationRateLimiter] : protectedRoute;
 
   router.get("/api/admin/access", authenticate, rateLimiter, async (_request, response) => {
     try {
@@ -76,7 +78,7 @@ export function createAdminRouter(
     } catch (error) { sendPersistenceError(response, error); }
   });
 
-  router.patch("/api/admin/feedback/:feedbackId/status", ...protectedRoute, async (request, response) => {
+  router.patch("/api/admin/feedback/:feedbackId/status", ...protectedMutation, async (request, response) => {
     try {
       const feedbackId = parseUuid(request.params.feedbackId, "invalid_admin_feedback_id");
       const parsed = statusBody.safeParse(request.body);
@@ -107,7 +109,7 @@ export function createAdminRouter(
     } catch (error) { sendPersistenceError(response, error); }
   });
 
-  router.post("/api/admin/users/:userId/admin", ...protectedRoute, async (request, response) => {
+  router.post("/api/admin/users/:userId/admin", ...protectedMutation, async (request, response) => {
     try {
       const userId = parseUuid(request.params.userId, "invalid_admin_user_id");
       const parsed = emptyBody.safeParse(request.body ?? {});
@@ -116,7 +118,7 @@ export function createAdminRouter(
     } catch (error) { sendPersistenceError(response, error); }
   });
 
-  router.delete("/api/admin/users/:userId/admin", ...protectedRoute, async (request, response) => {
+  router.delete("/api/admin/users/:userId/admin", ...protectedMutation, async (request, response) => {
     try {
       const userId = parseUuid(request.params.userId, "invalid_admin_user_id");
       await repository.revokeAdmin(response.locals.auth.accessToken, userId);

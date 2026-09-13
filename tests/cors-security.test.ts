@@ -6,16 +6,18 @@ import { withServer } from "./helpers";
 
 const productionEnv = loadServerEnv({
   NODE_ENV: "production",
-  FRONTEND_ORIGIN: "https://engineerus-quest.vercel.app",
+  FRONTEND_ORIGIN: "https://preview.example.test",
   SUPABASE_URL: "https://example.supabase.co",
   SUPABASE_PUBLISHABLE_KEY: "test-publishable-placeholder",
   SUPABASE_SECRET_KEY: "test-secret-placeholder",
 });
 
-test("production CORS allowlist contains deployed origins but no localhost", () => {
+test("production CORS allowlist contains only the canonical origin and configured exact origins", () => {
   const origins = createAllowedOrigins(productionEnv);
-  assert.ok(origins.has("https://engineerus-quest.vercel.app"));
-  assert.ok(origins.has("https://engineerus-quest-git-feat-supabase-foundation-enginnerus.vercel.app"));
+  assert.ok(origins.has("https://equest.kz"));
+  assert.ok(origins.has("https://preview.example.test"));
+  assert.equal(origins.has("https://engineerus-quest.vercel.app"), false);
+  assert.equal(origins.has("https://engineerus-quest-git-main-enginnerus.vercel.app"), false);
   assert.equal([...origins].some((origin) => /localhost|127\.0\.0\.1/u.test(origin)), false);
   assert.equal(origins.has("*"), false);
 });
@@ -34,13 +36,13 @@ test("localhost is restricted to explicit development and test environments", ()
   assert.ok(productionWithMisconfiguredLoopback.has("https://preview.example.test"));
 });
 
-test("allowed deployed origins receive CORS without credentialed-cookie support", async () => {
+test("an exact configured origin receives CORS without credentialed-cookie support", async () => {
   await withServer(createApp(productionEnv), async (baseUrl) => {
     const response = await fetch(`${baseUrl}/health`, {
-      headers: { Origin: "https://engineerus-quest.vercel.app" },
+      headers: { Origin: "https://preview.example.test" },
     });
     assert.equal(response.status, 200);
-    assert.equal(response.headers.get("access-control-allow-origin"), "https://engineerus-quest.vercel.app");
+    assert.equal(response.headers.get("access-control-allow-origin"), "https://preview.example.test");
     assert.equal(response.headers.get("access-control-allow-credentials"), null);
   });
 });

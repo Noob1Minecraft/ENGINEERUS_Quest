@@ -22,8 +22,10 @@ export function createBetaRouter(
   authenticate: RequestHandler,
   rateLimiter: RequestHandler,
   repository: BetaRepository,
+  feedbackRateLimiter?: RequestHandler,
 ): Router {
   const router = Router();
+  const feedbackProtection = feedbackRateLimiter ? [feedbackRateLimiter] : [];
 
   router.get("/api/beta/state", authenticate, rateLimiter, async (_request, response) => {
     try {
@@ -43,7 +45,7 @@ export function createBetaRouter(
     } catch (error) { sendPersistenceError(response, error); }
   });
 
-  router.post("/api/beta/feedback", authenticate, rateLimiter, async (request, response) => {
+  router.post("/api/beta/feedback", authenticate, rateLimiter, ...feedbackProtection, async (request, response) => {
     try {
       const parsed = feedbackSchema.safeParse(request.body);
       if (!parsed.success) throw invalid("invalid_beta_feedback", "Valid, non-sensitive feedback is required.");
