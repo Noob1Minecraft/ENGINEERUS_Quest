@@ -1805,7 +1805,7 @@ button.eq-home-link:hover { background: var(--color-surface-subtle); }
   .eq-ai-workspace .eq-ai-intro h2 { font-size: 1rem; }
   .eq-ai-workspace .eq-ai-intro h2 > span:last-child { display: none; }
   .eq-ai-workspace .eq-ai-modules { display: flex; flex: 0 0 auto; overflow-x: auto; scrollbar-width: thin; }
-  .eq-ai-workspace .eq-ai-module { flex: 0 0 7.75rem; padding: 0.5rem 0.45rem; }
+  .eq-ai-workspace .eq-ai-module { flex: 0 0 8rem; padding: 0.5rem 0.45rem; }
   .eq-ai-workspace .eq-ai-module > div:first-child { display: none; }
   .eq-ai-workspace .eq-ai-prompts { max-height: 4.75rem; overflow: hidden; padding: 0.45rem 0.55rem; }
   .eq-ai-workspace .eq-ai-prompts > div:first-child { display: none; }
