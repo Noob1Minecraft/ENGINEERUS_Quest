@@ -375,10 +375,6 @@ export default function App() {
               title={lang === 'ru' ? 'Не удалось загрузить прогресс' : lang === 'kk' ? 'Прогресті жүктеу мүмкін болмады' : 'Could not load progress'}
               description={lang === 'ru' ? 'Основные разделы доступны. Обновите страницу, чтобы повторить попытку.' : lang === 'kk' ? 'Негізгі бөлімдер қолжетімді. Қайталап көру үшін бетті жаңартыңыз.' : 'Core features remain available. Refresh the page to try again.'}
             />}
-            {auth.user && <div className="eq-beta-note">
-              <span><strong>{lang === 'ru' ? 'Закрытая бета.' : lang === 'kk' ? 'Жабық бета.' : 'Controlled beta.'}</strong> {lang === 'ru' ? 'Доступ ограничен, функции могут меняться — ваши отзывы помогают улучшать продукт.' : lang === 'kk' ? 'Қолжетімділік шектеулі, функциялар өзгеруі мүмкін — пікіріңіз өнімді жақсартады.' : 'Access is limited and features may change—your feedback helps improve the product.'}</span>
-              <button type="button" onClick={() => setFeedbackOpen(true)}>{lang === 'ru' ? 'Отправить отзыв' : lang === 'kk' ? 'Пікір жіберу' : 'Send feedback'}</button>
-            </div>}
             {auth.user && betaParticipantStatus === 'loading' && !betaParticipant && <LoadingState
               label={lang === 'ru' ? 'Загружаем шаги знакомства…' : lang === 'kk' ? 'Танысу қадамдары жүктелуде…' : 'Loading getting-started steps…'}
             />}

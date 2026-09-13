@@ -189,6 +189,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
   const [loading, setLoading] = useState<boolean>(false);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [showSessionsDrawer, setShowSessionsDrawer] = useState<boolean>(false);
+  const [showDesktopHistory, setShowDesktopHistory] = useState<boolean>(false);
   const [persistenceError, setPersistenceError] = useState<string | null>(null);
 
   // User Multi-Chat Sessions
@@ -889,7 +890,9 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                 : 'bg-slate-100/80 border-slate-200/55'
             }`}>
               <button
+                type="button"
                 onClick={() => setActiveSubView('chat')}
+                aria-pressed={activeSubView === 'chat'}
                 className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${
                   activeSubView === 'chat'
                     ? 'bg-blue-600 text-white shadow-xs'
@@ -903,7 +906,9 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
               </button>
 
               <button
+                type="button"
                 onClick={() => setActiveSubView('saved')}
+                aria-pressed={activeSubView === 'saved'}
                 className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${
                   activeSubView === 'saved'
                     ? 'bg-blue-600 text-white shadow-xs'
@@ -924,7 +929,9 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
 
             {/* Fullscreen Toggle Button */}
             <button
+              type="button"
               onClick={() => setIsFullscreen(!isFullscreen)}
+              aria-label={isFullscreen ? t.exitFullscreen : t.fullscreen}
               className={`p-2 rounded-xl border transition-all flex items-center justify-center ${
                 isFullscreen
                   ? 'bg-slate-850 hover:bg-slate-800 text-white border-slate-700'
@@ -971,20 +978,13 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                   <div className="font-extrabold text-xs truncate">
                     {config.label}
                   </div>
-                  <div className="text-[10px] text-slate-400 font-semibold mt-0.5 truncate">
-                    {key === 'tutor' && (lang === 'kk' ? 'Репетитор' : lang === 'en' ? 'AI Tutor' : 'Репетитор')}
-                    {key === 'material' && (lang === 'kk' ? 'МЕМСТ Материалдар' : lang === 'en' ? 'GOST Materials' : 'Материалы ГОСТ')}
-                    {key === 'patent' && (lang === 'kk' ? 'Патент Формуласы' : lang === 'en' ? 'Patent Draft' : 'Формула Патента')}
-                    {key === 'engi_legal' && (lang === 'kk' ? 'ҚНжЕ & Нормалар' : lang === 'en' ? 'Codes & Standards' : 'СНиП & Нормы')}
-                    {key === 'engi_match' && (lang === 'kk' ? 'Команда' : lang === 'en' ? 'Team' : 'Команда')}
-                  </div>
                 </button>
               );
             })}
           </nav>
 
           {/* Quick Preset Questions Bar */}
-          {!isFullscreen && (
+          {!isFullscreen && messages.length <= 1 && (
             <div className="eq-ai-prompts p-3.5 sm:p-4 space-y-2 shrink-0">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-extrabold text-slate-800 flex items-center gap-1.5">
@@ -997,6 +997,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                 {(PRESET_QUESTIONS[selectedModule]?.[lang] || PRESET_QUESTIONS[selectedModule]?.ru || []).map((preset, idx) => (
                   <button
                     key={idx}
+                    type="button"
                     onClick={() => {
                       setPromptText(preset);
                       handleSendPrompt(preset);
@@ -1013,11 +1014,11 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
 
           {/* Main Chat Interface Window with Multi-Chat Drawer */}
           <div
-            className={`eq-ai-chat-frame relative bg-white border border-slate-200/80 overflow-hidden flex flex-col ${
+            className={`eq-ai-chat-frame relative bg-white border border-slate-200/80 overflow-hidden flex flex-col${showDesktopHistory ? ' has-history' : ''} ${
               isFullscreen ? 'flex-1 min-h-0 bg-slate-900 border-slate-800 text-slate-100' : 'eq-ai-chat-frame--embedded'
             }`}
           >
-            <aside className={`eq-ai-history hidden min-h-0 w-64 flex-col border-r lg:flex ${isFullscreen ? 'border-slate-800 bg-slate-950' : 'border-slate-200 bg-slate-50'}`} aria-label={lang === 'kk' ? 'Сақталған чаттар' : lang === 'en' ? 'Saved conversations' : 'Сохранённые чаты'}>
+            <aside id="ai-chat-history-panel" className={`eq-ai-history hidden min-h-0 w-64 flex-col border-r ${isFullscreen ? 'border-slate-800 bg-slate-950' : 'border-slate-200 bg-slate-50'}`} aria-label={lang === 'kk' ? 'Сақталған чаттар' : lang === 'en' ? 'Saved conversations' : 'Сохранённые чаты'}>
               <div className="flex items-center justify-between gap-2 border-b border-inherit p-3">
                 <span className="flex min-w-0 items-center gap-2 text-xs font-black uppercase tracking-wide"><History className="h-4 w-4 text-blue-500" />{lang === 'kk' ? 'Чаттар' : lang === 'en' ? 'Conversations' : 'Диалоги'}</span>
                 <button type="button" onClick={handleCreateNewChat} aria-label={t.newChat} className="rounded-lg bg-blue-600 p-2 text-white transition hover:bg-blue-700"><Plus className="h-4 w-4" /></button>
@@ -1045,8 +1046,10 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
               {/* Left: Current Active Chat Title & History Toggle Button */}
               <div className="flex items-center gap-2 min-w-0">
                 <button
+                  type="button"
                   onClick={() => setShowSessionsDrawer(!showSessionsDrawer)}
                   aria-expanded={showSessionsDrawer}
+                  aria-controls="ai-chat-history-drawer"
                   className={`px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition-all lg:hidden ${
                     showSessionsDrawer
                       ? 'bg-blue-600 text-white'
@@ -1057,6 +1060,24 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                 >
                   <History className="w-3.5 h-3.5 text-blue-400" />
                   <span>{t.chatsCount || 'Чаты'} ({sessions.length})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowDesktopHistory((open) => !open)}
+                  aria-expanded={showDesktopHistory}
+                  aria-controls="ai-chat-history-panel"
+                  className={`eq-ai-history-toggle hidden items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-extrabold transition lg:flex ${
+                    showDesktopHistory
+                      ? 'border-blue-200 bg-blue-50 text-blue-900'
+                      : isFullscreen
+                      ? 'border-slate-700 bg-slate-800 text-slate-200'
+                      : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  <History className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>{lang === 'kk' ? 'Тарих' : lang === 'en' ? 'History' : 'История'}</span>
+                  <span aria-hidden="true">{sessions.length}</span>
                 </button>
 
                 <div className="font-extrabold text-xs truncate max-w-[150px] sm:max-w-[280px]">
@@ -1081,6 +1102,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
             {/* Multi-Chat Drawer Overlay (Slide Down / Expand) */}
             {showSessionsDrawer && (
               <div
+                id="ai-chat-history-drawer"
                 className={`eq-ai-history-drawer animate-fade-in lg:hidden ${
                   isFullscreen ? 'bg-slate-950 border-slate-800' : 'bg-slate-100/95 border-slate-200'
                 }`}
@@ -1092,7 +1114,9 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                     <FolderKanban className="w-3.5 h-3.5 text-blue-500" /> {lang === 'kk' ? `Пайдаланушының сақталған чаттары: ${user.username}` : lang === 'en' ? `Saved chats for ${user.username}` : `Сохраненные чаты пользователя ${user.username}`}
                   </span>
                   <button
+                    type="button"
                     onClick={() => setShowSessionsDrawer(false)}
+                    aria-label={lang === 'kk' ? 'Чаттар тізімін жабу' : lang === 'en' ? 'Close conversation history' : 'Закрыть историю диалогов'}
                     className="p-1 text-slate-400 hover:text-slate-600"
                   >
                     <X className="w-4 h-4" />
@@ -1365,6 +1389,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                 />
 
                 <button
+                  type="button"
                   onClick={() => handleSendPrompt()}
                   disabled={loading || !promptText.trim()}
                   className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-black px-3 sm:px-4 py-3 rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 text-xs shrink-0 min-h-[44px]"

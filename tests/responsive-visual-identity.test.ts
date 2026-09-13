@@ -13,10 +13,10 @@ test('official Engineerus logo asset is reused across shell, mobile navigation, 
   const mobile = source('src/components/BottomNav.tsx');
   const auth = source('src/components/AuthModal.tsx');
 
-  assert.equal(existsSync(path.resolve('public/brand/engineerus-logo-source.jpg')), true);
-  assert.equal(existsSync(path.resolve('public/brand/engineerus-logo.webp')), true);
+  assert.equal(existsSync(path.resolve('public/brand/engineerus-logo-transparent.png')), true);
+  assert.match(logo, /engineerus-logo-transparent\.png/u);
   assert.match(logo, /alt=\{decorative \? '' : 'Engineerus Quest'\}/u);
-  assert.match(logo, /width=\{565\}[\s\S]*height=\{362\}/u);
+  assert.match(logo, /width=\{500\}[\s\S]*height=\{500\}/u);
   for (const component of [shell, mobile, auth]) assert.match(component, /<BrandLogo/u);
 });
 
@@ -37,13 +37,18 @@ test('Tutor is a viewport workspace with independent transcript scrolling and a 
   assert.match(assistant, /eq-ai-chat-column/u);
   assert.match(assistant, /eq-ai-chat-frame--embedded/u);
   assert.match(assistant, /eq-ai-history-drawer__backdrop/u);
+  assert.match(assistant, /showDesktopHistory/u);
+  assert.match(assistant, /aria-controls="ai-chat-history-panel"/u);
+  assert.match(assistant, /messages\.length <= 1/u);
   assert.match(css, /height:\s*calc\(100dvh/u);
   assert.match(css, /eq-ai-transcript[^}]*overscroll-behavior:\s*contain/su);
   assert.match(css, /eq-ai-history-drawer__panel[^}]*height:\s*100%/su);
-  assert.match(css, /grid-template-columns:\s*clamp\(16\.25rem, 22vw, 19rem\) minmax\(0, 1fr\)/u);
+  assert.match(css, /has-history[^}]*grid-template-columns:\s*clamp\(13rem, 18vw, 16rem\) minmax\(0, 1fr\)/su);
   assert.match(css, /eq-ai-view-switcher[^}]*button\[class\*="bg-blue"\][^}]*color:\s*white/su);
   assert.match(css, /eq-ai-prompts > div:last-child[^}]*display:\s*flex[^}]*overflow-x:\s*auto/su);
   assert.match(css, /eq-ai-history \{ width:\s*100%/u);
+  assert.doesNotMatch(app, /Доступ ограничен, функции могут меняться/u);
+  assert.match(app, /onOpenFeedback=\{\(\) => setFeedbackOpen\(true\)\}/u);
 });
 
 test('responsive rules cover phone, tablet, and constrained laptop table layouts', () => {

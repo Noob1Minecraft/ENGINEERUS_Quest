@@ -75,7 +75,7 @@ test('corrective pass replaces legacy card compositions with task-specific struc
 
   assert.match(learning, /eq-learning-path__rail/u);
   assert.match(learning, /eq-resource-register__head/u);
-  assert.match(tutor, /<aside className=\{`eq-ai-history/u);
+  assert.match(tutor, /<aside[^>]*className=\{`eq-ai-history/u);
   assert.match(tutor, /eq-ai-transcript/u);
   assert.match(documents, /role="table"/u);
   assert.match(documents, /eq-document-table__head/u);

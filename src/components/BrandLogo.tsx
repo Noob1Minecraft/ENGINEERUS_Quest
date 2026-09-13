@@ -1,6 +1,6 @@
 import React from 'react';
 
-const logo = '/brand/engineerus-logo.webp';
+const logo = '/brand/engineerus-logo-transparent.png';
 
 type BrandLogoProps = {
   className?: string;
@@ -12,8 +12,8 @@ export function BrandLogo({ className = '', decorative = false, eager = false }:
   return (
     <img
       src={logo}
-      width={565}
-      height={362}
+      width={500}
+      height={500}
       alt={decorative ? '' : 'Engineerus Quest'}
       aria-hidden={decorative || undefined}
       className={`eq-brand-logo ${className}`.trim()}

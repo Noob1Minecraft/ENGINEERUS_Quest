@@ -1891,6 +1891,94 @@ button.eq-home-link:hover { background: var(--color-surface-subtle); }
 .eq-ai-refined .eq-ai-message :where(p, li) { overflow-wrap: anywhere; }
 .eq-ai-refined .eq-ai-message :where(pre, table) { display: block; max-width: 100%; overflow-x: auto; }
 
+/* Tutor correction: let the official transparent mark and active conversation
+   belong to the shell instead of reading as separate stacked panels. */
+.eq-sidebar__brand {
+  overflow: visible;
+  background: transparent;
+}
+.eq-sidebar__brand .eq-brand-logo {
+  width: 13rem;
+  max-width: none;
+  height: 13rem;
+}
+.eq-brand__logo {
+  width: 7rem;
+  max-width: none;
+  height: 7rem;
+}
+.eq-auth-dialog__logo {
+  width: 11rem;
+  max-width: none;
+  height: 11rem;
+  margin-block: -2rem;
+}
+
+.eq-ai-workspace:not(.fixed) .eq-ai-intro {
+  padding-block: 0.4rem;
+}
+.eq-ai-workspace:not(.fixed) .eq-ai-intro > div {
+  align-items: center;
+  gap: 0.65rem;
+}
+.eq-ai-workspace:not(.fixed) .eq-ai-intro p { display: none; }
+.eq-ai-workspace:not(.fixed) .eq-ai-intro h2 { font-size: 1rem; }
+.eq-ai-workspace:not(.fixed) .eq-ai-intro h2 > span:last-child { display: none; }
+.eq-ai-refined .eq-ai-modules {
+  min-height: 2.85rem;
+}
+.eq-ai-refined .eq-ai-module {
+  display: flex;
+  min-width: 7rem;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.7rem;
+}
+.eq-ai-refined .eq-ai-module > div:first-child {
+  width: 1.55rem;
+  height: 1.55rem;
+  flex: 0 0 auto;
+  margin: 0;
+}
+.eq-ai-refined .eq-ai-conversation-bar {
+  min-height: 2.8rem;
+  background: color-mix(in srgb, var(--color-surface) 88%, var(--color-bg));
+}
+.eq-ai-refined .eq-ai-history-toggle > span:last-child {
+  min-width: 1.25rem;
+  color: var(--color-text-muted);
+  font: 800 0.62rem/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.eq-ai-refined .eq-ai-transcript {
+  min-height: 0;
+  background: color-mix(in srgb, var(--color-surface) 97%, var(--color-bg));
+}
+
+@media (min-width: 64rem) {
+  .eq-ai-refined .eq-ai-chat-frame {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .eq-ai-refined .eq-ai-history { display: none; }
+  .eq-ai-refined .eq-ai-conversation-bar,
+  .eq-ai-refined .eq-ai-transcript,
+  .eq-ai-refined .eq-ai-composer { grid-column: 1; }
+  .eq-ai-refined .eq-ai-chat-frame.has-history {
+    grid-template-columns: clamp(13rem, 18vw, 16rem) minmax(0, 1fr);
+  }
+  .eq-ai-refined .eq-ai-chat-frame.has-history .eq-ai-history { display: flex; }
+  .eq-ai-refined .eq-ai-chat-frame.has-history .eq-ai-conversation-bar,
+  .eq-ai-refined .eq-ai-chat-frame.has-history .eq-ai-transcript,
+  .eq-ai-refined .eq-ai-chat-frame.has-history .eq-ai-composer { grid-column: 2; }
+}
+
+@media (max-width: 47.999rem) {
+  .eq-brand__logo {
+    width: 6.25rem;
+    height: 6.25rem;
+  }
+  .eq-ai-refined .eq-ai-module { flex-basis: 7rem; }
+}
+
 /* Admin operations use a quiet register layout rather than exposing private
    product surfaces through a dashboard-style grid. */
 .eq-admin { display: grid; min-width: 0; gap: 1.25rem; }
