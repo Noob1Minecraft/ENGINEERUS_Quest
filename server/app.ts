@@ -29,9 +29,11 @@ import { createAdminRepository } from "./persistence/admin";
 import { createAdminRouter } from "./routes/admin";
 
 const DEPLOYED_ALLOWED_ORIGINS = [
+  "https://equest.kz",
+  "https://www.equest.kz",
   "https://engineerus-quest.vercel.app",
+  "https://engineerus-quest-enginnerus.vercel.app",
   "https://engineerus-quest-git-main-enginnerus.vercel.app",
-  "https://engineerus-quest-git-feat-supabase-foundation-enginnerus.vercel.app",
 ];
 
 const DEVELOPMENT_ALLOWED_ORIGINS = [
@@ -68,7 +70,7 @@ export function createApp(env: ServerEnv, options: {
     contentSecurityPolicy: {
       useDefaults: false,
       directives: createContentSecurityPolicyDirectives(env.NODE_ENV),
-      reportOnly: true,
+      reportOnly: env.NODE_ENV !== "production",
     },
   }));
   app.use(express.json({ limit: "1mb" }));
