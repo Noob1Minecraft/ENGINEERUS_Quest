@@ -69,6 +69,7 @@ test('Tutor module descriptions and compact suggestions remain localized', () =>
 
   assert.match(assistant, /config\.description\[lang\]/u);
   assert.match(css, /eq-ai-module__description[^}]*font-size:\s*0\.58rem/su);
+  assert.match(css, /eq-ai-module__description[^}]*letter-spacing:\s*-0\.01em/su);
   assert.match(css, /eq-ai-module__description[^}]*line-height:\s*1\.25/su);
   assert.match(css, /eq-ai-prompts > div:last-child[^}]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/su);
   assert.match(css, /eq-ai-prompt:focus-visible[^}]*outline:\s*2px solid var\(--color-ai\)/su);

@@ -1945,6 +1945,7 @@ button.eq-home-link:hover { background: var(--color-surface-subtle); }
   color: color-mix(in srgb, var(--color-text) 70%, transparent);
   font-size: 0.58rem;
   font-weight: 650;
+  letter-spacing: -0.01em;
   line-height: 1.25;
 }
 .eq-ai-refined .eq-ai-prompts > div:last-child {
