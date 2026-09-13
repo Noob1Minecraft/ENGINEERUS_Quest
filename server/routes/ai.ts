@@ -23,7 +23,9 @@ import { trackProductEvent } from "../beta/trackProductEvent";
 import type { AiVisionImage } from "../ai/groqClient";
 import { MAX_IMAGES_PER_REQUEST, visionSystemPolicy } from "../images/imagePolicy";
 import {
+  buildEngineeringDomainPolicy,
   buildEngineeringIntentPolicy,
+  classifyEngineeringDomain,
   classifyEngineeringIntent,
   engineeringOffTopicRedirect,
   isContextualEngineeringFollowUp,
@@ -159,21 +161,24 @@ export function createAiRouter(
         }
       }
 
-      const engineeringIntent = classifyEngineeringIntent({
+      const engineeringInput = {
         text: canonicalPrompt,
         module: moduleName,
         hasDocument: Boolean(documentId),
         hasImages: Boolean(imageIds?.length),
-      });
+      };
+      const engineeringDomain = classifyEngineeringDomain(engineeringInput);
+      const engineeringIntent = classifyEngineeringIntent(engineeringInput);
       securityLogger.info("ai_engineering_route", {
+        domain: engineeringDomain,
         intent: engineeringIntent,
-        off_topic: engineeringIntent === "OFF_TOPIC",
+        off_topic: engineeringDomain === "OUT_OF_SCOPE",
         standards_route: engineeringIntent === "ENGINEERING_STANDARD",
         has_document: Boolean(documentId),
         image_count: imageIds?.length ?? 0,
       });
 
-      if (engineeringIntent === "OFF_TOPIC") {
+      if (engineeringDomain === "OUT_OF_SCOPE") {
         const responseText = engineeringOffTopicRedirect(detectedLanguage);
         response.json({
           status: "ok",
@@ -203,6 +208,7 @@ export function createAiRouter(
       }
       const providerPrompt = [prepared.prompt, conversationContext?.promptBlock, documentContext?.promptBlock].filter(Boolean).join("\n\n");
       const baseSystemPolicy = [
+        buildEngineeringDomainPolicy(engineeringDomain),
         buildEngineeringIntentPolicy(engineeringIntent),
         prepared.systemInstructions,
         conversationContext?.systemPolicy,

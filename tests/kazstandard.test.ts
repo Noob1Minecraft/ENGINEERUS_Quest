@@ -4,7 +4,7 @@ import test from "node:test";
 import express, { type RequestHandler } from "express";
 import type { ChatRepository } from "../server/persistence/chats";
 import { AiProviderError } from "../server/ai/groqClient";
-import { buildEngineeringIntentPolicy } from "../server/ai/engineeringPolicy";
+import { buildEngineeringDomainPolicy, buildEngineeringIntentPolicy } from "../server/ai/engineeringPolicy";
 import { createAiRouter } from "../server/routes/ai";
 import { loadServerEnv } from "../server/config/env";
 import {
@@ -1250,6 +1250,7 @@ test("passes verified metadata to the AI without changing the persisted user pro
   assert.match(aiPrompt, /Source: https:\/\/new-shop\.ksm\.kz\/catalog\/document\/66007\//u);
   assert.doesNotMatch(aiPrompt, /Публичная аннотация|\.pdf/iu);
   assert.equal(aiSystemPolicy, [
+    buildEngineeringDomainPolicy("ALLOWED"),
     buildEngineeringIntentPolicy("ENGINEERING_STANDARD"),
     buildStandardsSystemInstructions({ kind: "verified", standard }),
   ].join("\n\n"));
