@@ -51,6 +51,27 @@ test('Tutor is a viewport workspace with independent transcript scrolling and a 
   assert.match(app, /onOpenFeedback=\{\(\) => setFeedbackOpen\(true\)\}/u);
 });
 
+test('Tutor module descriptions and compact suggestions remain localized', () => {
+  const assistant = source('src/components/AIAssistantTab.tsx');
+  const css = source('src/index.css');
+
+  for (const description of [
+    'Инженерный помощник', 'Материалы и стандарты', 'Патенты и формулы', 'Стандарты и нормы', 'Команда и проекты',
+    'Инженерлік көмекші', 'Материалдар мен стандарттар', 'Патенттер мен формулалар', 'Стандарттар мен нормалар', 'Команда мен жобалар',
+    'Engineering assistant', 'Materials and standards', 'Patents and formulas', 'Standards and codes', 'Teams and projects',
+  ]) assert.match(assistant, new RegExp(description, 'u'));
+
+  for (const prompt of [
+    'Реакции опор балки', 'Теорема Карно и цикл Стирлинга', 'Кинематика vs динамика',
+    'Арқалық тіректерінің реакциялары', 'Карно теоремасы және Стирлинг циклі',
+    'Beam support reactions', 'Carnot theorem and Stirling cycle', 'Kinematics vs dynamics',
+  ]) assert.match(assistant, new RegExp(prompt, 'u'));
+
+  assert.match(assistant, /config\.description\[lang\]/u);
+  assert.match(css, /eq-ai-module__description[^}]*font-size:\s*0\.58rem/su);
+  assert.match(css, /eq-ai-module__description[^}]*line-height:\s*1\.15/su);
+});
+
 test('responsive rules cover phone, tablet, and constrained laptop table layouts', () => {
   const css = source('src/index.css');
   assert.match(css, /@media \(max-width: 47\.999rem\)/u);

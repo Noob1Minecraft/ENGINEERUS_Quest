@@ -60,19 +60,19 @@ interface AIAssistantTabProps {
 const PRESET_QUESTIONS: Record<string, Record<Language, string[]>> = {
   tutor: {
     ru: [
-      "Как рассчитать эпюру изгибающих моментов для двухопорной балки?",
-      "Объясни теорему Карно и цикл Стирлинга простыми словами",
-      "В чем разница между кинематикой и динамикой механизмов?",
+      "Реакции опор балки",
+      "Теорема Карно и цикл Стирлинга",
+      "Кинематика vs динамика",
     ],
     kk: [
-      "Екі тіректі арқалықтың иілу моменттері эпюрасын қалай есептейді?",
-      "Карно теоремасы мен Стирлинг циклін қарапайым сөзбен түсіндір",
-      "Механизмдер кинематикасы мен динамикасының айырмашылығы неде?",
+      "Арқалық тіректерінің реакциялары",
+      "Карно теоремасы және Стирлинг циклі",
+      "Кинематика vs динамика",
     ],
     en: [
-      "How to calculate bending moment diagrams for a simply supported beam?",
-      "Explain Carnot's theorem and the Stirling cycle in simple terms",
-      "What is the difference between kinematics and dynamics of mechanisms?",
+      "Beam support reactions",
+      "Carnot theorem and Stirling cycle",
+      "Kinematics vs dynamics",
     ],
   },
   material: {
@@ -145,12 +145,12 @@ const PRESET_QUESTIONS: Record<string, Record<Language, string[]>> = {
   },
 };
 
-const MODULE_CONFIG: Record<string, { label: string; icon: React.FC<{ className?: string }>; color: string; badgeBg: string }> = {
-  tutor: { label: 'TUTOR AI', icon: GraduationCap, color: 'text-blue-600', badgeBg: 'bg-blue-600' },
-  material: { label: 'MaterialSwap', icon: Layers, color: 'text-emerald-600', badgeBg: 'bg-emerald-600' },
-  patent: { label: 'PatentCraft', icon: Cpu, color: 'text-purple-600', badgeBg: 'bg-purple-600' },
-  engi_legal: { label: 'EngiLegal', icon: ShieldCheck, color: 'text-amber-600', badgeBg: 'bg-amber-600' },
-  engi_match: { label: 'EngiMatch', icon: Users, color: 'text-indigo-600', badgeBg: 'bg-indigo-600' },
+const MODULE_CONFIG: Record<string, { label: string; description: Record<Language, string>; icon: React.FC<{ className?: string }>; color: string; badgeBg: string }> = {
+  tutor: { label: 'TUTOR AI', description: { ru: 'Инженерный помощник', kk: 'Инженерлік көмекші', en: 'Engineering assistant' }, icon: GraduationCap, color: 'text-blue-600', badgeBg: 'bg-blue-600' },
+  material: { label: 'MaterialSwap', description: { ru: 'Материалы и стандарты', kk: 'Материалдар мен стандарттар', en: 'Materials and standards' }, icon: Layers, color: 'text-emerald-600', badgeBg: 'bg-emerald-600' },
+  patent: { label: 'PatentCraft', description: { ru: 'Патенты и формулы', kk: 'Патенттер мен формулалар', en: 'Patents and formulas' }, icon: Cpu, color: 'text-purple-600', badgeBg: 'bg-purple-600' },
+  engi_legal: { label: 'EngiLegal', description: { ru: 'Стандарты и нормы', kk: 'Стандарттар мен нормалар', en: 'Standards and codes' }, icon: ShieldCheck, color: 'text-amber-600', badgeBg: 'bg-amber-600' },
+  engi_match: { label: 'EngiMatch', description: { ru: 'Команда и проекты', kk: 'Команда мен жобалар', en: 'Teams and projects' }, icon: Users, color: 'text-indigo-600', badgeBg: 'bg-indigo-600' },
 };
 
 type PageResponse<T> = { items: T[]; next_cursor: string | null };
@@ -975,8 +975,13 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                   >
                     <IconComp className="w-3.5 h-3.5" />
                   </div>
-                  <div className="font-extrabold text-xs truncate">
-                    {config.label}
+                  <div className="min-w-0">
+                    <div className="font-extrabold text-xs truncate">
+                      {config.label}
+                    </div>
+                    <div className="eq-ai-module__description truncate">
+                      {config.description[lang]}
+                    </div>
                   </div>
                 </button>
               );
