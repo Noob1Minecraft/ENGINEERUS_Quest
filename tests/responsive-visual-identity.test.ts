@@ -62,14 +62,18 @@ test('Tutor module descriptions and compact suggestions remain localized', () =>
   ]) assert.match(assistant, new RegExp(description, 'u'));
 
   for (const prompt of [
-    'Реакции опор балки', 'Теорема Карно и цикл Стирлинга', 'Кинематика vs динамика',
-    'Арқалық тіректерінің реакциялары', 'Карно теоремасы және Стирлинг циклі',
-    'Beam support reactions', 'Carnot theorem and Stirling cycle', 'Kinematics vs dynamics',
+    'Реакции опор балки', 'Теорема Карно и цикл Стирлинга', 'Кинематика и динамика',
+    'Арқалық тіректерінің реакциялары', 'Карно теоремасы және Стирлинг циклі', 'Кинематика және динамика',
+    'Beam support reactions', 'Carnot theorem and Stirling cycle', 'Kinematics and dynamics',
   ]) assert.match(assistant, new RegExp(prompt, 'u'));
 
   assert.match(assistant, /config\.description\[lang\]/u);
   assert.match(css, /eq-ai-module__description[^}]*font-size:\s*0\.58rem/su);
-  assert.match(css, /eq-ai-module__description[^}]*line-height:\s*1\.15/su);
+  assert.match(css, /eq-ai-module__description[^}]*line-height:\s*1\.25/su);
+  assert.match(css, /eq-ai-prompts > div:last-child[^}]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/su);
+  assert.match(css, /eq-ai-prompt:focus-visible[^}]*outline:\s*2px solid var\(--color-ai\)/su);
+  assert.match(css, /eq-ai-prompt:nth-child\(3\)[^}]*grid-column:\s*1 \/ -1/su);
+  assert.doesNotMatch(assistant, /Кинематика vs динамика|Kinematics vs dynamics/u);
 });
 
 test('responsive rules cover phone, tablet, and constrained laptop table layouts', () => {

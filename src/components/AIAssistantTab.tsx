@@ -62,17 +62,17 @@ const PRESET_QUESTIONS: Record<string, Record<Language, string[]>> = {
     ru: [
       "Реакции опор балки",
       "Теорема Карно и цикл Стирлинга",
-      "Кинематика vs динамика",
+      "Кинематика и динамика",
     ],
     kk: [
       "Арқалық тіректерінің реакциялары",
       "Карно теоремасы және Стирлинг циклі",
-      "Кинематика vs динамика",
+      "Кинематика және динамика",
     ],
     en: [
       "Beam support reactions",
       "Carnot theorem and Stirling cycle",
-      "Kinematics vs dynamics",
+      "Kinematics and dynamics",
     ],
   },
   material: {
