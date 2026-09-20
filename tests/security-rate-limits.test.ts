@@ -123,6 +123,7 @@ test("authoritative AI budgets return 429 and fail closed when shared storage is
 
 test("authoritative endpoint budgets preserve operation-specific 429 responses", async () => {
   const operations = [
+    ["authenticated_general", "rate_limit_exceeded"],
     ["engimatch", "engimatch_rate_limit_exceeded"],
     ["document_upload", "document_upload_rate_limit_exceeded"],
     ["image_upload", "image_upload_rate_limit_exceeded"],
@@ -221,6 +222,8 @@ test("the application wires pre-auth protection and dedicated AI controls", () =
   assert.match(serverSource, /createAiConcurrencyGuard\(abuseControls\)/);
   assert.match(serverSource, /new SupabaseAbuseControlStore/);
   assert.match(serverSource, /createApp\(env, \{ abuseControlStore: abuseControls \}\)/);
+  assert.match(serverSource, /createAuthoritativeRateLimit\(abuseControls, "authenticated_general"\)/);
+  assert.match(appSource, /createAuthoritativeRateLimit\(options\.abuseControlStore, "authenticated_general"\)/);
   assert.match(serverSource, /createAuthoritativeRateLimit\(abuseControls, "document_upload"\)/);
   assert.match(serverSource, /createAuthoritativeRateLimit\(abuseControls, "image_upload"\)/);
   assert.match(appSource, /authoritative\?\.\("engimatch"\)/);

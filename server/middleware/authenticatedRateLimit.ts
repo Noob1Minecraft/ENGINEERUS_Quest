@@ -49,6 +49,7 @@ export function createAiRateLimit(factory?: RateLimitStoreFactory, limit = 20) {
 }
 
 const authoritativeResponses: Record<AbuseBudgetOperation, { code: string; message: string }> = {
+  authenticated_general: { code: "rate_limit_exceeded", message: "Too many requests. Try again later." },
   ai_request: { code: "ai_rate_limit_exceeded", message: "AI request budget exceeded. Try again later." },
   ai_vision: { code: "vision_rate_limit_exceeded", message: "Vision request budget exceeded. Try again later." },
   engimatch: { code: "engimatch_rate_limit_exceeded", message: "Too many matching requests. Try again later." },

@@ -21,6 +21,7 @@ export type AbuseBudgetResult = {
 };
 
 export type AbuseBudgetOperation =
+  | "authenticated_general"
   | "ai_request"
   | "ai_vision"
   | "engimatch"

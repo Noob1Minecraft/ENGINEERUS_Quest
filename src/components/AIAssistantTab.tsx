@@ -4,7 +4,7 @@ import { UserProfile, Language, SavedNote, ChatMessage, ChatSession } from '../t
 import { TRANSLATIONS } from '../data';
 import { verifySystemIntegrity } from '../utils/integrity';
 import { apiFetch } from '../utils/api';
-import { loadSavedAiNotes, storeSavedAiNotes } from '../utils/savedAiNotes';
+import { clearSavedAiNotes, loadSavedAiNotes, storeSavedAiNotes } from '../utils/savedAiNotes';
 import { activeChatStorageKey, buildConversationTitle, clearChatDraft, isUntitledConversation, loadChatDraft, storeChatDraft } from '../ai/chatWorkspace';
 import { appendOffTopicTransientMessage, isOffTopicRedirectResponse, type ModuleAiResponse } from '../ai/moduleResponse';
 import {
@@ -821,6 +821,17 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
     });
   };
 
+  const handleClearSavedNotes = () => {
+    const message = lang === 'kk'
+      ? 'Барлық сақталған шешімдерді осы құрылғыдан жою керек пе?'
+      : lang === 'en'
+        ? 'Clear all saved solutions from this device?'
+        : 'Удалить все сохранённые решения с этого устройства?';
+    if (!window.confirm(message)) return;
+    clearSavedAiNotes(localStorage, authenticatedUserId);
+    setSavedNotes([]);
+  };
+
   const handleCopyText = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
     setCopiedId(id);
@@ -1531,6 +1542,15 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                   {modCfg.label}
                 </button>
               ))}
+              {savedNotes.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleClearSavedNotes}
+                  className="min-h-[36px] shrink-0 rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 transition hover:bg-rose-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600"
+                >
+                  {lang === 'kk' ? 'Барлығын тазалау' : lang === 'en' ? 'Clear all' : 'Очистить всё'}
+                </button>
+              )}
             </div>
           </div>
 

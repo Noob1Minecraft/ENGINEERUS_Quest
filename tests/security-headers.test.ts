@@ -94,20 +94,24 @@ test("Vercel deploys host-scoped enforcing CSP values and browser-only output di
   const config = JSON.parse(readFileSync(path.resolve("vercel.json"), "utf8")) as {
     outputDirectory: string;
     headers: Array<{
-      has?: Array<{ type: string; value: string }>;
+      has?: Array<{ type: string; value: string | { re?: string } }>;
       headers: Array<{ key: string; value: string }>;
     }>;
   };
+  const conditionMatchesHost = (value: string | { re?: string }, host: string) => typeof value === "string"
+    ? value === host
+    : typeof value.re === "string" && new RegExp(value.re, "u").test(host);
   const cspForHost = (host: string) => config.headers
-    .find((entry) => entry.has?.some((condition) => condition.type === "host" && condition.value === host))
+    .find((entry) => entry.has?.some((condition) => condition.type === "host" && conditionMatchesHost(condition.value, host)))
     ?.headers.find((header) => header.key === CONTENT_SECURITY_POLICY_HEADER)?.value;
 
   assert.equal(config.outputDirectory, "dist");
   assert.equal(cspForHost("equest.kz"), PRODUCTION_CSP_VALUE);
   assert.equal(
-    cspForHost("engineerus-quest-git-feat-security-hardening-c330f1-enginnerus.vercel.app"),
+    cspForHost("engineerus-quest-git-any-authenticated-preview-enginnerus.vercel.app"),
     PREVIEW_CSP_VALUE,
   );
+  assert.equal(cspForHost("unrelated-project.vercel.app"), undefined);
   assert.equal(cspForHost("equest.kz")?.includes(PREVIEW_API_ORIGIN), false);
   assert.equal(cspForHost("equest.kz")?.includes("*"), false);
 });

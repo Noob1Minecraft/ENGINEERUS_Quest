@@ -87,7 +87,9 @@ export function createApp(env: ServerEnv, options: {
   app.use(createHealthRouter());
   app.use("/api", createPreAuthRateLimit(options.rateLimitStoreFactory));
   const authenticate = createRequireAuth(createSupabaseAccessTokenVerifier(env));
-  const rateLimiter = createAuthenticatedRateLimit(options.rateLimitStoreFactory);
+  const rateLimiter = options.abuseControlStore
+    ? createAuthoritativeRateLimit(options.abuseControlStore, "authenticated_general")
+    : createAuthenticatedRateLimit(options.rateLimitStoreFactory);
   const profiles = createProfileRepository(env);
   const projects = createProjectRepository(env);
   const projectRecruitment = createProjectRecruitmentRepository(env);

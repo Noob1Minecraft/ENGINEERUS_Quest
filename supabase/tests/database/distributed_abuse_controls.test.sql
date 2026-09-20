@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(47);
+select plan(49);
 
 select has_table('public', 'abuse_rate_limit_windows', 'authoritative rate-limit table exists');
 select has_table('public', 'ai_capacity_leases', 'authoritative AI lease table exists');
@@ -216,6 +216,22 @@ select is(
   20,
   'denied attempts cannot increase the counter beyond its bound'
 );
+
+set local role service_role;
+select is(
+  (public.consume_abuse_budget(
+    'a6200000-0000-4000-8000-000000000021', 'authenticated_general'
+  ) ->> 'limit')::integer,
+  180,
+  'general authenticated API requests use the shared 180-per-window budget'
+);
+select ok(
+  (public.consume_abuse_budget(
+    'a6200000-0000-4000-8000-000000000022', 'authenticated_general'
+  ) ->> 'allowed')::boolean,
+  'general authenticated budget permits an in-budget request'
+);
+reset role;
 
 set local role service_role;
 select ok(public.acquire_ai_capacity(
