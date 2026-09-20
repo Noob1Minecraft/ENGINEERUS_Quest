@@ -79,6 +79,7 @@ test("local PostgreSQL persistence and ownership API", async (t) => {
   const admin = createClient(url, secretKey, { auth: { persistSession: false } });
   const userA = await createIdentity("a");
   const userB = await createIdentity("b");
+  const userC = await createIdentity("provider-failure");
   const userAClient = createSupabaseUserClient(env, userA.token);
   let aiCalls = 0;
   const app = createTestApp(async () => {
@@ -156,6 +157,79 @@ test("local PostgreSQL persistence and ownership API", async (t) => {
           body: JSON.stringify({ session_id: sessionB, module: "tutor", text: "forged", lang: "en" }),
         });
         assert.equal(crossAppend.status, 404);
+      });
+
+      await t.test("provider failure keeps one persisted user message and an idempotent retry completes once", async () => {
+        const created = await fetch(`${baseUrl}/api/chats`, {
+          method: "POST",
+          headers: authorization(userC),
+          body: JSON.stringify({ title: "Failure recovery", module: "tutor" }),
+        });
+        assert.equal(created.status, 201);
+        const failureSessionId = (await created.json() as { session: { id: string } }).session.id;
+        const requestId = crypto.randomUUID();
+        const requestBody = JSON.stringify({
+          session_id: failureSessionId,
+          module: "tutor",
+          text: "Keep this question if the provider fails",
+          lang: "en",
+        });
+        const failingApp = createTestApp(async () => {
+          throw new Error("synthetic provider failure");
+        });
+
+        await withServer(failingApp, async (failingUrl) => {
+          const failed = await fetch(`${failingUrl}/api/module`, {
+            method: "POST",
+            headers: { ...authorization(userC), "Idempotency-Key": requestId },
+            body: requestBody,
+          });
+          assert.equal(failed.status, 503);
+          const body = await failed.json() as {
+            error: { code: string };
+            user_message: { text: string; requestId: string };
+            assistant_message: null;
+          };
+          assert.equal(body.error.code, "ai_unavailable");
+          assert.equal(body.user_message.text, "Keep this question if the provider fails");
+          assert.equal(body.user_message.requestId, `ai:tutor:${requestId}`);
+          assert.equal(body.assistant_message, null);
+        });
+
+        const afterFailure = await fetch(`${baseUrl}/api/chats/${failureSessionId}/messages`, {
+          headers: authorization(userC),
+        });
+        assert.equal(afterFailure.status, 200);
+        const persistedAfterFailure = (await afterFailure.json() as {
+          messages: Array<{ sender: string; text: string; requestId: string }>;
+        }).messages;
+        assert.equal(persistedAfterFailure.length, 1);
+        assert.equal(persistedAfterFailure[0].sender, "user");
+        assert.equal(persistedAfterFailure[0].text, "Keep this question if the provider fails");
+        assert.equal(persistedAfterFailure[0].requestId, `ai:tutor:${requestId}`);
+
+        const recoveryApp = createTestApp(async () => "Recovered assistant response");
+        await withServer(recoveryApp, async (recoveryUrl) => {
+          const retried = await fetch(`${recoveryUrl}/api/module`, {
+            method: "POST",
+            headers: { ...authorization(userC), "Idempotency-Key": requestId },
+            body: requestBody,
+          });
+          assert.equal(retried.status, 200);
+        });
+
+        const restarted = createTestApp(async () => "must not be called for an idempotent replay");
+        await withServer(restarted, async (restartedUrl) => {
+          const reloaded = await fetch(`${restartedUrl}/api/chats/${failureSessionId}/messages`, {
+            headers: authorization(userC),
+          });
+          assert.equal(reloaded.status, 200);
+          const messages = (await reloaded.json() as {
+            messages: Array<{ sender: string; text: string; requestId: string }>;
+          }).messages;
+          assert.deepEqual(messages.map(({ sender }) => sender), ["user", "ai"]);
+          assert.equal(messages.filter((message) => message.requestId === `ai:tutor:${requestId}`).length, 2);
+        });
       });
 
       await t.test("user/assistant messages and canonical XP persist idempotently", async () => {
@@ -351,5 +425,6 @@ test("local PostgreSQL persistence and ownership API", async (t) => {
   } finally {
     await admin.auth.admin.deleteUser(userA.id);
     await admin.auth.admin.deleteUser(userB.id);
+    await admin.auth.admin.deleteUser(userC.id);
   }
 });

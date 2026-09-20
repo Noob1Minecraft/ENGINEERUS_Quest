@@ -20,7 +20,7 @@ test("minimal Images UI supports private upload, selection, deletion, error, and
 
 test("image selection sends only server IDs to the existing AI request and remains clearable", () => {
   assert.match(app, /setAiImages\(images\.map/u);
-  assert.match(ai, /image_ids: imageContext\.map/u);
+  assert.match(ai, /image_ids: submissionImageIds/u);
   assert.match(ai, /onClearImageContext/u);
   assert.doesNotMatch(ai, /image_(?:url|base64|binary)\s*:/iu);
 });

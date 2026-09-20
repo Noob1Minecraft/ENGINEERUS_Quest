@@ -116,9 +116,10 @@ export function createAiRouter(
       return;
     }
 
+    let started: Awaited<ReturnType<ChatRepository["beginExchange"]>> | undefined;
     try {
       const { userId, accessToken } = response.locals.auth;
-      const started = await dependencies.repository.beginExchange(
+      started = await dependencies.repository.beginExchange(
         userId,
         accessToken,
         sessionId,
@@ -230,9 +231,19 @@ export function createAiRouter(
       } catch (error) {
         if (!(error instanceof AiProviderError)) throw error;
         if (error.category === "aborted") return;
-        providerFailureCategory = error.category;
-        providerStatus = error.providerStatus;
-        generatedResponse = error.fallbackContent;
+        securityLogger.warn("ai_response_unavailable_after_message_persisted", {
+          error_category: error.category,
+          ...(error.providerStatus !== undefined ? { provider_status: error.providerStatus } : {}),
+        });
+        response.status(503).json({
+          error: {
+            code: "ai_provider_unavailable",
+            message: "The question was saved, but the AI response could not be completed.",
+          },
+          user_message: started.userMessage,
+          assistant_message: null,
+        });
+        return;
       }
       const sanitizedResponse = sanitizeAssistantContent(generatedResponse);
       const materialGuardResult = guardMaterialPropertyResponse({
@@ -349,11 +360,20 @@ export function createAiRouter(
       });
     } catch (error) {
       if (error instanceof PersistenceError) {
-        sendPersistenceError(response, error);
+        if (started) {
+          response.status(error.status).json({
+            error: { code: error.code, message: error.message },
+            user_message: started.userMessage,
+            assistant_message: null,
+          });
+        } else {
+          sendPersistenceError(response, error);
+        }
         return;
       }
       response.status(503).json({
         error: { code: "ai_unavailable", message: "The AI service is temporarily unavailable." },
+        ...(started ? { user_message: started.userMessage, assistant_message: null } : {}),
       });
     }
   }
