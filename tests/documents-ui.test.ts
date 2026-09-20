@@ -21,7 +21,7 @@ test("Documents UI has authenticated upload, loading, empty, failure, delete, an
 
 test("document selection adds only document_id to the existing AI request and can be cleared", () => {
   assert.match(app, /setAiDocument\(\{ id: document\.id, name: document\.original_filename \}\)/u);
-  assert.match(ai, /document_id: documentContext\.id/u);
+  assert.match(ai, /document_id: submissionDocumentId/u);
   assert.match(ai, /onClearDocumentContext/u);
   assert.doesNotMatch(ai, /document_(?:text|chunks|content)\s*:/u);
 });
