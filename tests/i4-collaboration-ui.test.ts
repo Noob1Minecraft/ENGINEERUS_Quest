@@ -31,7 +31,8 @@ test('Messages keep human chat distinct and expose an eligible-only accessible s
   const focusHook = source('src/hooks/useDialogFocus.ts');
   assert.match(focusHook, /event\.key === 'Escape'/);
   assert.match(focusHook, /previousFocus\.current\?\.focus/);
-  assert.match(messages, /acceptedCandidates/);
+  assert.match(messages, /listDirectChatEligibleContacts/);
+  assert.match(messages, /eligibleCandidates/);
   assert.match(messages, /new Map/);
   assert.match(css, /@media \(max-width: 767px\)/);
   assert.match(css, /eq-direct-chat__list--mobile-hidden/);

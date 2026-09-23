@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { request as httpRequest } from "node:http";
 import test from "node:test";
 import express, { type RequestHandler } from "express";
 import { createDocumentsRouter } from "../server/routes/documents";
@@ -93,6 +94,39 @@ test("multipart upload enforces the 10 MB parser limit, rejects extra fields, an
     const response = await fetch(`${baseUrl}/api/documents`, { method: "POST", body: quota });
     assert.equal(response.status, 409);
     assert.equal((await response.json() as { error: { code: string } }).error.code, "document_quota_exceeded");
+  });
+  assert.equal(fixture.state.uploads.length, 0);
+});
+
+test("crafted multipart field names and aborted uploads fail safely without creating storage state", async () => {
+  const fixture = appFixture();
+  await withServer(fixture.app, async (baseUrl) => {
+    for (const fieldName of ["items[999999999]", "constructor[prototype][polluted]"]) {
+      const crafted = new FormData();
+      crafted.append(fieldName, "forged");
+      crafted.append("file", new Blob(["safe"], { type: "text/plain" }), "notes.txt");
+      assert.equal((await fetch(`${baseUrl}/api/documents`, { method: "POST", body: crafted })).status, 400);
+    }
+
+    const endpoint = new URL("/api/documents", baseUrl);
+    await new Promise<void>((resolve) => {
+      const boundary = "----engineerus-aborted-upload";
+      const request = httpRequest({
+        hostname: endpoint.hostname,
+        port: Number(endpoint.port),
+        path: endpoint.pathname,
+        method: "POST",
+        headers: {
+          "Content-Type": `multipart/form-data; boundary=${boundary}`,
+          "Content-Length": 1024 * 1024,
+        },
+      });
+      request.on("error", () => resolve());
+      request.write(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="aborted.txt"\r\nContent-Type: text/plain\r\n\r\npartial`);
+      request.destroy();
+    });
+
+    assert.equal((await fetch(`${baseUrl}/api/documents`)).status, 200);
   });
   assert.equal(fixture.state.uploads.length, 0);
 });

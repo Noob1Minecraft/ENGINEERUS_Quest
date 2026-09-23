@@ -22,7 +22,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Check out complete history without persisted credentials
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -39,11 +39,11 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Check out source without persisted credentials
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
       - name: Use repository Node and npm versions
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -62,7 +62,7 @@ jobs:
           mkdir -p artifacts
           npm sbom --sbom-format cyclonedx --omit dev --package-lock-only > artifacts/engineerus-sbom.cdx.json
       - name: Upload SBOM for review
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: engineerus-cyclonedx-sbom
           path: artifacts/engineerus-sbom.cdx.json

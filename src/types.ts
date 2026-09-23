@@ -277,6 +277,7 @@ export interface ChatMessage {
   queryForAi?: string;
   requestId?: string;
   transient?: boolean;
+  deliveryState?: 'sending' | 'failed';
 }
 
 export interface ChatSession {

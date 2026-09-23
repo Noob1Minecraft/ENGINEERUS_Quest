@@ -33,8 +33,8 @@ test('Tutor composer reuses owned document and image APIs with explicit removabl
   assert.match(picker, /uploadImage\(file\)/);
   assert.match(picker, /status === 'ready'/);
   assert.match(picker, /requestAnimationFrame\(\(\) => trigger\.current\?\.focus\(\)\)/);
-  assert.match(assistant, /document_id: documentContext\.id/);
-  assert.match(assistant, /image_ids: imageContext\.map/);
+  assert.match(assistant, /document_id: submissionDocumentId/);
+  assert.match(assistant, /image_ids: submissionImageIds/);
   assert.match(assistant, /onSelectDocumentContext\?\.\(null\)/);
   assert.match(assistant, /onSelectImageContext\?\.\(\[\]\)/);
 });
@@ -44,6 +44,14 @@ test('workspace remains backend-persistent and avoids local message history', ()
   assert.match(assistant, /\/api\/chats\/\$\{encodeURIComponent\(activeSessionId\)\}\/messages\?limit=50/);
   assert.match(assistant, /headers: \{ 'Idempotency-Key': requestId \}/);
   assert.doesNotMatch(assistant, /localStorage\.(?:setItem|getItem)\([^\n]*(?:messages|sessions|chats)/);
+});
+
+test('message submission is optimistic and cannot be blocked by cosmetic chat renaming', () => {
+  assert.ok(assistant.indexOf('createOptimisticUserMessage') < assistant.indexOf("apiFetch<ModuleAiResponse>('/api/module'"));
+  assert.match(assistant, /Renaming is cosmetic and must never prevent message persistence/);
+  assert.match(assistant, /sendInFlightRef\.current/);
+  assert.match(assistant, /canonicalAiRequestId/);
+  assert.match(assistant, /onClick=\{\(\) => void handleSendPrompt\(undefined, failedSubmission\)\}/);
 });
 
 test('public Beta badge is removed without removing beta feedback', () => {

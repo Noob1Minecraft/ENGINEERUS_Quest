@@ -28,7 +28,7 @@ const serverEnvSchema = z.object({
   FRONTEND_ORIGIN: optionalString,
   GROQ_API_KEY: optionalString,
   GROQ_API_KEY_2: optionalString,
-  GROQ_MODEL: z.string().trim().min(1).default("qwen/qwen3.6-27b"),
+  GROQ_MODEL: z.string().trim().min(1).default("qwen/qwen3.8-27b"),
   KAZSTANDARD_LOOKUP_ENABLED: disabledByDefaultBoolean,
   SUPABASE_URL: optionalUrl,
   SUPABASE_PUBLISHABLE_KEY: optionalString,

@@ -4,9 +4,17 @@ import { UserProfile, Language, SavedNote, ChatMessage, ChatSession } from '../t
 import { TRANSLATIONS } from '../data';
 import { verifySystemIntegrity } from '../utils/integrity';
 import { apiFetch } from '../utils/api';
-import { loadSavedAiNotes, storeSavedAiNotes } from '../utils/savedAiNotes';
+import { clearSavedAiNotes, loadSavedAiNotes, storeSavedAiNotes } from '../utils/savedAiNotes';
 import { activeChatStorageKey, buildConversationTitle, clearChatDraft, isUntitledConversation, loadChatDraft, storeChatDraft } from '../ai/chatWorkspace';
 import { appendOffTopicTransientMessage, isOffTopicRedirectResponse, type ModuleAiResponse } from '../ai/moduleResponse';
+import {
+  canonicalAiRequestId,
+  createOptimisticUserMessage,
+  markOptimisticMessageFailed,
+  mergeCanonicalMessages,
+  persistedUserMessageFromError,
+  type FailedAiSubmission,
+} from '../ai/messageFlow';
 import { AiAttachmentPicker } from './AiAttachmentPicker';
 import { Button } from './ui';
 import { useDialogFocus } from '../hooks/useDialogFocus';
@@ -155,13 +163,6 @@ const MODULE_CONFIG: Record<string, { label: string; description: Record<Languag
 
 type PageResponse<T> = { items: T[]; next_cursor: string | null };
 
-function mergeMessages(...groups: ChatMessage[][]): ChatMessage[] {
-  const byId = new Map<string, ChatMessage>();
-  groups.flat().forEach((message) => byId.set(message.id, message));
-  return [...byId.values()].sort((left, right) =>
-    left.timestamp.localeCompare(right.timestamp) || left.id.localeCompare(right.id));
-}
-
 export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
   user,
   authenticatedUserId,
@@ -191,6 +192,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
   const [showSessionsDrawer, setShowSessionsDrawer] = useState<boolean>(false);
   const [showDesktopHistory, setShowDesktopHistory] = useState<boolean>(false);
   const [persistenceError, setPersistenceError] = useState<string | null>(null);
+  const [failedSubmission, setFailedSubmission] = useState<FailedAiSubmission | null>(null);
 
   // User Multi-Chat Sessions
   const [sessions, setSessions] = useState<ChatSession[]>([]);
@@ -213,6 +215,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
   const managementDialogRef = useRef<HTMLElement>(null);
   const managementInitialFocusRef = useRef<HTMLElement>(null);
   const newChatButtonRef = useRef<HTMLButtonElement | null>(null);
+  const sendInFlightRef = useRef<string | null>(null);
 
   // Saved Notes Library
   const [savedNotes, setSavedNotes] = useState<SavedNote[]>(() =>
@@ -245,6 +248,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
     setSessionCursor(null);
     setLoadingMessageSessions(new Set());
     setTransientMessages({});
+    setFailedSubmission(null);
 
     if (!authenticatedUserId) {
       setSessions([]);
@@ -479,7 +483,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
         `/api/chats/${encodeURIComponent(sessionId)}/messages?limit=50&cursor=${encodeURIComponent(cursor)}`,
       );
       setSessions((current) => current.map((session) => session.id === sessionId
-        ? { ...session, messages: mergeMessages(result.items, session.messages) }
+        ? { ...session, messages: mergeCanonicalMessages(result.items, session.messages) }
         : session));
       setMessageCursors((current) => ({ ...current, [sessionId]: result.next_cursor }));
     } catch {
@@ -579,21 +583,28 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
     }
   };
 
-  const handleSendPrompt = async (textToSend?: string) => {
-    const query = textToSend || promptText;
-    if (!query.trim() || loading) return;
-    const requestId = crypto.randomUUID();
-    let targetSessionId = activeSession?.id;
+  const handleSendPrompt = async (textToSend?: string, retry?: FailedAiSubmission) => {
+    const query = retry?.text ?? textToSend ?? promptText;
+    if (!query.trim() || sendInFlightRef.current) return;
+    const requestId = retry?.requestId ?? crypto.randomUUID();
+    const submissionModule = retry?.module ?? selectedModule;
+    const submissionLang = retry?.lang ?? lang;
+    const submissionDocumentId = retry?.documentId ?? documentContext?.id;
+    const submissionImageIds = retry?.imageIds ?? imageContext.map(({ id }) => id);
+    const canonicalRequestId = canonicalAiRequestId(submissionModule, requestId);
+    let targetSessionId = retry?.sessionId ?? activeSession?.id;
+    sendInFlightRef.current = requestId;
     setPromptText('');
     setLoading(true);
     setPersistenceError(null);
+    setFailedSubmission(null);
 
     try {
       if (!targetSessionId) {
         const created = await apiFetch<{ session: Omit<ChatSession, 'messages'> }>('/api/chats', {
           method: 'POST',
           body: JSON.stringify({
-            module: selectedModule,
+            module: submissionModule,
             title: 'New conversation',
           }),
         });
@@ -605,15 +616,27 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
         setActiveSessionId(newSession.id);
       }
 
+      const optimisticMessage = createOptimisticUserMessage({
+        requestId: canonicalRequestId,
+        text: query,
+        module: submissionModule,
+      });
+      setSessions((current) => current.map((session) => session.id === targetSessionId
+        ? { ...session, messages: mergeCanonicalMessages(session.messages, [optimisticMessage]) }
+        : session));
+
       if (isUntitledConversation(activeSession?.id === targetSessionId ? activeSession.title : sessions.find((session) => session.id === targetSessionId)?.title ?? 'New conversation')) {
         const title = buildConversationTitle(query);
-        const renamed = await apiFetch<{ session: Omit<ChatSession, 'messages'> }>(`/api/chats/${encodeURIComponent(targetSessionId)}`, {
+        void apiFetch<{ session: Omit<ChatSession, 'messages'> }>(`/api/chats/${encodeURIComponent(targetSessionId)}`, {
           method: 'PATCH',
           body: JSON.stringify({ title }),
+        }).then((renamed) => {
+          setSessions((current) => current.map((session) => session.id === targetSessionId
+            ? { ...renamed.session, messages: session.messages }
+            : session));
+        }).catch(() => {
+          // Renaming is cosmetic and must never prevent message persistence.
         });
-        setSessions((current) => current.map((session) => session.id === targetSessionId
-          ? { ...renamed.session, messages: session.messages }
-          : session));
       }
 
       const data = await apiFetch<ModuleAiResponse>('/api/module', {
@@ -621,19 +644,17 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
         headers: { 'Idempotency-Key': requestId },
         body: JSON.stringify({
           session_id: targetSessionId,
-          module: selectedModule,
+          module: submissionModule,
           text: query,
-          lang,
-          ...(documentContext ? { document_id: documentContext.id } : {}),
-          ...(imageContext.length > 0 ? { image_ids: imageContext.map(({ id }) => id) } : {}),
+          lang: submissionLang,
+          ...(submissionDocumentId ? { document_id: submissionDocumentId } : {}),
+          ...(submissionImageIds.length > 0 ? { image_ids: submissionImageIds } : {}),
         }),
       });
       if (isOffTopicRedirectResponse(data)) {
         setSessions((current) => current.map((session) => {
           if (session.id !== targetSessionId) return session;
-          const messagesById = new Map(session.messages.map((message) => [message.id, message]));
-          messagesById.set(data.user_message.id, data.user_message);
-          return { ...session, messages: Array.from(messagesById.values()) };
+          return { ...session, messages: mergeCanonicalMessages(session.messages, [data.user_message]) };
         }));
         setTransientMessages((current) => {
           const currentMessages = current[targetSessionId] ?? [];
@@ -641,7 +662,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
             ...current,
             [targetSessionId]: appendOffTopicTransientMessage(currentMessages, data, {
               requestId,
-              module: selectedModule,
+              module: submissionModule,
               timestamp: new Date().toLocaleTimeString(),
             }),
           };
@@ -655,58 +676,104 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
 
       setSessions((current) => current.map((session) => {
         if (session.id !== targetSessionId) return session;
-        const byId = new Map(session.messages.map((message) => [message.id, message]));
-        byId.set(data.user_message.id, data.user_message);
-        byId.set(data.assistant_message!.id, {
+        return { ...session, messages: mergeCanonicalMessages(session.messages, [
+          data.user_message,
+          {
           ...data.assistant_message!,
           queryForAi: query,
-        });
-        return { ...session, messages: Array.from(byId.values()) };
+          },
+        ]) };
       }));
 
       clearChatDraft(authenticatedUserId, targetSessionId);
       onSelectDocumentContext?.(null);
       onSelectImageContext?.([]);
 
-      onUpdateUser({
-        xp: data.xp,
-        level: data.level,
-        streak: data.streak,
-        requests_count: data.requests_count,
-        material_count: data.material_count,
-        patent_count: data.patent_count,
-        modules_used: data.modules_used,
-      });
+      try {
+        onUpdateUser({
+          xp: data.xp,
+          level: data.level,
+          streak: data.streak,
+          requests_count: data.requests_count,
+          material_count: data.material_count,
+          patent_count: data.patent_count,
+          modules_used: data.modules_used,
+        });
 
-      if (onCompleteQuest) {
-        await onCompleteQuest('first_contact');
-        if (selectedModule === 'material') await onCompleteQuest('material_scout');
-        if (data.modules_used.length >= 4) await onCompleteQuest('module_explorer');
-        if (data.xp >= 100) await onCompleteQuest('xp_hunter');
-        if (data.streak >= 3) await onCompleteQuest('streak_master');
+        if (onCompleteQuest) {
+          await onCompleteQuest('first_contact');
+          if (submissionModule === 'material') await onCompleteQuest('material_scout');
+          if (data.modules_used.length >= 4) await onCompleteQuest('module_explorer');
+          if (data.xp >= 100) await onCompleteQuest('xp_hunter');
+          if (data.streak >= 3) await onCompleteQuest('streak_master');
+        }
+      } catch {
+        // Progress/quest refresh is a separate side effect. It must not turn a
+        // completed, persisted exchange into a message failure.
       }
-    } catch {
-      setPersistenceError(lang === 'kk'
-        ? 'Хабарлама сақталмады немесе ЖИ жауабы аяқталмады.'
-        : lang === 'en'
-          ? 'The message could not be persisted or the AI response did not complete.'
-          : 'Сообщение не сохранено или ответ ИИ не был завершён.');
+    } catch (error) {
+      const persistedUserMessage = persistedUserMessageFromError(error);
+      const retrySubmission: FailedAiSubmission | null = targetSessionId ? {
+        requestId,
+        sessionId: targetSessionId,
+        text: query,
+        module: submissionModule,
+        lang: submissionLang,
+        ...(submissionDocumentId ? { documentId: submissionDocumentId } : {}),
+        ...(submissionImageIds.length > 0 ? { imageIds: submissionImageIds } : {}),
+      } : null;
+      setFailedSubmission(retrySubmission);
+      setPersistenceError(persistedUserMessage
+        ? (lang === 'kk'
+          ? 'Сұрақ сақталды, бірақ ЖИ жауабы аяқталмады. Қайта көруге болады.'
+          : lang === 'en'
+            ? 'Your question was saved, but the AI response did not complete. You can retry it.'
+            : 'Вопрос сохранён, но ответ ИИ не был завершён. Можно повторить запрос.')
+        : (lang === 'kk'
+          ? 'Сұрауды жіберу немесе сақтауды растау мүмкін болмады. Қайта көріңіз.'
+          : lang === 'en'
+            ? 'The request could not be sent or its persistence confirmed. Please retry.'
+            : 'Не удалось отправить запрос или подтвердить его сохранение. Повторите попытку.'));
+
+      if (persistedUserMessage && targetSessionId) {
+        setSessions((current) => current.map((session) => session.id === targetSessionId
+          ? { ...session, messages: mergeCanonicalMessages(session.messages, [persistedUserMessage]) }
+          : session));
+      }
 
       // Reload canonical rows. A user message may have committed before an AI
       // provider failure; no client-only error message is treated as canonical.
       try {
-        if (!targetSessionId) return;
+        if (!targetSessionId) {
+          setPromptText(query);
+          return;
+        }
         const result = await apiFetch<PageResponse<ChatMessage>>(
           `/api/chats/${encodeURIComponent(targetSessionId)}/messages?limit=50`,
         );
+        const canonicalUserPersisted = result.items.some((message) =>
+          message.sender === 'user' && message.requestId === canonicalRequestId);
         setSessions((current) => current.map((session) => session.id === targetSessionId
-          ? { ...session, messages: mergeMessages(session.messages, result.items) }
+          ? {
+            ...session,
+            messages: canonicalUserPersisted
+              ? mergeCanonicalMessages(session.messages, result.items)
+              : markOptimisticMessageFailed(
+                mergeCanonicalMessages(session.messages, result.items),
+                canonicalRequestId,
+              ),
+          }
           : session));
         setMessageCursors((current) => ({ ...current, [targetSessionId]: result.next_cursor }));
       } catch {
-        // The visible persistence error remains the single source of truth.
+        if (targetSessionId) {
+          setSessions((current) => current.map((session) => session.id === targetSessionId
+            ? { ...session, messages: markOptimisticMessageFailed(session.messages, canonicalRequestId) }
+            : session));
+        }
       }
     } finally {
+      sendInFlightRef.current = null;
       setLoading(false);
     }
   };
@@ -752,6 +819,17 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
       storeSavedAiNotes(localStorage, authenticatedUserId, next);
       return next;
     });
+  };
+
+  const handleClearSavedNotes = () => {
+    const message = lang === 'kk'
+      ? 'Барлық сақталған шешімдерді осы құрылғыдан жою керек пе?'
+      : lang === 'en'
+        ? 'Clear all saved solutions from this device?'
+        : 'Удалить все сохранённые решения с этого устройства?';
+    if (!window.confirm(message)) return;
+    clearSavedAiNotes(localStorage, authenticatedUserId);
+    setSavedNotes([]);
   };
 
   const handleCopyText = (text: string, id: string) => {
@@ -845,8 +923,18 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
       }`}
     >
       {persistenceError && (
-        <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold p-3 rounded-xl">
-          {persistenceError}
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-bold text-rose-700" role="alert">
+          <span>{persistenceError}</span>
+          {failedSubmission && (
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() => void handleSendPrompt(undefined, failedSubmission)}
+              className="rounded-lg border border-rose-300 bg-white px-3 py-1.5 text-rose-800 transition hover:bg-rose-100 disabled:opacity-60"
+            >
+              {lang === 'kk' ? 'Қайталау' : lang === 'en' ? 'Retry' : 'Повторить'}
+            </button>
+          )}
         </div>
       )}
 
@@ -1320,7 +1408,11 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
 
                       {isUser && (
                         <div className="text-[10px] text-blue-200 font-semibold text-right mt-1.5">
-                          {msg.timestamp}
+                          {msg.deliveryState === 'sending'
+                            ? (lang === 'kk' ? 'Сақталуда…' : lang === 'en' ? 'Saving…' : 'Сохранение…')
+                            : msg.deliveryState === 'failed'
+                              ? (lang === 'kk' ? 'Сақтау расталмады' : lang === 'en' ? 'Save not confirmed' : 'Сохранение не подтверждено')
+                              : msg.timestamp}
                         </div>
                       )}
                     </div>
@@ -1450,6 +1542,15 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                   {modCfg.label}
                 </button>
               ))}
+              {savedNotes.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleClearSavedNotes}
+                  className="min-h-[36px] shrink-0 rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 transition hover:bg-rose-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600"
+                >
+                  {lang === 'kk' ? 'Барлығын тазалау' : lang === 'en' ? 'Clear all' : 'Очистить всё'}
+                </button>
+              )}
             </div>
           </div>
 

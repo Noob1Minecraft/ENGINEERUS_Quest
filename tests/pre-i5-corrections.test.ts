@@ -19,9 +19,9 @@ test('learning resources use safe external destinations and explicit external-li
   assert.match(learning, /href=\{book\.sourceUrl\}/u);
   assert.match(learning, /target="_blank"/u);
   assert.match(learning, /rel="noopener noreferrer"/u);
-  assert.match(learning, /Открыть источник/u);
-  assert.match(learning, /Дереккөзді ашу/u);
-  assert.match(learning, /View source/u);
+  assert.match(learning, /'Открыть'/u);
+  assert.match(learning, /'Ашу'/u);
+  assert.match(learning, /'Open'/u);
   assert.doesNotMatch(learning, /dangerouslySetInnerHTML|javascript:|data:/iu);
 });
 
@@ -31,7 +31,8 @@ test('Messages omits only the duplicated legacy progress strip and preserves I4 
   const migration = source('supabase/migrations/20260824084316_direct_chat_foundation.sql');
   assert.match(app, /activeTab !== 'messages'/u);
   assert.match(directChat, /Start conversation|Начать диалог|Сөйлесуді бастау/u);
-  assert.match(directChat, /acceptedCandidates/u);
+  assert.match(directChat, /listDirectChatEligibleContacts/u);
+  assert.match(directChat, /eligibleCandidates/u);
   assert.match(migration, /unique \(user_low_id, user_high_id\)/u);
   assert.doesNotMatch(migration, /(?:alias|archived_at|hidden_at)/iu);
 });

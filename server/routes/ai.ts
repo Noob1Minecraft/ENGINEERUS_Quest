@@ -23,7 +23,9 @@ import { trackProductEvent } from "../beta/trackProductEvent";
 import type { AiVisionImage } from "../ai/groqClient";
 import { MAX_IMAGES_PER_REQUEST, visionSystemPolicy } from "../images/imagePolicy";
 import {
+  buildEngineeringDomainPolicy,
   buildEngineeringIntentPolicy,
+  classifyEngineeringDomain,
   classifyEngineeringIntent,
   engineeringOffTopicRedirect,
   isContextualEngineeringFollowUp,
@@ -114,9 +116,10 @@ export function createAiRouter(
       return;
     }
 
+    let started: Awaited<ReturnType<ChatRepository["beginExchange"]>> | undefined;
     try {
       const { userId, accessToken } = response.locals.auth;
-      const started = await dependencies.repository.beginExchange(
+      started = await dependencies.repository.beginExchange(
         userId,
         accessToken,
         sessionId,
@@ -159,21 +162,24 @@ export function createAiRouter(
         }
       }
 
-      const engineeringIntent = classifyEngineeringIntent({
+      const engineeringInput = {
         text: canonicalPrompt,
         module: moduleName,
         hasDocument: Boolean(documentId),
         hasImages: Boolean(imageIds?.length),
-      });
+      };
+      const engineeringDomain = classifyEngineeringDomain(engineeringInput);
+      const engineeringIntent = classifyEngineeringIntent(engineeringInput);
       securityLogger.info("ai_engineering_route", {
+        domain: engineeringDomain,
         intent: engineeringIntent,
-        off_topic: engineeringIntent === "OFF_TOPIC",
+        off_topic: engineeringDomain === "OUT_OF_SCOPE",
         standards_route: engineeringIntent === "ENGINEERING_STANDARD",
         has_document: Boolean(documentId),
         image_count: imageIds?.length ?? 0,
       });
 
-      if (engineeringIntent === "OFF_TOPIC") {
+      if (engineeringDomain === "OUT_OF_SCOPE") {
         const responseText = engineeringOffTopicRedirect(detectedLanguage);
         response.json({
           status: "ok",
@@ -203,6 +209,7 @@ export function createAiRouter(
       }
       const providerPrompt = [prepared.prompt, conversationContext?.promptBlock, documentContext?.promptBlock].filter(Boolean).join("\n\n");
       const baseSystemPolicy = [
+        buildEngineeringDomainPolicy(engineeringDomain),
         buildEngineeringIntentPolicy(engineeringIntent),
         prepared.systemInstructions,
         conversationContext?.systemPolicy,
@@ -224,9 +231,19 @@ export function createAiRouter(
       } catch (error) {
         if (!(error instanceof AiProviderError)) throw error;
         if (error.category === "aborted") return;
-        providerFailureCategory = error.category;
-        providerStatus = error.providerStatus;
-        generatedResponse = error.fallbackContent;
+        securityLogger.warn("ai_response_unavailable_after_message_persisted", {
+          error_category: error.category,
+          ...(error.providerStatus !== undefined ? { provider_status: error.providerStatus } : {}),
+        });
+        response.status(503).json({
+          error: {
+            code: "ai_provider_unavailable",
+            message: "The question was saved, but the AI response could not be completed.",
+          },
+          user_message: started.userMessage,
+          assistant_message: null,
+        });
+        return;
       }
       const sanitizedResponse = sanitizeAssistantContent(generatedResponse);
       const materialGuardResult = guardMaterialPropertyResponse({
@@ -343,11 +360,20 @@ export function createAiRouter(
       });
     } catch (error) {
       if (error instanceof PersistenceError) {
-        sendPersistenceError(response, error);
+        if (started) {
+          response.status(error.status).json({
+            error: { code: error.code, message: error.message },
+            user_message: started.userMessage,
+            assistant_message: null,
+          });
+        } else {
+          sendPersistenceError(response, error);
+        }
         return;
       }
       response.status(503).json({
         error: { code: "ai_unavailable", message: "The AI service is temporarily unavailable." },
+        ...(started ? { user_message: started.userMessage, assistant_message: null } : {}),
       });
     }
   }

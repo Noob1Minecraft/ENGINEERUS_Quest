@@ -3,7 +3,7 @@ import { sanitizeAssistantContent } from "./responseSafety";
 import { securityLogger } from "../security/structuredLogger";
 
 const FALLBACK_MODELS = ["openai/gpt-oss-120b", "openai/gpt-oss-20b"];
-const VISION_CAPABLE_MODELS = new Set(["qwen/qwen3.6-27b"]);
+const VISION_CAPABLE_MODELS = new Set(["qwen/qwen3.8-27b"]);
 const MODEL_FALLBACK_STATUSES = new Set([400, 404]);
 const CREDENTIAL_FALLBACK_STATUSES = new Set([401, 403]);
 
@@ -126,7 +126,7 @@ export function createGroqResponder(options: GroqResponderOptions) {
               ],
               temperature: 0.2,
               max_tokens: 600,
-              reasoning_effort: "none",
+              reasoning_effort: model.startsWith("openai/gpt-oss-") ? "medium" : "none",
             }),
             signal: providerAbort.signal,
           });

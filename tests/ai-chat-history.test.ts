@@ -85,9 +85,11 @@ test('message history is selected-session only, bounded, and cursor validated', 
 
 test('frontend hydrates one selected session instead of issuing an initial N+1 fan-out', () => {
   const source = readFileSync(new URL('../src/components/AIAssistantTab.tsx', import.meta.url), 'utf8');
+  const messageFlow = readFileSync(new URL('../src/ai/messageFlow.ts', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /Promise\.all\(persistentSessions\.map/);
   assert.match(source, /Hydrate only the selected chat/);
   assert.match(source, /loadOlderSessions/);
   assert.match(source, /loadOlderMessages/);
-  assert.match(source, /new Map<string, ChatMessage>/);
+  assert.match(source, /mergeCanonicalMessages/);
+  assert.match(messageFlow, /new Map<string, ChatMessage>/);
 });

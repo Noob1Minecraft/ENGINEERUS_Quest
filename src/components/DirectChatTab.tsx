@@ -20,7 +20,7 @@ const TEXT = {
   ru: {
     title: 'Сообщения', subtitle: 'Рабочие диалоги с участниками совместных проектов.', empty: 'Личных диалогов пока нет.',
     emptyHint: 'Начать разговор можно с участником, доступным по принятой заявке или приглашению.', choose: 'Выберите диалог, чтобы продолжить обсуждение.',
-    placeholder: 'Написать участнику…', send: 'Отправить', signIn: 'Войдите, чтобы открыть сообщения.', start: 'Начать разговор',
+    placeholder: 'Написать участнику…', send: 'Отправить', signIn: 'Войдите, чтобы открыть сообщения.', signInAction: 'Войти', start: 'Начать разговор',
     startTitle: 'Новый разговор', startHint: 'Показаны только участники, доступные по действующим проектным связям.',
     noEligible: 'Сейчас нет участников, с которыми можно начать новый разговор.', close: 'Закрыть', back: 'К диалогам',
     owner: 'Владелец проекта', collaborator: 'Участник проекта', loading: 'Загружаем диалоги…', starting: 'Открываем разговор…', unread: 'непрочитанных', error: 'Не удалось выполнить действие с сообщениями. Повторите позже.',
@@ -28,7 +28,7 @@ const TEXT = {
   kk: {
     title: 'Хабарламалар', subtitle: 'Ортақ жобалар қатысушыларымен жұмыс диалогтары.', empty: 'Жеке диалогтар әзірге жоқ.',
     emptyHint: 'Қабылданған өтінім немесе шақыру арқылы қолжетімді қатысушымен сөйлесуге болады.', choose: 'Талқылауды жалғастыру үшін диалогты таңдаңыз.',
-    placeholder: 'Қатысушыға жазыңыз…', send: 'Жіберу', signIn: 'Хабарламаларды ашу үшін кіріңіз.', start: 'Сөйлесуді бастау',
+    placeholder: 'Қатысушыға жазыңыз…', send: 'Жіберу', signIn: 'Хабарламаларды ашу үшін кіріңіз.', signInAction: 'Кіру', start: 'Сөйлесуді бастау',
     startTitle: 'Жаңа сөйлесу', startHint: 'Тек қолданыстағы жоба байланысы бойынша қолжетімді қатысушылар көрсетіледі.',
     noEligible: 'Қазір жаңа сөйлесуді бастауға болатын қатысушылар жоқ.', close: 'Жабу', back: 'Диалогтарға',
     owner: 'Жоба иесі', collaborator: 'Жоба қатысушысы', loading: 'Диалогтар жүктелуде…', starting: 'Сөйлесу ашылуда…', unread: 'оқылмаған', error: 'Хабарламалармен әрекетті орындау мүмкін болмады. Кейінірек қайталап көріңіз.',
@@ -36,7 +36,7 @@ const TEXT = {
   en: {
     title: 'Messages', subtitle: 'Working conversations with people from shared projects.', empty: 'No direct conversations yet.',
     emptyHint: 'You can start with someone made eligible by an accepted application or invitation.', choose: 'Choose a conversation to continue the discussion.',
-    placeholder: 'Message a collaborator…', send: 'Send', signIn: 'Sign in to open messages.', start: 'Start conversation',
+    placeholder: 'Message a collaborator…', send: 'Send', signIn: 'Sign in to open messages.', signInAction: 'Sign in', start: 'Start conversation',
     startTitle: 'New conversation', startHint: 'Only people eligible through an existing project relationship are shown.',
     noEligible: 'There are no eligible collaborators for a new conversation right now.', close: 'Close', back: 'Back to conversations',
     owner: 'Project owner', collaborator: 'Project collaborator', loading: 'Loading conversations…', starting: 'Opening conversation…', unread: 'unread', error: 'The messaging action could not be completed. Please try again.',
@@ -174,7 +174,7 @@ export function DirectChatTab({ authenticated, currentUserId, lang, initialConve
     finally { setSending(false); }
   }
 
-  if (!authenticated) return <section className="eq-collab-guest"><MessageCircle aria-hidden="true" /><p>{copy.signIn}</p><Button onClick={onRequireAuth}>Sign in</Button></section>;
+  if (!authenticated) return <section className="eq-collab-guest"><MessageCircle aria-hidden="true" /><p>{copy.signIn}</p><Button onClick={onRequireAuth}>{copy.signInAction}</Button></section>;
 
   return <section className="eq-direct-chat" aria-labelledby="direct-chat-title">
     <header className="eq-direct-chat__header"><div><h1 id="direct-chat-title"><MessageCircle aria-hidden="true" />{copy.title}</h1><p>{copy.subtitle}</p></div><button ref={startTriggerRef} type="button" className="eq-button eq-button--secondary" onClick={() => void openStartConversation()}><Plus aria-hidden="true" />{copy.start}</button></header>

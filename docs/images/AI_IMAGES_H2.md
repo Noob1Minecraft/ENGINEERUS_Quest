@@ -4,7 +4,7 @@ H2 adds private, authenticated image analysis to the existing Engineerus AI Tuto
 
 ## Provider and request model
 
-The existing Groq primary model, `qwen/qwen3.6-27b`, accepts text and image inputs through the OpenAI-compatible chat-completions API. Groq documents a 20 MB image-bearing request limit and at most three input images. Existing GPT-OSS fallback models are text-only, so vision requests use only the configured Qwen vision model and fail safely instead of falling back to a text-only model. No additional provider or credential is introduced.
+The existing Groq primary model, `qwen/qwen3.8-27b`, accepts text and image inputs through the OpenAI-compatible chat-completions API. Groq documents a 20 MB image-bearing request limit and at most three input images. Existing GPT-OSS fallback models are text-only, so vision requests use only the configured Qwen vision model and fail safely instead of falling back to a text-only model. No additional provider or credential is introduced.
 
 The backend accepts only owner-verified `image_ids`. It privately downloads normalized bytes, constructs `data:image/...;base64,...` parts in memory, and sends them directly to Groq. The browser cannot submit an image URL, Storage path, base64 payload, or owner identifier to the AI route. The canonical user text remains unchanged for persistence, language routing, standards guards, idempotency, and XP.
 

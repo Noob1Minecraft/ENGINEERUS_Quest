@@ -361,9 +361,11 @@ export default function App() {
       <main className={`eq-app__main space-y-5 md:space-y-8${activeTab === 'ai' ? ' eq-app__main--workspace' : ''}`}>
         {/* User Profile Stats Header Bar (Incorporating exact design from screenshot) */}
         {activeTab !== 'profile' && activeTab !== 'home' && activeTab !== 'messages' && activeTab !== 'ai' && (
-          <Suspense fallback={<LoadingState label={featureLoadingLabel} />}>
-            <ProfileStats user={user} lang={lang} onNavigateToQuest={handleNavigateToQuest} />
-          </Suspense>
+          <div className="eq-context-stats">
+            <Suspense fallback={<LoadingState label={featureLoadingLabel} />}>
+              <ProfileStats user={user} lang={lang} onNavigateToQuest={handleNavigateToQuest} />
+            </Suspense>
+          </div>
         )}
 
         {/* Tab Content Routing */}

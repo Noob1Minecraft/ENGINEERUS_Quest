@@ -34,6 +34,10 @@ test('Messages UI is distinct from AI chat and uses visible-only non-overlapping
   assert.match(source,/new Map/);
   assert.match(source,/if \(markRead\) await markDirectConversationRead/);
   assert.doesNotMatch(source,/AIAssistantTab|chat_sessions|chat_messages|Groq/i);
+  assert.match(source,/signInAction: 'Войти'/);
+  assert.match(source,/signInAction: 'Кіру'/);
+  assert.match(source,/signInAction: 'Sign in'/);
+  assert.match(source,/>\{copy\.signInAction\}<\/Button>/);
 });
 
 test('Direct Chat polling backs off from 15 to 60 seconds and remains bounded',()=>{

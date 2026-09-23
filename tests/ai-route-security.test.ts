@@ -4,6 +4,7 @@ import express, { type RequestHandler } from "express";
 import type { ChatRepository } from "../server/persistence/chats";
 import { apiErrorHandler } from "../server/middleware/apiErrorHandler";
 import { createAiRouter } from "../server/routes/ai";
+import { AiProviderError } from "../server/ai/groqClient";
 import { withServer } from "./helpers";
 
 const SESSION_ID = "123e4567-e89b-42d3-a456-426614174000";
@@ -170,15 +171,26 @@ test("a null request cannot create an unhandled rejection and a subsequent valid
 });
 
 test("async provider failure returns a safe structured 503 without completing persistence", async () => {
-  const { app, state } = testApp(async () => { throw new Error("provider details must not escape"); });
+  const { app, state } = testApp(async () => {
+    throw new AiProviderError("provider", "provider details must not escape", 503);
+  });
   await withServer(app, async (baseUrl) => {
     const response = await postJson(baseUrl, {
       session_id: SESSION_ID, text: "Что такое момент?", lang: "ru",
     });
     assert.equal(response.status, 503);
-    const body = await response.json() as { error: { code: string; message: string } };
+    const body = await response.json() as {
+      error: { code: string; message: string };
+      user_message: { id: string; text: string };
+      assistant_message: null;
+    };
     assert.deepEqual(body, {
-      error: { code: "ai_unavailable", message: "The AI service is temporarily unavailable." },
+      error: {
+        code: "ai_provider_unavailable",
+        message: "The question was saved, but the AI response could not be completed.",
+      },
+      user_message: { id: "user-message", sender: "user", text: "Что такое момент?", module: "tutor", timestamp: TIMESTAMP },
+      assistant_message: null,
     });
     assert.doesNotMatch(JSON.stringify(body), /provider details|stack|token|secret/iu);
   });

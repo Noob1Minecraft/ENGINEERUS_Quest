@@ -15,6 +15,9 @@ test("security workflow is least privilege and contains the required non-deploym
     assert.match(workflow, new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "u"));
   }
   assert.match(workflow, /gitleaks\/gitleaks-action@[0-9a-f]{40}/u);
+  for (const action of ["actions/checkout", "actions/setup-node", "actions/upload-artifact"]) {
+    assert.match(workflow, new RegExp(`${action.replace("/", "\\/")}@[0-9a-f]{40}`, "u"));
+  }
   assert.match(workflow, /persist-credentials: false/u);
 });
 
