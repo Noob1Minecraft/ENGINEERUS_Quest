@@ -19,7 +19,7 @@ test("Groq vision uses only the configured vision model and sends private bytes 
   const requests: Array<Record<string, unknown>> = [];
   const responder = createGroqResponder({
     apiKey: "test-key",
-    model: "qwen/qwen3.6-27b",
+    model: "qwen/qwen3.8-27b",
     fetchImpl: async (_url, init) => {
       requests.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
       return new Response(JSON.stringify({ choices: [{ message: { content: "Наблюдаю схему редуктора." } }] }), { status: 200 });
@@ -28,7 +28,7 @@ test("Groq vision uses only the configured vision model and sends private bytes 
   const response = await responder("Что изображено?", "tutor", "ru", visionSystemPolicy(), [visionImage]);
   assert.equal(response, "Наблюдаю схему редуктора.");
   assert.equal(requests.length, 1);
-  assert.equal(requests[0].model, "qwen/qwen3.6-27b");
+  assert.equal(requests[0].model, "qwen/qwen3.8-27b");
   const user = (requests[0].messages as Array<{ role: string; content: unknown }>)[1];
   assert.ok(Array.isArray(user.content));
   const imagePart = (user.content as Array<{ type: string; image_url?: { url: string } }>).find(({ type }) => type === "image_url");
@@ -41,7 +41,7 @@ test("vision never falls back to text-only GPT-OSS models and provider errors re
   let calls = 0;
   const responder = createGroqResponder({
     apiKey: "test-key",
-    model: "qwen/qwen3.6-27b",
+    model: "qwen/qwen3.8-27b",
     fetchImpl: async () => { calls += 1; return new Response("private provider detail", { status: 400 }); },
   });
   await assert.rejects(() => responder("diagram", "tutor", "en", visionSystemPolicy(), [visionImage]), (error: unknown) => error instanceof AiProviderError && error.category === "model");

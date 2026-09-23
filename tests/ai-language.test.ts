@@ -133,6 +133,30 @@ test("sends the resolved language and centralized system policy to Groq without 
   }
 });
 
+test("uses model-compatible reasoning effort across the Groq fallback chain", async () => {
+  const requests: Array<{ model: string; reasoning_effort?: string }> = [];
+  const respond = createGroqResponder({
+    apiKey: "test-placeholder",
+    model: "qwen/qwen3.8-27b",
+    fetchImpl: async (_input, init) => {
+      const body = JSON.parse(String(init?.body)) as { model: string; reasoning_effort?: string };
+      requests.push(body);
+      if (requests.length < 3) return new Response("{}", { status: 400 });
+      return new Response(JSON.stringify({ choices: [{ message: { content: "fallback success" } }] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    },
+  });
+
+  assert.equal(await respond("Что такое напряжение?", "tutor", "ru"), "fallback success");
+  assert.deepEqual(requests.map(({ model, reasoning_effort }) => ({ model, reasoning_effort })), [
+    { model: "qwen/qwen3.8-27b", reasoning_effort: "none" },
+    { model: "openai/gpt-oss-120b", reasoning_effort: "medium" },
+    { model: "openai/gpt-oss-20b", reasoning_effort: "medium" },
+  ]);
+});
+
 test("keeps the route-resolved language when English catalog metadata is attached", async () => {
   const requests: Array<{ messages: Array<{ role: string; content: string }> }> = [];
   const fetchStub: typeof fetch = async (_input, init) => {
