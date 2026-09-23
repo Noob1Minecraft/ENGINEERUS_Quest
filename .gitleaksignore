@@ -1,0 +1,8 @@
+# Deterministic Idempotency-Key fixtures used only by historical tests.
+c15cd86df51987a68ba9483d42c5123ff8b9b3e2:tests/ai-route-security.test.ts:generic-api-key:68
+8c80e98d78e304e1be4a6da99bb38d78f3d9fbd4:tests/kazstandard.test.ts:generic-api-key:139
+0237736df9474f126988b26f0ab9a1fc64e78390:tests/kazstandard.test.ts:generic-api-key:278
+04799490934f695b99ba92723dcbf2f78affa275:tests/ai-response-safety.test.ts:generic-api-key:86
+
+# Revoked historical Groq fallback; exact fingerprint only. Future findings remain enforced.
+21edd1969e30759d1b7eb4846b18ae0bae9edaa4:server.ts:generic-api-key:17
