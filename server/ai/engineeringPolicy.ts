@@ -25,6 +25,7 @@ export type EngineeringDomainInput = {
 type IntentInput = EngineeringDomainInput;
 
 const OFF_TOPIC = /(?:love\s+(?:poem|message)|relationship\s+advice|celebrity\s+gossip|best\s+rapper|world\s+cup|entertainment\s+trivia|roman\s+empire|political\s+(?:persuasion|news)|latest\s+political\s+news|recommend\s+(?:a\s+)?(?:movie|netflix)|social[ -]media\s+caption|life\s+coach(?:ing)?|write\s+(?:me\s+)?a\s+poem|horoscope|movie\s+recap|travel\s+itinerary|cooking\s+recipe|посоветуй\s+фильм|любовн\p{L}*\s+сообщен|стихотворен\p{L}*\s+(?:о\s+)?любв|совет\p{L}*\s+об\s+отношен|сплетн\p{L}*\s+о\s+знаменит|кто\s+(?:лучший\s+рэпер|выиграл\s+чемпионат\s+мира)|последн\p{L}*\s+политическ\p{L}*\s+новост|римск\p{L}*\s+импери|политическ\p{L}*\s+агитац|подпись\s+для\s+соцсет|лайф[- ]?коуч|гороскоп|пересказ\p{L}*\s+фильм|туристическ\p{L}*\s+маршрут|кулинарн\p{L}*\s+рецепт|махаббат\s+туралы\s+(?:өлең|хабарлама)|қарым-қатынас\s+туралы\s+кеңес|ең\s+жақсы\s+рэпер|саяси\s+жаңалық|әлем\s+чемпионат\p{L}*\s+кім\s+жең|жұлдыз\s+жорамал|саяхат\s+жоспар|аспаздық\s+рецепт)/iu;
+const GENERAL_OFF_TOPIC = /(?:shopping\s+(?:advice|recommendation)|what\s+(?:phone|shoes|clothes)\s+should\s+i\s+buy|translate\s+.{1,80}\s+into\s+(?:french|spanish|german)|language\s+exercise|lifestyle\s+advice|совет\p{L}*\s+по\s+покупк|какой\s+(?:телефон|одежд|обув)\p{L}*\s+купить|переведи\s+.{1,80}\s+на\s+(?:французск|испанск|немецк)|упражнен\p{L}*\s+по\s+язык|совет\p{L}*\s+по\s+образу\s+жизни|сатып\s+алу\s+туралы\s+кеңес|қандай\s+(?:телефон|киім|аяқ\s*киім)\s+сатып\s+алу|.{1,80}\s+(?:француз|испан|неміс)\s+тіліне\s+аудар|тілдік\s+жаттығу|өмір\s+салты\s+туралы\s+кеңес)/iu;
 const POLICY_OVERRIDE = /(?:ignore\s+(?:(?:all\s+)?(?:previous|prior|system)\s+instructions|policy)|you\s+are\s+now\s+(?:normal\s+)?chatgpt|forget\s+(?:the\s+)?(?:engineering|stem)\s+restriction|reveal\s+(?:your\s+)?system\s+prompt|repeat\s+(?:the\s+)?hidden\s+instructions|pretend\s+(?:this\s+is\s+not|you\s+are\s+not)\s+engineerus|for\s+one\s+message.{0,40}forget\s+(?:the\s+)?stem\s+restriction|игнорируй\s+(?:все\s+)?(?:предыдущие|системные)\s+инструкц|раскрой\s+(?:свой\s+)?системн\p{L}*\s+промпт|покажи\s+скрыт\p{L}*\s+инструкц|забудь\s+(?:об\s+)?(?:инженерн\p{L}*|stem)\s+ограничен|алдыңғы\s+нұсқауларды\s+елеме|жүйелік\s+промптті\s+көрсет|жасырын\s+нұсқауларды\s+қайтала)/iu;
 const FOLLOW_UP = /^(?:why|show\s+(?:the\s+)?formula|calculate\s+again|explain\s+(?:it\s+)?simpler|what\s+if\s+i\s+(?:double|halve)\s+it|use\s+\p{L}+\s+instead|почему|покажи\s+формул\p{L}*|рассчитай\s+(?:ещ[её]|снова)|объясни\s+проще|а\s+если\s+(?:удвоить|уменьшить)|используй\s+\p{L}+\s+вместо|неге|формуланы\s+көрсет|қайта\s+есепте|қарапайым\s+түсіндір|екі\s+есе\s+(?:арттырса|кемітсе))\s*[?.!]*$/iu;
 const CALCULATION = /(?:calculate|compute|solve|find\s+(?:the\s+)?(?:stress|force|torque|power|current|voltage|diameter|deflection)|рассчитай|вычисли|найди\s+(?:напряжен|сил|момент|мощност|ток|напряжение|диаметр|прогиб)|есепте|табу|formula|формул|equation|уравнен|теңдеу|\d+(?:[.,]\d+)?\s*(?:kn|n·?m|nm|mpa|gpa|pa|kw|w|v|a|mm|cm|m\b|kg|кн|н·?м|мпа|гпа|квт|вт))/iu;
@@ -60,7 +61,7 @@ export function classifyEngineeringDomain(input: EngineeringDomainInput): Engine
   // A mixed request remains usable for its technical portion. The central policy
   // instructs the model to decline any unrelated or policy-override portion.
   if (hasAllowedSignal) return "ALLOWED";
-  if (OFF_TOPIC.test(text) || POLICY_OVERRIDE.test(text)) return "OUT_OF_SCOPE";
+  if (OFF_TOPIC.test(text) || GENERAL_OFF_TOPIC.test(text) || POLICY_OVERRIDE.test(text)) return "OUT_OF_SCOPE";
 
   // Attachments and specialized modules may carry the missing technical context,
   // while unusually phrased questions should not be rejected by a keyword gate.
@@ -97,9 +98,9 @@ export function isContextualEngineeringFollowUp(text: string): boolean {
 }
 
 const REDIRECTS: Record<SupportedLanguage, string> = {
-  ru: "Я специализируюсь на инженерии, физике, математике и химии. Задай вопрос по одной из этих областей — помогу разобраться.",
-  kk: "Мен инженерия, физика, математика және химия салаларына маманданамын. Осы бағыттардың бірі бойынша сұрақ қой — көмектесемін.",
-  en: "I specialize in engineering, physics, mathematics, and chemistry. Ask me a question in one of these areas and I’ll help.",
+  ru: "Я специализируюсь на инженерии, математике, физике, химии и связанных технических темах. Задай вопрос в одной из этих областей — помогу.",
+  kk: "Мен инженерия, математика, физика, химия және байланысты техникалық тақырыптарға маманданамын. Осы салалардың бірінен сұрақ қой — көмектесемін.",
+  en: "I'm focused on engineering, mathematics, physics, chemistry, and related technical topics. Ask me something in one of those areas and I'll help.",
 };
 
 export function engineeringOffTopicRedirect(language: SupportedLanguage): string {

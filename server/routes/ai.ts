@@ -51,6 +51,30 @@ function safeAsync(handler: RequestHandler): RequestHandler {
   };
 }
 
+function runRequestHandler(
+  handler: RequestHandler,
+  request: import("express").Request,
+  response: import("express").Response,
+): Promise<boolean> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = () => settle(false);
+    const settle = (continued: boolean, error?: unknown) => {
+      if (settled) return;
+      settled = true;
+      response.off("finish", finish);
+      if (error) reject(error);
+      else resolve(continued);
+    };
+    response.once("finish", finish);
+    try {
+      handler(request, response, (error?: unknown) => settle(true, error));
+    } catch (error) {
+      settle(false, error);
+    }
+  });
+}
+
 function sendInvalidAiRequest(response: import("express").Response, moduleRequest = false): void {
   response.status(400).json({
     error: {
@@ -130,7 +154,29 @@ export function createAiRouter(
       const canonicalPrompt = started.userMessage.text;
       const detectedLanguage = dependencies.detectLanguage(canonicalPrompt, lang);
 
+      const engineeringInput = {
+        text: canonicalPrompt,
+        module: moduleName,
+        hasDocument: Boolean(documentId),
+        hasImages: Boolean(imageIds?.length),
+      };
+      const engineeringDomain = classifyEngineeringDomain(engineeringInput);
+      const engineeringIntent = classifyEngineeringIntent(engineeringInput);
+
       if (started.assistantMessage) {
+        if (engineeringDomain === "OUT_OF_SCOPE" && !started.assistantMessage.xpEarned) {
+          response.json({
+            status: "ok",
+            response_type: "off_topic_redirect",
+            response: started.assistantMessage.text,
+            user_message: started.userMessage,
+            assistant_message: started.assistantMessage,
+            ...started.progress,
+            lang: detectedLanguage,
+            idempotent_replay: true,
+          });
+          return;
+        }
         await trackProductEvent(dependencies.recordEvent, userId, "ai_message_sent", {
           module: moduleName,
           language: detectedLanguage,
@@ -162,14 +208,6 @@ export function createAiRouter(
         }
       }
 
-      const engineeringInput = {
-        text: canonicalPrompt,
-        module: moduleName,
-        hasDocument: Boolean(documentId),
-        hasImages: Boolean(imageIds?.length),
-      };
-      const engineeringDomain = classifyEngineeringDomain(engineeringInput);
-      const engineeringIntent = classifyEngineeringIntent(engineeringInput);
       securityLogger.info("ai_engineering_route", {
         domain: engineeringDomain,
         intent: engineeringIntent,
@@ -181,18 +219,28 @@ export function createAiRouter(
 
       if (engineeringDomain === "OUT_OF_SCOPE") {
         const responseText = engineeringOffTopicRedirect(detectedLanguage);
+        const completed = await dependencies.repository.completeExchangeWithoutReward(
+          userId,
+          accessToken,
+          sessionId,
+          requestId,
+          responseText,
+          moduleName,
+        );
         response.json({
           status: "ok",
           response_type: "off_topic_redirect",
-          response: responseText,
-          user_message: started.userMessage,
-          assistant_message: null,
-          ...started.progress,
+          response: completed.assistantMessage?.text ?? responseText,
+          user_message: completed.userMessage,
+          assistant_message: completed.assistantMessage,
+          ...completed.progress,
           lang: detectedLanguage,
-          idempotent_replay: true,
+          idempotent_replay: completed.created === false,
         });
         return;
       }
+
+      if (!await runRequestHandler(concurrencyGuard, request, response)) return;
 
       const prepared = await preparePromptWithStandardsMetadata(canonicalPrompt, dependencies.lookupStandards);
       const documentContext = documentId
@@ -396,7 +444,7 @@ export function createAiRouter(
     }
   }
 
-  router.post("/api/ai", authenticate, rateLimiter, visionRateLimiter, concurrencyGuard, safeAsync(async (request, response) => {
+  router.post("/api/ai", authenticate, rateLimiter, visionRateLimiter, safeAsync(async (request, response) => {
     await runWithCapacity(response, async () => {
       const parsed = baseAiRequestSchema.safeParse(request.body);
       if (!parsed.success) {
@@ -407,7 +455,7 @@ export function createAiRouter(
     });
   }));
 
-  router.post("/api/module", authenticate, rateLimiter, visionRateLimiter, concurrencyGuard, safeAsync(async (request, response) => {
+  router.post("/api/module", authenticate, rateLimiter, visionRateLimiter, safeAsync(async (request, response) => {
     await runWithCapacity(response, async () => {
       const parsed = moduleAiRequestSchema.safeParse(request.body);
       if (!parsed.success) {

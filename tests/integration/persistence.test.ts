@@ -80,6 +80,7 @@ test("local PostgreSQL persistence and ownership API", async (t) => {
   const userA = await createIdentity("a");
   const userB = await createIdentity("b");
   const userC = await createIdentity("provider-failure");
+  const userD = await createIdentity("off-topic");
   const userAClient = createSupabaseUserClient(env, userA.token);
   let aiCalls = 0;
   const app = createTestApp(async () => {
@@ -229,6 +230,47 @@ test("local PostgreSQL persistence and ownership API", async (t) => {
           }).messages;
           assert.deepEqual(messages.map(({ sender }) => sender), ["user", "ai"]);
           assert.equal(messages.filter((message) => message.requestId === `ai:tutor:${requestId}`).length, 2);
+        });
+      });
+
+      await t.test("off-topic refusal persists once across replay and restart without XP or progress", async () => {
+        const created = await fetch(`${baseUrl}/api/chats`, {
+          method: "POST",
+          headers: authorization(userD),
+          body: JSON.stringify({ title: "Off-topic redirect", module: "tutor" }),
+        });
+        assert.equal(created.status, 201);
+        const sessionId = (await created.json() as { session: { id: string } }).session.id;
+        const requestId = crypto.randomUUID();
+        const request = () => fetch(`${baseUrl}/api/module`, {
+          method: "POST",
+          headers: { ...authorization(userD), "Idempotency-Key": requestId },
+          body: JSON.stringify({ session_id: sessionId, module: "tutor", text: "Write me a love poem", lang: "en" }),
+        });
+        const providerCallsBefore = aiCalls;
+        const first = await request();
+        const replay = await request();
+        assert.equal(first.status, 200);
+        assert.equal(replay.status, 200);
+        const firstBody = await first.json() as { assistant_message: { id: string }; xp: number; requests_count: number; idempotent_replay: boolean };
+        const replayBody = await replay.json() as { assistant_message: { id: string }; xp: number; requests_count: number; idempotent_replay: boolean };
+        assert.equal(firstBody.idempotent_replay, false);
+        assert.equal(replayBody.idempotent_replay, true);
+        assert.equal(firstBody.assistant_message.id, replayBody.assistant_message.id);
+        assert.equal(firstBody.xp, 0);
+        assert.equal(firstBody.requests_count, 0);
+        assert.equal(aiCalls, providerCallsBefore);
+
+        const restarted = createTestApp(async () => "must not run while reloading");
+        await withServer(restarted, async (restartedUrl) => {
+          const reloaded = await fetch(`${restartedUrl}/api/chats/${sessionId}/messages`, {
+            headers: authorization(userD),
+          });
+          assert.equal(reloaded.status, 200);
+          const messages = (await reloaded.json() as { messages: Array<{ id: string; sender: string; requestId: string }> }).messages;
+          assert.deepEqual(messages.map(({ sender }) => sender), ["user", "ai"]);
+          assert.equal(messages.filter((message) => message.requestId === `ai:tutor:${requestId}`).length, 2);
+          assert.equal(messages[1].id, firstBody.assistant_message.id);
         });
       });
 
