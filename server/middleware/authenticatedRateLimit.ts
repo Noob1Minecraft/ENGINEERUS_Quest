@@ -3,6 +3,11 @@ import type { RequestHandler } from "express";
 import type { AbuseBudgetOperation, AbuseControlStore, AiCapacityStore, RateLimitStoreFactory } from "../security/securityControlStore";
 
 const WINDOW_MS = 15 * 60 * 1000;
+const SAFE_READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
+function isRoutineRead(method: string): boolean {
+  return SAFE_READ_METHODS.has(method.toUpperCase());
+}
 
 function storeOptions(factory: RateLimitStoreFactory | undefined, namespace: string) {
   return factory ? { store: factory.create(namespace) } : {};
@@ -24,13 +29,14 @@ export function createPreAuthRateLimit(factory?: RateLimitStoreFactory, limit = 
   });
 }
 
-export function createAuthenticatedRateLimit(factory?: RateLimitStoreFactory) {
+export function createAuthenticatedRateLimit(factory?: RateLimitStoreFactory, limit = 180) {
   return rateLimit({
     windowMs: WINDOW_MS,
-    limit: 180,
+    limit,
     standardHeaders: "draft-8",
     legacyHeaders: false,
     keyGenerator: (_request, response) => response.locals.auth.userId,
+    skip: (request) => isRoutineRead(request.method),
     handler: handler("rate_limit_exceeded", "Too many requests. Try again later."),
     ...storeOptions(factory, "authenticated-general"),
   });
@@ -64,6 +70,10 @@ export function createAuthoritativeRateLimit(
   operation: AbuseBudgetOperation,
 ): RequestHandler {
   return async (request, response, next) => {
+    if (operation === "authenticated_general" && isRoutineRead(request.method)) {
+      next();
+      return;
+    }
     if (operation === "ai_vision"
       && (!Array.isArray(request.body?.image_ids) || request.body.image_ids.length === 0)) {
       next();

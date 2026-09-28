@@ -104,6 +104,7 @@ test("sends the resolved language and centralized system policy to Groq without 
   const requests: Array<{
     messages: Array<{ role: string; content: string }>;
     reasoning_effort?: string;
+    max_tokens?: number;
   }> = [];
   const fetchStub: typeof fetch = async (_input, init) => {
     requests.push(JSON.parse(String(init?.body)));
@@ -128,6 +129,7 @@ test("sends the resolved language and centralized system policy to Groq without 
     const userMessage = body.messages.find(({ role }) => role === "user")?.content ?? "";
     assert.equal(systemMessage, buildSystemPrompt(requestedLanguage, module));
     assert.equal(body.reasoning_effort, "none");
+    assert.equal(body.max_tokens, 1600);
     assert.ok(userMessage.includes(userInstruction));
     assert.match(userMessage, /Preserve technical notation and identifiers/);
   }
