@@ -1972,7 +1972,8 @@ button.eq-home-link:hover { background: var(--color-surface-subtle); }
 }
 .eq-ai-refined .eq-ai-module__description {
   margin-top: 0.12rem;
-  color: color-mix(in srgb, var(--color-text) 70%, transparent);
+  color: inherit;
+  opacity: 0.82;
   font-size: 0.58rem;
   font-weight: 650;
   letter-spacing: -0.01em;
@@ -2105,7 +2106,17 @@ button.eq-home-link:hover { background: var(--color-surface-subtle); }
   .eq-admin-user { align-items: start; grid-template-columns: auto minmax(0, 1fr); }
   .eq-admin-user > :last-child { grid-column: 2; justify-self: start; }
 }
-.eq-ai-refined .eq-ai-message pre { border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface-subtle); padding: 0.75rem; }
+.eq-ai-refined .eq-ai-message__meta,
+.eq-ai-refined .eq-ai-message__timestamp { color: var(--color-text-muted); }
+.eq-ai-refined .eq-ai-message__content { color: var(--color-text); }
+.eq-ai-refined .eq-ai-message__content .markdown-body a {
+  color: var(--color-ai);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+.eq-ai-refined .eq-ai-message__content .markdown-body pre { border: 1px solid #334155; border-radius: var(--radius-sm); background: #0f172a; color: #f8fafc; padding: 0.75rem; }
+.eq-ai-refined .eq-ai-message__content .markdown-body pre code { color: inherit; }
 .eq-ai-refined .eq-ai-message code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9em; }
 .eq-ai-refined .eq-ai-transcript { scroll-padding-block: 1rem 5.5rem; }
 .eq-ai-refined .eq-ai-composer { padding-block: 0.7rem; }
