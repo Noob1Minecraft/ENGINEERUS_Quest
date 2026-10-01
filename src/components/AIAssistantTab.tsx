@@ -1322,12 +1322,12 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                     >
                       {/* Top AI Message Header Bar */}
                       {!isUser && (
-                        <div className="flex items-center justify-between border-b border-slate-200/30 pb-2 text-xs font-bold text-slate-400">
+                        <div className="eq-ai-message__meta flex items-center justify-between border-b border-slate-200/30 pb-2 text-xs font-bold text-slate-400">
                           <div className="flex items-center gap-1.5">
                             <span className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold text-white ${modConfig.badgeBg}`}>
                               {modConfig.label}
                             </span>
-                            <span className="text-[11px] text-slate-400">{msg.timestamp}</span>
+                            <span className="eq-ai-message__timestamp text-[11px] text-slate-400">{msg.timestamp}</span>
                           </div>
 
                           {msg.xpEarned && (
@@ -1340,7 +1340,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
 
                       {/* Markdown Text Content */}
                       <div
-                        className={`text-xs sm:text-sm font-medium leading-relaxed ${
+                        className={`eq-ai-message__content text-xs sm:text-sm font-medium leading-relaxed ${
                           isUser ? 'text-white' : isFullscreen ? 'text-slate-100' : 'text-slate-900'
                         }`}
                       >

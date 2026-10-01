@@ -69,12 +69,26 @@ test('Tutor module descriptions and compact suggestions remain localized', () =>
 
   assert.match(assistant, /config\.description\[lang\]/u);
   assert.match(css, /eq-ai-module__description[^}]*font-size:\s*0\.58rem/su);
+  assert.match(css, /eq-ai-module__description[^}]*color:\s*inherit[^}]*opacity:\s*0\.82/su);
   assert.match(css, /eq-ai-module__description[^}]*letter-spacing:\s*-0\.01em/su);
   assert.match(css, /eq-ai-module__description[^}]*line-height:\s*1\.25/su);
   assert.match(css, /eq-ai-prompts > div:last-child[^}]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/su);
   assert.match(css, /eq-ai-prompt:focus-visible[^}]*outline:\s*2px solid var\(--color-ai\)/su);
   assert.match(css, /eq-ai-prompt:nth-child\(3\)[^}]*grid-column:\s*1 \/ -1/su);
   assert.doesNotMatch(assistant, /Кинематика vs динамика|Kinematics vs dynamics/u);
+});
+
+test('Tutor fullscreen messages preserve readable semantic contrast', () => {
+  const assistant = source('src/components/AIAssistantTab.tsx');
+  const css = source('src/index.css');
+
+  assert.match(assistant, /eq-ai-message__meta/u);
+  assert.match(assistant, /eq-ai-message__timestamp/u);
+  assert.match(assistant, /eq-ai-message__content/u);
+  assert.match(css, /eq-ai-message__content \{ color:\s*var\(--color-text\); \}/u);
+  assert.match(css, /eq-ai-message__meta,[\s\S]*eq-ai-message__timestamp \{ color:\s*var\(--color-text-muted\); \}/u);
+  assert.match(css, /eq-ai-message__content \.markdown-body a[^}]*color:\s*var\(--color-ai\)/su);
+  assert.match(css, /eq-ai-message__content \.markdown-body pre[^}]*background:\s*#0f172a[^}]*color:\s*#f8fafc/su);
 });
 
 test('responsive rules cover phone, tablet, and constrained laptop table layouts', () => {

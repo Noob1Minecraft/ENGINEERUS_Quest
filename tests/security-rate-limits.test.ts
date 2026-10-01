@@ -159,6 +159,49 @@ test("authoritative endpoint budgets fail closed when shared storage is unavaila
   });
 });
 
+test("authenticated general budgets exempt routine reads but continue limiting writes", async () => {
+  let calls = 0;
+  const store: AbuseControlStore = {
+    async consume(_userId, operation) {
+      calls += 1;
+      assert.equal(operation, "authenticated_general");
+      return {
+        allowed: calls === 1,
+        limit: 1,
+        remaining: 0,
+        resetAt: new Date(Date.now() + 60_000),
+      };
+    },
+  };
+  const app = express();
+  const limiter = createAuthoritativeRateLimit(store, "authenticated_general");
+  app.get("/profile", authenticate, limiter, (_request, response) => response.json({ ok: true }));
+  app.post("/profile", authenticate, limiter, (_request, response) => response.json({ ok: true }));
+
+  await withServer(app, async (baseUrl) => {
+    assert.equal((await fetch(`${baseUrl}/profile`)).status, 200);
+    assert.equal((await fetch(`${baseUrl}/profile`, { method: "HEAD" })).status, 200);
+    assert.equal(calls, 0, "safe reads do not consume the shared authenticated budget");
+    assert.equal((await fetch(`${baseUrl}/profile`, { method: "POST" })).status, 200);
+    assert.equal((await fetch(`${baseUrl}/profile`, { method: "POST" })).status, 429);
+    assert.equal(calls, 2, "writes remain authoritatively rate limited");
+  });
+});
+
+test("in-memory authenticated general limiting mirrors the safe-read exemption", async () => {
+  const app = express();
+  const limiter = createAuthenticatedRateLimit(undefined, 1);
+  app.get("/profile", authenticate, limiter, (_request, response) => response.json({ ok: true }));
+  app.post("/profile", authenticate, limiter, (_request, response) => response.json({ ok: true }));
+
+  await withServer(app, async (baseUrl) => {
+    assert.equal((await fetch(`${baseUrl}/profile`)).status, 200);
+    assert.equal((await fetch(`${baseUrl}/profile`)).status, 200);
+    assert.equal((await fetch(`${baseUrl}/profile`, { method: "POST" })).status, 200);
+    assert.equal((await fetch(`${baseUrl}/profile`, { method: "POST" })).status, 429);
+  });
+});
+
 test("closing a client connection aborts provider work but does not release capacity early", async () => {
   const request = new (await import("node:events")).EventEmitter() as unknown as import("express").Request;
   const response = new (await import("node:events")).EventEmitter() as unknown as import("express").Response;

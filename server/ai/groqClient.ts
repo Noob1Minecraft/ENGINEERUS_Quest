@@ -125,7 +125,7 @@ export function createGroqResponder(options: GroqResponderOptions) {
                 },
               ],
               temperature: 0.2,
-              max_tokens: 600,
+              max_tokens: 1600,
               reasoning_effort: model.startsWith("openai/gpt-oss-") ? "medium" : "none",
             }),
             signal: providerAbort.signal,
