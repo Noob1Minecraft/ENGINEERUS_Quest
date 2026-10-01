@@ -95,6 +95,8 @@ test('Tutor fullscreen messages preserve readable semantic contrast', () => {
   assert.match(assistant, /eq-ai-chat-frame--fullscreen/u);
   assert.match(assistant, /eq-ai-message--assistant/u);
   assert.match(css, /eq-ai-message__content \{ color:\s*var\(--eq-ai-message-text\); \}/u);
+  assert.match(css, /--eq-ai-user-message-text:\s*#fff/u);
+  assert.match(css, /eq-ai-message\.bg-blue-700 \.eq-ai-message__content \{ color:\s*var\(--eq-ai-user-message-text\); \}/u);
   assert.match(css, /eq-ai-message__meta,[\s\S]*eq-ai-message__timestamp \{ color:\s*var\(--eq-ai-message-muted\); \}/u);
   assert.match(css, /eq-ai-message__content \.markdown-body a[^}]*color:\s*var\(--eq-ai-message-link\)/su);
   assert.match(css, /eq-ai-message__content \.markdown-body code:not\(pre code\)[^}]*color:\s*var\(--eq-ai-inline-code-text\)/su);
