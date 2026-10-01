@@ -1108,7 +1108,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
           {/* Main Chat Interface Window with Multi-Chat Drawer */}
           <div
             className={`eq-ai-chat-frame relative bg-white border border-slate-200/80 overflow-hidden flex flex-col${showDesktopHistory ? ' has-history' : ''} ${
-              isFullscreen ? 'flex-1 min-h-0 bg-slate-900 border-slate-800 text-slate-100' : 'eq-ai-chat-frame--embedded'
+              isFullscreen ? 'eq-ai-chat-frame--fullscreen flex-1 min-h-0 bg-slate-900 border-slate-800 text-slate-100' : 'eq-ai-chat-frame--embedded'
             }`}
           >
             <aside id="ai-chat-history-panel" className={`eq-ai-history hidden min-h-0 w-64 flex-col border-r ${isFullscreen ? 'border-slate-800 bg-slate-950' : 'border-slate-200 bg-slate-50'}`} aria-label={lang === 'kk' ? 'Сақталған чаттар' : lang === 'en' ? 'Saved conversations' : 'Сохранённые чаты'}>
@@ -1315,19 +1315,17 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                       className={`eq-ai-message max-w-[88%] sm:max-w-[80%] rounded-xl p-4 sm:p-5 ${
                         isUser
                           ? 'bg-blue-700 text-white rounded-br-xs'
-                          : isFullscreen
-                          ? 'bg-slate-900 border border-slate-800 text-slate-100 rounded-bl-xs space-y-3'
-                          : 'bg-white border border-slate-200/90 border-l-[3px] border-l-teal-600 text-slate-800 rounded-bl-xs space-y-3'
+                          : 'eq-ai-message--assistant border rounded-bl-xs space-y-3'
                       }`}
                     >
                       {/* Top AI Message Header Bar */}
                       {!isUser && (
-                        <div className="eq-ai-message__meta flex items-center justify-between border-b border-slate-200/30 pb-2 text-xs font-bold text-slate-400">
+                        <div className="eq-ai-message__meta flex items-center justify-between border-b border-slate-200/30 pb-2 text-xs font-bold">
                           <div className="flex items-center gap-1.5">
                             <span className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold text-white ${modConfig.badgeBg}`}>
                               {modConfig.label}
                             </span>
-                            <span className="eq-ai-message__timestamp text-[11px] text-slate-400">{msg.timestamp}</span>
+                            <span className="eq-ai-message__timestamp text-[11px]">{msg.timestamp}</span>
                           </div>
 
                           {msg.xpEarned && (
@@ -1340,9 +1338,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
 
                       {/* Markdown Text Content */}
                       <div
-                        className={`eq-ai-message__content text-xs sm:text-sm font-medium leading-relaxed ${
-                          isUser ? 'text-white' : isFullscreen ? 'text-slate-100' : 'text-slate-900'
-                        }`}
+                        className={`eq-ai-message__content text-xs sm:text-sm font-medium leading-relaxed ${isUser ? 'text-white' : ''}`}
                       >
                         {isUser ? (
                           <div className="whitespace-pre-wrap">{translateMsgText(msg.text, msg.id)}</div>
@@ -1358,11 +1354,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
                         <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200/30">
                           <button
                             onClick={() => handleCopyText(translateMsgText(msg.text, msg.id), msg.id)}
-                            className={`px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all flex items-center gap-1 ${
-                              isFullscreen
-                                ? 'bg-slate-800 hover:bg-slate-700 text-slate-200'
-                                : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                            }`}
+                            className="eq-ai-message__action px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all flex items-center gap-1"
                           >
                             {copiedId === msg.id ? (
                               <>

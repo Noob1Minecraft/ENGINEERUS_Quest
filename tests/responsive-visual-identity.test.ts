@@ -7,6 +7,13 @@ function source(file: string): string {
   return readFileSync(path.resolve(file), 'utf8');
 }
 
+test('browser title uses the Engineerus Quest product name', () => {
+  const html = source('index.html');
+
+  assert.match(html, /<title>Engineerus Quest<\/title>/u);
+  assert.doesNotMatch(html, /edu-assistant-v2/iu);
+});
+
 test('official Engineerus logo asset is reused across shell, mobile navigation, and auth', () => {
   const logo = source('src/components/BrandLogo.tsx');
   const shell = source('src/components/Header.tsx') + source('src/components/AppSidebar.tsx');
@@ -85,10 +92,14 @@ test('Tutor fullscreen messages preserve readable semantic contrast', () => {
   assert.match(assistant, /eq-ai-message__meta/u);
   assert.match(assistant, /eq-ai-message__timestamp/u);
   assert.match(assistant, /eq-ai-message__content/u);
-  assert.match(css, /eq-ai-message__content \{ color:\s*var\(--color-text\); \}/u);
-  assert.match(css, /eq-ai-message__meta,[\s\S]*eq-ai-message__timestamp \{ color:\s*var\(--color-text-muted\); \}/u);
-  assert.match(css, /eq-ai-message__content \.markdown-body a[^}]*color:\s*var\(--color-ai\)/su);
+  assert.match(assistant, /eq-ai-chat-frame--fullscreen/u);
+  assert.match(assistant, /eq-ai-message--assistant/u);
+  assert.match(css, /eq-ai-message__content \{ color:\s*var\(--eq-ai-message-text\); \}/u);
+  assert.match(css, /eq-ai-message__meta,[\s\S]*eq-ai-message__timestamp \{ color:\s*var\(--eq-ai-message-muted\); \}/u);
+  assert.match(css, /eq-ai-message__content \.markdown-body a[^}]*color:\s*var\(--eq-ai-message-link\)/su);
+  assert.match(css, /eq-ai-message__content \.markdown-body code:not\(pre code\)[^}]*color:\s*var\(--eq-ai-inline-code-text\)/su);
   assert.match(css, /eq-ai-message__content \.markdown-body pre[^}]*background:\s*#0f172a[^}]*color:\s*#f8fafc/su);
+  assert.match(css, /eq-ai-chat-frame--fullscreen[^}]*--eq-ai-message-text:\s*#f8fafc/su);
 });
 
 test('responsive rules cover phone, tablet, and constrained laptop table layouts', () => {
