@@ -14,6 +14,7 @@ import type {
 } from "@supabase/supabase-js";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
 import { setApiAccessToken } from "../utils/api";
+import type { Language } from "../types";
 
 type AuthSnapshot = {
   session: Session | null;
@@ -65,6 +66,55 @@ export async function restoreAuthSession(
 }
 
 type SignUpResult = { requiresEmailConfirmation: boolean };
+
+type AuthOperation = "sign-up" | "sign-in" | "oauth" | "sign-out";
+
+const AUTH_ERROR_COPY = {
+  ru: {
+    invalidCredentials: "Неверный email или пароль.",
+    emailNotConfirmed: "Подтвердите email перед входом.",
+    weakPassword: "Пароль недостаточно надёжный. Используйте более сложный пароль.",
+    invalidEmail: "Проверьте формат email.",
+    emailRateLimit: "Слишком много писем отправлено. Подождите и попробуйте снова.",
+    duplicateSignup: "Не удалось создать аккаунт с этими данными. Попробуйте войти или восстановить пароль.",
+    generic: "Ошибка авторизации. Проверьте данные и повторите попытку.",
+  },
+  kk: {
+    invalidCredentials: "Email немесе құпия сөз қате.",
+    emailNotConfirmed: "Кіру алдында email мекенжайын растаңыз.",
+    weakPassword: "Құпия сөз жеткілікті сенімді емес. Күрделірек құпия сөз қолданыңыз.",
+    invalidEmail: "Email пішімін тексеріңіз.",
+    emailRateLimit: "Тым көп хат жіберілді. Күтіп, қайта көріңіз.",
+    duplicateSignup: "Бұл деректермен аккаунт жасау мүмкін болмады. Кіріп немесе құпия сөзді қалпына келтіріп көріңіз.",
+    generic: "Авторландыру сәтсіз аяқталды. Деректерді тексеріп, қайталап көріңіз.",
+  },
+  en: {
+    invalidCredentials: "Incorrect email or password.",
+    emailNotConfirmed: "Confirm your email before signing in.",
+    weakPassword: "That password is not strong enough. Use a stronger password.",
+    invalidEmail: "Check the email address format.",
+    emailRateLimit: "Too many emails were sent. Wait and try again.",
+    duplicateSignup: "An account could not be created with these details. Try signing in or resetting your password.",
+    generic: "Authentication failed. Check your details and try again.",
+  },
+} satisfies Record<Language, Record<string, string>>;
+
+export function authErrorMessage(error: unknown, lang: Language, operation: AuthOperation): string {
+  const copy = AUTH_ERROR_COPY[lang];
+  const code = typeof error === "object" && error !== null && "code" in error
+    ? String(error.code)
+    : "";
+
+  if (code === "invalid_credentials") return copy.invalidCredentials;
+  if (code === "email_not_confirmed") return copy.emailNotConfirmed;
+  if (code === "weak_password") return copy.weakPassword;
+  if (code === "email_address_invalid") return copy.invalidEmail;
+  if (code === "over_email_send_rate_limit") return copy.emailRateLimit;
+  if (operation === "sign-up" && (code === "email_exists" || code === "user_already_exists")) {
+    return copy.duplicateSignup;
+  }
+  return copy.generic;
+}
 
 type SignOutClient = {
   auth: {

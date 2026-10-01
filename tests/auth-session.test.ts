@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { Session } from "@supabase/supabase-js";
-import { restoreAuthSession, signOutAuthSession } from "../src/auth/AuthContext";
+import { authErrorMessage, restoreAuthSession, signOutAuthSession } from "../src/auth/AuthContext";
 
 const session = {
   access_token: "local-test-token",
@@ -69,4 +69,25 @@ test("failed sign-out preserves auth state and surfaces the error", async () => 
 
   assert.equal(calls, 1);
   assert.equal(cleared, 0);
+});
+
+test("auth failures are actionable without distinguishing nonexistent accounts", () => {
+  assert.equal(
+    authErrorMessage({ code: "invalid_credentials" }, "en", "sign-in"),
+    "Incorrect email or password.",
+  );
+  assert.equal(
+    authErrorMessage({ code: "email_not_confirmed" }, "ru", "sign-in"),
+    "Подтвердите email перед входом.",
+  );
+  assert.equal(
+    authErrorMessage({ code: "weak_password" }, "kk", "sign-up"),
+    "Құпия сөз жеткілікті сенімді емес. Күрделірек құпия сөз қолданыңыз.",
+  );
+  const duplicate = authErrorMessage({ code: "email_exists" }, "en", "sign-up");
+  assert.equal(
+    duplicate,
+    "An account could not be created with these details. Try signing in or resetting your password.",
+  );
+  assert.doesNotMatch(duplicate, /already exists|registered/i);
 });

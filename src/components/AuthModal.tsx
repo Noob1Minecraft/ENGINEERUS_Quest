@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import { Language } from '../types';
 import { TRANSLATIONS } from '../data';
 import { User, Lock, Mail, ArrowRight, X, LogOut } from 'lucide-react';
-import { useAuth } from '../auth/AuthContext';
+import { authErrorMessage, useAuth } from '../auth/AuthContext';
 import { useDialogFocus } from '../hooks/useDialogFocus';
 import { BrandLogo } from './BrandLogo';
 
@@ -34,11 +34,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   // modal cannot change React's hook order.
   if (!isOpen) return null;
 
-  const genericAuthError = lang === 'kk'
-    ? 'Авторландыру сәтсіз аяқталды. Деректерді тексеріп, қайталап көріңіз.'
-    : lang === 'en'
-      ? 'Authentication failed. Check your details and try again.'
-      : 'Ошибка авторизации. Проверьте данные и повторите попытку.';
   const closeAccountLabel = lang === 'kk' ? 'Аккаунт терезесін жабу' : lang === 'en' ? 'Close account' : 'Закрыть окно аккаунта';
   const closeAuthLabel = lang === 'kk' ? 'Кіру терезесін жабу' : lang === 'en' ? 'Close authentication' : 'Закрыть окно входа';
 
@@ -63,8 +58,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         await auth.signInWithPassword(email, password);
       }
       onClose();
-    } catch {
-      setErrorMsg(genericAuthError);
+    } catch (error) {
+      setErrorMsg(authErrorMessage(error, lang, isRegister ? 'sign-up' : 'sign-in'));
     } finally {
       setSubmitting(false);
     }
@@ -76,8 +71,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setSubmitting(true);
     try {
       await auth.signInWithGoogle();
-    } catch {
-      setErrorMsg(genericAuthError);
+    } catch (error) {
+      setErrorMsg(authErrorMessage(error, lang, 'oauth'));
       setSubmitting(false);
     }
   };
@@ -88,8 +83,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     try {
       await auth.signOut();
       onClose();
-    } catch {
-      setErrorMsg(genericAuthError);
+    } catch (error) {
+      setErrorMsg(authErrorMessage(error, lang, 'sign-out'));
     } finally {
       setSubmitting(false);
     }
