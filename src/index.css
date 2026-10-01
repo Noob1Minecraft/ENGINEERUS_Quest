@@ -2110,6 +2110,7 @@ button.eq-home-link:hover { background: var(--color-surface-subtle); }
   --eq-ai-message-text: var(--color-text);
   --eq-ai-message-muted: var(--color-text-muted);
   --eq-ai-message-link: var(--color-ai);
+  --eq-ai-user-message-text: #fff;
   --eq-ai-inline-code-bg: color-mix(in srgb, var(--color-ai-soft) 78%, var(--color-surface));
   --eq-ai-inline-code-text: var(--color-ai);
   --eq-ai-action-bg: var(--color-surface-subtle);
@@ -2129,6 +2130,7 @@ button.eq-home-link:hover { background: var(--color-surface-subtle); }
 .eq-ai-refined .eq-ai-message__meta,
 .eq-ai-refined .eq-ai-message__timestamp { color: var(--eq-ai-message-muted); }
 .eq-ai-refined .eq-ai-message__content { color: var(--eq-ai-message-text); }
+.eq-ai-refined .eq-ai-message.bg-blue-700 .eq-ai-message__content { color: var(--eq-ai-user-message-text); }
 .eq-ai-refined .eq-ai-message__content .markdown-body :where(p, ul, ol, li, div, span, strong, b, h1, h2, h3, h4, blockquote) { color: inherit; }
 .eq-ai-refined .eq-ai-message__content .markdown-body a {
   color: var(--eq-ai-message-link);
