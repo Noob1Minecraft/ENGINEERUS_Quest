@@ -105,6 +105,7 @@ export type AiExchange = {
   assistantMessage: PersistedChatMessage | null;
   progress: CanonicalProgress;
   awarded?: boolean;
+  created?: boolean;
 };
 
 export function createChatRepository(env: ServerEnv) {
@@ -131,6 +132,7 @@ export function createChatRepository(env: ServerEnv) {
       assistantMessage: assistantMessage ? mapMessage(assistantMessage) : null,
       progress: mapProgress(progress),
       ...(typeof data.awarded === "boolean" ? { awarded: data.awarded } : {}),
+      ...(typeof data.created === "boolean" ? { created: data.created } : {}),
     };
   }
 
@@ -285,6 +287,27 @@ export function createChatRepository(env: ServerEnv) {
         p_xp_amount: xpAmount,
       });
       if (result.error) throw new PersistenceError(503, "response_persist_failed", "The AI response could not be persisted.");
+      return mapExchange(result.data as Record<string, unknown>);
+    },
+
+    async completeExchangeWithoutReward(
+      userId: string,
+      accessToken: string,
+      sessionId: string,
+      requestId: string,
+      responseText: string,
+      module: ChatModule,
+    ): Promise<AiExchange> {
+      await requireOwnedSession(userId, accessToken, sessionId);
+      const client = createSupabaseAdminClient(env);
+      const result = await client.rpc("complete_ai_exchange_without_reward", {
+        p_user_id: userId,
+        p_session_id: sessionId,
+        p_request_id: requestId,
+        p_content: responseText,
+        p_module: module,
+      });
+      if (result.error) throw new PersistenceError(503, "response_persist_failed", "The response could not be persisted.");
       return mapExchange(result.data as Record<string, unknown>);
     },
   };
