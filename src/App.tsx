@@ -562,9 +562,6 @@ export default function App() {
             <p>
               {t.foundedBy}
             </p>
-            <p>
-              {t.attributionCaption}
-            </p>
             {auth.user && <button type="button" onClick={() => setFeedbackOpen(true)}>
               {lang === 'ru' ? 'Сообщить о проблеме или отправить бета-отзыв' : lang === 'kk' ? 'Мәселе туралы хабарлау немесе бета-пікір жіберу' : 'Report a problem or send beta feedback'}
             </button>}

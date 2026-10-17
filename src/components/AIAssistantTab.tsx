@@ -227,6 +227,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
   const [savedFilterModule, setSavedFilterModule] = useState<string>('all');
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const transcriptRef = useRef<HTMLDivElement>(null);
   const promptHydrationRef = useRef<string>('');
   const skipDraftPersistRef = useRef(false);
 
@@ -440,7 +441,15 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
   // Auto scroll bottom when new message arrives
   useEffect(() => {
     if (activeSubView === 'chat') {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      if (window.matchMedia('(max-width: 47.999rem)').matches) {
+        const transcript = transcriptRef.current;
+        transcript?.scrollTo({
+          top: transcript.scrollHeight,
+          behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+        });
+      } else {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }
     }
   }, [messages, loading, activeSubView]);
 
@@ -1270,6 +1279,7 @@ export const AIAssistantTab: React.FC<AIAssistantTabProps> = ({
 
             {/* Chat Messages Timeline Scroll Box */}
             <div
+              ref={transcriptRef}
               className={`eq-ai-transcript flex-1 p-4 sm:p-5 overflow-y-auto space-y-4 ${
                 isFullscreen ? 'bg-slate-950/60' : 'bg-slate-50/30'
               }`}
