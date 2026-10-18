@@ -11,6 +11,7 @@ import { createChatsRouter } from "./server/routes/chats";
 import { createQuestsRouter } from "./server/routes/quests";
 import { createAiRouter } from "./server/routes/ai";
 import { createGroqResponder } from "./server/ai/groqClient";
+import { createTutorPipeline } from "./server/ai/tutor/pipeline";
 import { resolveResponseLanguage } from "./server/ai/languagePolicy";
 import { createKazStandardClient } from "./server/standards/kazStandardClient";
 import { createStandardsService } from "./server/standards/standardsService";
@@ -83,6 +84,7 @@ app.use(createAiRouter(requireAuth, aiRateLimit, {
   repository: chatRepository,
   detectLanguage,
   generateResponse: generateAIResponse,
+  tutorPipeline: env.GROQ_API_KEY || env.GROQ_API_KEY_2 ? createTutorPipeline(generateAIResponse) : undefined,
   lookupStandards: standardsService.searchVerifiedStandards,
   concurrencyGuard: aiConcurrencyGuard,
   recordEvent: betaRepository.recordEvent,

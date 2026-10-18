@@ -32,12 +32,17 @@ import {
 } from "../ai/engineeringPolicy";
 import { buildBoundedConversationContext } from "../ai/conversationContext";
 import { guardMaterialPropertyResponse } from "../ai/materialPropertyGuard";
+import { isTutorFollowUp, planTutoring, TUTOR_MODES } from "../ai/tutor/taskRouter";
+import { existingTutorKnowledge } from "../ai/tutor/knowledge";
+import type { createTutorPipeline } from "../ai/tutor/pipeline";
+import type { PersistedChatMessage } from "../persistence/chats";
 
 const MODULES = ["tutor", "material", "patent", "engi_legal", "engi_match"] as const;
 const baseAiRequestSchema = z.object({
   text: z.string().max(20_000).refine((value) => value.trim().length > 0),
   lang: z.enum(["ru", "kk", "en"]).default("ru"),
   session_id: z.string().uuid(),
+  tutor_mode: z.enum(TUTOR_MODES).optional(),
   document_id: z.string().uuid().optional(),
   image_ids: z.array(z.string().uuid()).min(1).max(MAX_IMAGES_PER_REQUEST).refine((ids) => new Set(ids).size === ids.length).optional(),
 }).strip();
@@ -92,6 +97,7 @@ function uniqueDesignations(designations: readonly string[]): string[] {
 
 type AiDependencies = {
   repository: ChatRepository;
+  tutorPipeline?: ReturnType<typeof createTutorPipeline>;
   detectLanguage: (text: string, requestedLanguage: SupportedLanguage) => SupportedLanguage;
   generateResponse: (
     text: string,
@@ -197,10 +203,13 @@ export function createAiRouter(
       }
 
       let conversationContext: ReturnType<typeof buildBoundedConversationContext>;
-      if (isContextualEngineeringFollowUp(canonicalPrompt)
+      let tutorHistory: PersistedChatMessage[] = [];
+      if ((isContextualEngineeringFollowUp(canonicalPrompt)
+          || (moduleName === "tutor" && dependencies.tutorPipeline && (isTutorFollowUp(canonicalPrompt) || input.tutor_mode)))
           && typeof dependencies.repository.messages === "function") {
         try {
           const history = await dependencies.repository.messages(userId, accessToken, sessionId, 8);
+          tutorHistory = history.items.filter(({ id }) => id !== started!.userMessage.id);
           conversationContext = buildBoundedConversationContext(history.items, started.userMessage.id);
         } catch {
           // A follow-up remains safe and usable without history; the engineering
@@ -264,18 +273,32 @@ export function createAiRouter(
         documentContext?.systemPolicy,
         imageContext?.length ? visionSystemPolicy() : undefined,
       ].filter(Boolean).join("\n\n");
+      const tutorPlan = moduleName === "tutor" && dependencies.tutorPipeline
+        ? planTutoring(canonicalPrompt, tutorHistory, input.tutor_mode) : undefined;
+      const clientSignal = response.locals.aiAbortSignal as AbortSignal | undefined;
+      // Includes a possible standards retry; stays below the existing capacity lease TTL.
+      const tutorSignal = tutorPlan ? AbortSignal.any([
+        ...(clientSignal ? [clientSignal] : []), AbortSignal.timeout(90_000),
+      ]) : clientSignal;
+      const generateCompletion = (policy: string) => tutorPlan && dependencies.tutorPipeline
+        ? dependencies.tutorPipeline({
+          plan: tutorPlan,
+          knowledge: existingTutorKnowledge({ prompt: providerPrompt, policy, sources: [
+            ...(prepared.lookupResult ? ["standards" as const] : []),
+            ...(documentContext ? ["document" as const] : []),
+            ...(conversationContext ? ["conversation" as const] : []),
+            ...(imageContext?.length ? ["image" as const] : []),
+          ] }),
+          language: detectedLanguage, images: imageContext,
+          signal: tutorSignal,
+        })
+        : dependencies.generateResponse(providerPrompt, moduleName, detectedLanguage, policy, imageContext,
+          response.locals.aiAbortSignal as AbortSignal | undefined);
       let providerFailureCategory: string | undefined;
       let providerStatus: number | undefined;
       let generatedResponse: string;
       try {
-        generatedResponse = await dependencies.generateResponse(
-          providerPrompt,
-          moduleName,
-          detectedLanguage,
-          baseSystemPolicy,
-          imageContext,
-          response.locals.aiAbortSignal as AbortSignal | undefined,
-        );
+        generatedResponse = await generateCompletion(baseSystemPolicy);
       } catch (error) {
         if (!(error instanceof AiProviderError)) throw error;
         if (error.category === "aborted") return;
@@ -326,14 +349,7 @@ export function createAiRouter(
         const strictPolicy = buildStrictStandardsAllowlistPolicy(allowedDesignations);
         const retrySystemPolicy = [baseSystemPolicy, strictPolicy].filter(Boolean).join("\n\n");
         try {
-          const regeneratedResponse = await dependencies.generateResponse(
-            providerPrompt,
-            moduleName,
-            detectedLanguage,
-            retrySystemPolicy,
-            imageContext,
-            response.locals.aiAbortSignal as AbortSignal | undefined,
-          );
+          const regeneratedResponse = await generateCompletion(retrySystemPolicy);
           finalGuardResult = guardStandardsResponse({
             content: sanitizeAssistantContent(regeneratedResponse),
             userPrompt: canonicalPrompt,
