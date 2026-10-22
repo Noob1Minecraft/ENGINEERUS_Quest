@@ -35,6 +35,7 @@ import { guardMaterialPropertyResponse } from "../ai/materialPropertyGuard";
 import { isTutorFollowUp, planTutoring, TUTOR_MODES } from "../ai/tutor/taskRouter";
 import { existingTutorKnowledge } from "../ai/tutor/knowledge";
 import type { createTutorPipeline } from "../ai/tutor/pipeline";
+import { withGroqUsage } from "../ai/usageDiagnostics";
 import type { PersistedChatMessage } from "../persistence/chats";
 
 const MODULES = ["tutor", "material", "patent", "engi_legal", "engi_match"] as const;
@@ -467,7 +468,7 @@ export function createAiRouter(
         sendInvalidAiRequest(response);
         return;
       }
-      await handle(request, response, "tutor", 10, parsed.data);
+      await withGroqUsage(() => handle(request, response, "tutor", 10, parsed.data));
     });
   }));
 
@@ -478,7 +479,11 @@ export function createAiRouter(
         sendInvalidAiRequest(response, true);
         return;
       }
-      await handle(request, response, parsed.data.module, 15, parsed.data);
+      if (parsed.data.module === "tutor") {
+        await withGroqUsage(() => handle(request, response, parsed.data.module, 15, parsed.data));
+      } else {
+        await handle(request, response, parsed.data.module, 15, parsed.data);
+      }
     });
   }));
 

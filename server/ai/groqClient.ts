@@ -1,6 +1,7 @@
 import { buildSystemPrompt, languageName, type AiModule, type SupportedLanguage } from "./languagePolicy";
 import { sanitizeAssistantContent } from "./responseSafety";
 import { securityLogger } from "../security/structuredLogger";
+import { beginGroqUsageAttempt } from "./usageDiagnostics";
 
 const FALLBACK_MODELS = ["openai/gpt-oss-120b", "openai/gpt-oss-20b"];
 const VISION_CAPABLE_MODELS = new Set(["qwen/qwen3.8-27b"]);
@@ -89,6 +90,9 @@ export function createGroqResponder(options: GroqResponderOptions) {
 
       for (let modelAttempt = 0; modelAttempt < requestModels.length; modelAttempt += 1) {
         const model = requestModels[modelAttempt];
+        const finishUsage = beginGroqUsageAttempt();
+        let usage: unknown;
+        try {
         securityLogger.info("ai_provider_request", {
           provider: "groq",
           model,
@@ -169,7 +173,8 @@ export function createGroqResponder(options: GroqResponderOptions) {
         }
 
         try {
-          const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
+          const data = await response.json() as { usage?: unknown; choices?: Array<{ message?: { content?: string } }> };
+          usage = data.usage;
           const content = sanitizeAssistantContent(data.choices?.[0]?.message?.content ?? "");
           if (content) return content;
           securityLogger.error("ai_provider_failure", {
@@ -186,6 +191,9 @@ export function createGroqResponder(options: GroqResponderOptions) {
           });
         }
         throw new AiProviderError("invalid_response", fallbackResponse(prompt, language, false));
+        } finally {
+          finishUsage(usage);
+        }
       }
     }
 

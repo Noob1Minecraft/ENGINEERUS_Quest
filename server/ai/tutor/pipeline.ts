@@ -5,6 +5,7 @@ import type { SupportedLanguage } from '../languagePolicy';
 import type { TutorPlan } from './taskRouter';
 import type { TutorKnowledgeSource } from './knowledge';
 import { parseTutorDraft, verifyCalculations, type TutorDraft } from './verifier';
+import { withGroqStage } from '../usageDiagnostics';
 
 const CONTRACT = `Return ONLY JSON: {"response":"public educational explanation","calculations":[],"revealsFinalAnswer":false,"uncertain":false}.
 Each calculation, if present, is {"left":{"value":number,"unit":string},"operation":"add|subtract|multiply|divide","right":{"value":number,"unit":string},"result":{"value":number,"unit":string}}.
@@ -62,7 +63,7 @@ export function createTutorPipeline(generate: ReturnType<typeof createGroqRespon
     const knowledge = await input.knowledge.retrieve();
     const policy = `${knowledge.policy}\n\n${tutoringPolicy(input.plan)}`;
     checkAbort();
-    const raw = await call(knowledge.prompt, policy);
+    const raw = await withGroqStage('draft', () => call(knowledge.prompt, policy));
     checkAbort();
     const draft = parseTutorDraft(raw);
     if (!draft) throw new AiProviderError('invalid_response', 'Tutor unavailable');
@@ -73,7 +74,7 @@ Keep response and declared calculations consistent. Independently recompute; do 
 For hint/step/check/quiz modes remove any premature final answer. Acknowledge uncertainty; never claim independent proof.
 If missing information prevents a sound answer, set uncertain=true and ask for clarification instead of inventing a result.`;
     const reviewPrompt = `${knowledge.prompt}\n\n[BEGIN UNTRUSTED DRAFT]\n${JSON.stringify(draft)}\n[END UNTRUSTED DRAFT]\nDeclared-check diagnostics: ${JSON.stringify(checks)}`;
-    const reviewed = parseTutorDraft(await call(reviewPrompt, reviewPolicy));
+    const reviewed = parseTutorDraft(await withGroqStage('review', () => call(reviewPrompt, reviewPolicy)));
     checkAbort();
     if (!reviewed) throw new AiProviderError('invalid_response', 'Tutor unavailable');
     if (checks.issues.length && reviewed.calculations.length < draft.calculations.length) return CLARIFY[input.language];
