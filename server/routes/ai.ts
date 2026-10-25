@@ -32,7 +32,7 @@ import {
 } from "../ai/engineeringPolicy";
 import { buildBoundedConversationContext } from "../ai/conversationContext";
 import { guardMaterialPropertyResponse } from "../ai/materialPropertyGuard";
-import { isTutorFollowUp, planTutoring, TUTOR_MODES } from "../ai/tutor/taskRouter";
+import { isSymbolicEngineeringFollowUp, isTutorFollowUp, planTutoring, TUTOR_MODES } from "../ai/tutor/taskRouter";
 import { existingTutorKnowledge } from "../ai/tutor/knowledge";
 import type { createTutorPipeline } from "../ai/tutor/pipeline";
 import { withGroqUsage } from "../ai/usageDiagnostics";
@@ -176,7 +176,7 @@ export function createAiRouter(
         moduleName,
       );
       const canonicalPrompt = started.userMessage.text;
-      const detectedLanguage = dependencies.detectLanguage(canonicalPrompt, lang);
+      let detectedLanguage = dependencies.detectLanguage(canonicalPrompt, lang);
 
       const engineeringInput = {
         text: canonicalPrompt,
@@ -237,6 +237,13 @@ export function createAiRouter(
           const history = await dependencies.repository.messages(userId, accessToken, sessionId, 8);
           tutorHistory = history.items.filter(({ id }) => id !== started!.userMessage.id);
           conversationContext = buildBoundedConversationContext(history.items, started.userMessage.id);
+          if (isSymbolicEngineeringFollowUp(canonicalPrompt)) {
+            const previousNaturalLanguageUser = [...tutorHistory].reverse().find((message) =>
+              message.sender === "user" && message.module === "tutor" && !isSymbolicEngineeringFollowUp(message.text));
+            if (previousNaturalLanguageUser) {
+              detectedLanguage = dependencies.detectLanguage(previousNaturalLanguageUser.text, lang);
+            }
+          }
         } catch {
           // A follow-up remains safe and usable without history; the engineering
           // policy requires clarification instead of invented prior parameters.
