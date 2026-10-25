@@ -20,8 +20,18 @@ const QUIZ = /(?:quiz\s+me|test\s+my\s+knowledge|проверь\s+мои\s+зн�
 const HINT = /(?:give\s+(?:me\s+)?(?:a\s+)?hint|подсказ|кеңес\s+бер|ишара)/iu;
 const STEPS = /(?:step[ -]by[ -]step|пошагов|қадамдап)/iu;
 
+export function isSymbolicEngineeringFollowUp(text: string): boolean {
+  const trimmed = text.trim();
+  if (trimmed.length === 0 || trimmed.length > 120) return false;
+  if (!/\d/u.test(trimmed) || !/[=?:]/u.test(trimmed)) return false;
+  const words = trimmed.match(/\p{L}+/gu) ?? [];
+  if (words.length === 0) return false;
+  return words.every((word) => word.length <= 4);
+}
+
 export function isTutorFollowUp(text: string): boolean {
-  return MORE.test(text) || FULL.test(text) || CHECK.test(text) || QUIZ.test(text) || HINT.test(text) || STEPS.test(text);
+  return MORE.test(text) || FULL.test(text) || CHECK.test(text) || QUIZ.test(text) || HINT.test(text) || STEPS.test(text)
+    || isSymbolicEngineeringFollowUp(text);
 }
 
 function isStandaloneControl(text: string): boolean {
