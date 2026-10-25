@@ -71,7 +71,7 @@ export function createTutorPipeline(generate: ReturnType<typeof createGroqRespon
     const reviewPolicy = `${policy}\n[VERIFIER PASS]
 Review the draft against the ORIGINAL task and teaching mode. Correct arithmetic, units, formula applicability, invented assumptions and contradictions BEFORE returning the JSON.
 Keep response and declared calculations consistent. Independently recompute; do not simply approve the draft or erase failed checks to evade review.
-For hint/step/check/quiz modes remove any premature final answer. Acknowledge uncertainty; never claim independent proof.
+For hint/step/check/quiz modes remove any premature final answer or fully worked solution. Enforce the concise dialogue formatting rules from the teaching policy. Acknowledge uncertainty; never claim independent proof.
 If missing information prevents a sound answer, set uncertain=true and ask for clarification instead of inventing a result.`;
     const reviewPrompt = `${knowledge.prompt}\n\n[BEGIN UNTRUSTED DRAFT]\n${JSON.stringify(draft)}\n[END UNTRUSTED DRAFT]\nDeclared-check diagnostics: ${JSON.stringify(checks)}`;
     const reviewed = parseTutorDraft(await withGroqStage('review', () => call(reviewPrompt, reviewPolicy)));
