@@ -52,7 +52,7 @@ export function planTutoring(text: string, history: readonly PersistedChatMessag
   const completedFollowUps = standalone ? anchorIndex >= 0 ? users.length - anchorIndex - 1 : users.length : 0;
   let mode: TutorMode = explicit ?? (FULL.test(text) ? 'full_explanation'
     : CHECK.test(text) ? 'check_my_solution' : QUIZ.test(text) ? 'quiz_me'
-      : STEPS.test(text) ? 'step_by_step' : HINT.test(text) || MORE.test(text) || category === 'calculation' ? 'hint' : 'full_explanation');
+      : STEPS.test(text) ? 'step_by_step' : 'hint');
   let hintLevel: 0 | 1 | 2 | 3 = mode === 'hint' ? (MORE.test(text) || HINT.test(text)) && users.length > 0
     ? Math.min(3, completedFollowUps + 2) as 2 | 3 : 1 : mode === 'step_by_step' ? 3 : 0;
   if (!explicit && mode === 'hint' && MORE.test(text) && completedFollowUps >= 2) {
