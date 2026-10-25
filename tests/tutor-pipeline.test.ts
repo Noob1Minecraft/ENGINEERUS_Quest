@@ -32,6 +32,8 @@ test('router returns structured categories and calculations default to level-one
   assert.equal(plan.mode, 'hint');
   assert.equal(plan.hintLevel, 1);
   assert.match(tutoringPolicy(plan), /no numeric answer/);
+  assert.match(tutoringPolicy(plan), /patient engineering tutor/);
+  assert.match(tutoringPolicy(plan), /Do not use \$\$\.\.\.\$\$/);
 });
 
 test('bounded history escalates RU/KK/EN hints, then explains fully; new tasks reset', () => {
@@ -47,14 +49,16 @@ test('bounded history escalates RU/KK/EN hints, then explains fully; new tasks r
   }
 });
 
-test('explicit modes, complete explanation, evaluation, quiz and direct theory remain distinct', () => {
+test('explicit modes, complete explanation, evaluation, quiz and default theory remain distinct', () => {
   for (const text of ['Show full solution', 'Покажи полное решение', 'Толық шешім']) {
     assert.equal(planTutoring(text, []).mode, 'full_explanation');
   }
   assert.equal(planTutoring('Check my solution: I = 4 A', []).mode, 'check_my_solution');
   assert.match(tutoringPolicy(planTutoring('Check my solution', [])), /do not replace their work/);
   assert.equal(planTutoring('Quiz me', []).mode, 'quiz_me');
-  assert.equal(planTutoring('What is entropy?', []).mode, 'full_explanation');
+  assert.equal(planTutoring('What is entropy?', []).mode, 'hint');
+  assert.equal(planTutoring('Explain Ohm law and solve a simple example', []).mode, 'hint');
+  assert.equal(planTutoring('Explain Ohm law and solve a simple example', []).hintLevel, 1);
   assert.equal(planTutoring('Calculate the force', [], 'step_by_step').hintLevel, 3);
   assert.equal(planTutoring('Calculate the force', [], 'full_explanation').mode, 'full_explanation');
   assert.equal(planTutoring('Give me a hint about CAD design', [message('Calculate force')]).category, 'cad_design');
