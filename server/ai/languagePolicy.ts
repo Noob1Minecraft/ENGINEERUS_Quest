@@ -30,6 +30,10 @@ const TECHNICAL_LATIN_TERMS = new Set([
   "arduino", "asme", "beam", "cad", "gost", "ieee", "iso", "modulus", "sensor", "stress", "torque", "young",
 ]);
 
+const ENGINEERING_SYMBOL_WORDS = new Set([
+  "a", "c", "e", "f", "i", "l", "m", "n", "p", "q", "r", "s", "t", "u", "v", "w",
+]);
+
 const CYRILLIC_STANDARD_TERMS = new Set(["гост", "ескд", "мемст", "сп", "ст", "тр"]);
 
 function normalizeRequestedLanguage(language: string): SupportedLanguage {
@@ -63,6 +67,7 @@ export function resolveResponseLanguage(text: string, requestedLanguage = "ru"):
 
     if (LATIN_WORD.test(word)) {
       if (isStandardIdentifier(word) || TECHNICAL_LATIN_TERMS.has(word)) continue;
+      if (ENGINEERING_SYMBOL_WORDS.has(word) && /[=+\-*/?\d]/u.test(text)) continue;
       scores.en += ENGLISH_MARKERS.has(word) ? 4 : 1;
     }
   }
