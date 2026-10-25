@@ -2,6 +2,7 @@ import { buildSystemPrompt, languageName, type AiModule, type SupportedLanguage 
 import { sanitizeAssistantContent } from "./responseSafety";
 import { securityLogger } from "../security/structuredLogger";
 import { beginGroqUsageAttempt } from "./usageDiagnostics";
+import { stagingAiLimitsEnabled, withinAiDeadline } from "./stagingUsageLimits";
 
 const FALLBACK_MODELS = ["openai/gpt-oss-120b", "openai/gpt-oss-20b"];
 const VISION_CAPABLE_MODELS = new Set(["qwen/qwen3.8-27b"]);
@@ -75,6 +76,7 @@ export function createGroqResponder(options: GroqResponderOptions) {
       throw new AiProviderError("vision_unavailable", fallbackResponse(prompt, language, false));
     }
     const requestModels = hasImages ? [options.model] : modelCandidates;
+    const boundedStagingRequest = module === "tutor" && stagingAiLimitsEnabled();
     const userContent = hasImages
       ? [
         { type: "text", text: `${prompt}\n\nRespond in ${languageName(language)}. Preserve technical notation and identifiers.` },
@@ -104,16 +106,18 @@ export function createGroqResponder(options: GroqResponderOptions) {
         });
 
         let response: Response;
+        let stagingBody: { usage?: unknown; choices?: Array<{ message?: { content?: string } }> } | undefined;
         const providerAbort = new AbortController();
         let timedOut = false;
         const abortProvider = () => providerAbort.abort();
         signal?.addEventListener("abort", abortProvider, { once: true });
+        if (boundedStagingRequest && signal?.aborted) providerAbort.abort(signal.reason);
         const timeout = setTimeout(() => {
           timedOut = true;
           providerAbort.abort();
         }, options.timeoutMs ?? 45_000);
         try {
-          response = await fetchImpl("https://api.groq.com/openai/v1/chat/completions", {
+          const fetchResponse = () => fetchImpl("https://api.groq.com/openai/v1/chat/completions", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -134,6 +138,15 @@ export function createGroqResponder(options: GroqResponderOptions) {
             }),
             signal: providerAbort.signal,
           });
+          response = boundedStagingRequest
+            ? await withinAiDeadline(providerAbort.signal, fetchResponse) : await fetchResponse();
+          if (boundedStagingRequest && response.ok) {
+            // Keep cancellation and the attempt timeout active through body consumption.
+            stagingBody = await withinAiDeadline(providerAbort.signal, () => response.json());
+            usage = stagingBody?.usage;
+          } else if (boundedStagingRequest) {
+            await withinAiDeadline(providerAbort.signal, async () => { await response.body?.cancel(); });
+          }
         } catch {
           const category: AiProviderFailureCategory = signal?.aborted
             ? "aborted"
@@ -173,7 +186,7 @@ export function createGroqResponder(options: GroqResponderOptions) {
         }
 
         try {
-          const data = await response.json() as { usage?: unknown; choices?: Array<{ message?: { content?: string } }> };
+          const data = (boundedStagingRequest ? stagingBody : await response.json()) as { usage?: unknown; choices?: Array<{ message?: { content?: string } }> };
           usage = data.usage;
           const content = sanitizeAssistantContent(data.choices?.[0]?.message?.content ?? "");
           if (content) return content;

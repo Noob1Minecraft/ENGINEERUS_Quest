@@ -36,6 +36,7 @@ import { isTutorFollowUp, planTutoring, TUTOR_MODES } from "../ai/tutor/taskRout
 import { existingTutorKnowledge } from "../ai/tutor/knowledge";
 import type { createTutorPipeline } from "../ai/tutor/pipeline";
 import { withGroqUsage } from "../ai/usageDiagnostics";
+import { createAiDeadline, createStagingAiBudget, inputTooLarge, stagingAiLimitsEnabled, withinAiDeadline } from "../ai/stagingUsageLimits";
 import type { PersistedChatMessage } from "../persistence/chats";
 
 const MODULES = ["tutor", "material", "patent", "engi_legal", "engi_match"] as const;
@@ -117,6 +118,7 @@ type AiDependencies = {
   loadImageContext?: (userId: string, imageIds: readonly string[]) => Promise<AiVisionImage[]>;
   concurrencyGuard?: RequestHandler;
   recordEvent?: ProductEventRecorder;
+  stagingUsageLimits?: { enabled: boolean; now?: () => number; timeoutMs?: number };
 };
 
 export function createAiRouter(
@@ -127,6 +129,20 @@ export function createAiRouter(
 ): Router {
   const router = Router();
   const concurrencyGuard = dependencies.concurrencyGuard ?? ((_request, _response, next) => next());
+  const stagingLimits = dependencies.stagingUsageLimits?.enabled ?? stagingAiLimitsEnabled();
+  const stagingBudget = createStagingAiBudget(dependencies.stagingUsageLimits?.now);
+  const isStagingTutor = (request: import("express").Request) => stagingLimits
+    && (request.route?.path === "/api/ai" || request.body?.module === "tutor");
+  // Completed staging replays must not consume AI generation budgets.
+  const beforeReplay = (limiter: RequestHandler): RequestHandler => (req, res, next) =>
+    isStagingTutor(req) ? next() : limiter(req, res, next);
+  const checkRawSize: RequestHandler = (req, res, next) => {
+    if (isStagingTutor(req) && typeof req.body?.text === "string" && req.body.text.length > 20_000) {
+      res.status(413).json({ error: { code: "ai_input_too_large", message: "Please shorten the question before trying again." } });
+      return;
+    }
+    next();
+  };
 
   async function handle(
     request: import("express").Request,
@@ -148,6 +164,7 @@ export function createAiRouter(
     }
 
     let started: Awaited<ReturnType<ChatRepository["beginExchange"]>> | undefined;
+    let deadline: ReturnType<typeof createAiDeadline> | undefined;
     try {
       const { userId, accessToken } = response.locals.auth;
       started = await dependencies.repository.beginExchange(
@@ -203,6 +220,14 @@ export function createAiRouter(
         return;
       }
 
+      if (stagingLimits && moduleName === "tutor" && inputTooLarge(canonicalPrompt)) {
+        response.status(413).json({
+          error: { code: "ai_input_too_large", message: "The question was saved. Please shorten it before requesting an AI response." },
+          user_message: started.userMessage, assistant_message: null,
+        });
+        return;
+      }
+
       let conversationContext: ReturnType<typeof buildBoundedConversationContext>;
       let tutorHistory: PersistedChatMessage[] = [];
       if ((isContextualEngineeringFollowUp(canonicalPrompt)
@@ -250,17 +275,36 @@ export function createAiRouter(
         return;
       }
 
+      if (stagingLimits && moduleName === "tutor") {
+        const retryAfter = stagingBudget.consume(userId);
+        if (retryAfter) {
+          response.setHeader("Retry-After", String(retryAfter));
+          response.status(429).json({
+            error: { code: "ai_rate_limit_exceeded", message: "AI request budget exceeded. Try again later." },
+            user_message: started.userMessage, assistant_message: null,
+          });
+          return;
+        }
+        if (!await runRequestHandler(rateLimiter, request, response)) return;
+        if (!await runRequestHandler(visionRateLimiter, request, response)) return;
+      }
       if (!await runRequestHandler(concurrencyGuard, request, response)) return;
+      if (stagingLimits && moduleName === "tutor") {
+        deadline = createAiDeadline(response.locals.aiAbortSignal as AbortSignal | undefined,
+          dependencies.stagingUsageLimits?.timeoutMs);
+      }
+      const boundedWork = <T>(work: () => Promise<T>) => deadline
+        ? withinAiDeadline(deadline.signal, work) : work();
 
-      const prepared = await preparePromptWithStandardsMetadata(canonicalPrompt, dependencies.lookupStandards);
+      const prepared = await boundedWork(() => preparePromptWithStandardsMetadata(canonicalPrompt, dependencies.lookupStandards));
       const documentContext = documentId
-        ? await dependencies.loadDocumentContext?.(userId, documentId, canonicalPrompt)
+        ? await boundedWork(async () => dependencies.loadDocumentContext?.(userId, documentId, canonicalPrompt))
         : undefined;
       if (documentId && !documentContext) {
         throw new PersistenceError(503, "document_context_unavailable", "Document context is temporarily unavailable.");
       }
       const imageContext = imageIds?.length
-        ? await dependencies.loadImageContext?.(userId, imageIds)
+        ? await boundedWork(async () => dependencies.loadImageContext?.(userId, imageIds))
         : undefined;
       if (imageIds?.length && !imageContext) {
         throw new PersistenceError(503, "image_context_unavailable", "Image context is temporarily unavailable.");
@@ -278,10 +322,10 @@ export function createAiRouter(
         ? planTutoring(canonicalPrompt, tutorHistory, input.tutor_mode) : undefined;
       const clientSignal = response.locals.aiAbortSignal as AbortSignal | undefined;
       // Includes a possible standards retry; stays below the existing capacity lease TTL.
-      const tutorSignal = tutorPlan ? AbortSignal.any([
+      const tutorSignal = deadline?.signal ?? (tutorPlan ? AbortSignal.any([
         ...(clientSignal ? [clientSignal] : []), AbortSignal.timeout(90_000),
-      ]) : clientSignal;
-      const generateCompletion = (policy: string) => tutorPlan && dependencies.tutorPipeline
+      ]) : clientSignal);
+      const generate = (policy: string) => tutorPlan && dependencies.tutorPipeline
         ? dependencies.tutorPipeline({
           plan: tutorPlan,
           knowledge: existingTutorKnowledge({ prompt: providerPrompt, policy, sources: [
@@ -294,7 +338,9 @@ export function createAiRouter(
           signal: tutorSignal,
         })
         : dependencies.generateResponse(providerPrompt, moduleName, detectedLanguage, policy, imageContext,
-          response.locals.aiAbortSignal as AbortSignal | undefined);
+          tutorSignal);
+      const generateCompletion = (policy: string) => deadline
+        ? withinAiDeadline(deadline.signal, () => generate(policy)) : generate(policy);
       let providerFailureCategory: string | undefined;
       let providerStatus: number | undefined;
       let generatedResponse: string;
@@ -362,6 +408,9 @@ export function createAiRouter(
         } catch (error) {
           if (!(error instanceof AiProviderError)) throw error;
           if (error.category === "aborted") return;
+          if (deadline?.signal.aborted) {
+            throw new PersistenceError(503, "ai_provider_unavailable", "The question was saved, but the AI response could not be completed.");
+          }
           providerFailureCategory = error.category;
           providerStatus = error.providerStatus;
         }
@@ -440,6 +489,8 @@ export function createAiRouter(
         error: { code: "ai_unavailable", message: "The AI service is temporarily unavailable." },
         ...(started ? { user_message: started.userMessage, assistant_message: null } : {}),
       });
+    } finally {
+      deadline?.dispose();
     }
   }
 
@@ -461,7 +512,7 @@ export function createAiRouter(
     }
   }
 
-  router.post("/api/ai", authenticate, rateLimiter, visionRateLimiter, safeAsync(async (request, response) => {
+  router.post("/api/ai", authenticate, beforeReplay(rateLimiter), beforeReplay(visionRateLimiter), checkRawSize, safeAsync(async (request, response) => {
     await runWithCapacity(response, async () => {
       const parsed = baseAiRequestSchema.safeParse(request.body);
       if (!parsed.success) {
@@ -472,7 +523,7 @@ export function createAiRouter(
     });
   }));
 
-  router.post("/api/module", authenticate, rateLimiter, visionRateLimiter, safeAsync(async (request, response) => {
+  router.post("/api/module", authenticate, beforeReplay(rateLimiter), beforeReplay(visionRateLimiter), checkRawSize, safeAsync(async (request, response) => {
     await runWithCapacity(response, async () => {
       const parsed = moduleAiRequestSchema.safeParse(request.body);
       if (!parsed.success) {
