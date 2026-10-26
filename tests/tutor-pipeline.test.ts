@@ -91,6 +91,68 @@ test('pipeline reviews and corrects a draft before returning only public explana
   assert.doesNotMatch(result, /calculations|VERIFIER|Wrong/);
 });
 
+test('unit aliases preserve Ohm law verification and SI scale', () => {
+  for (const unit of ['Ω', 'Ω', 'ohm', 'ohms', 'Ом', 'Ohm', ' Ω ']) {
+    assert.deepEqual(verifyCalculations([{
+      left: { value: 5, unit: 'А' }, operation: 'multiply', right: { value: 10, unit },
+      result: { value: 50, unit: 'В' },
+    }]), { checked: 1, issues: [] });
+    assert.deepEqual(verifyCalculations([{
+      left: { value: 12, unit: 'V' }, operation: 'divide', right: { value: 4, unit },
+      result: { value: 3, unit: 'A' },
+    }]), { checked: 1, issues: [] });
+  }
+  for (const unit of ['kΩ', 'kΩ', 'kOhm', 'кОм']) {
+    assert.deepEqual(verifyCalculations([{ ...ohm, right: { value: 4, unit } }]), { checked: 1, issues: [] });
+  }
+});
+
+test('alias normalization does not relax dimensions, arithmetic or unsupported units', () => {
+  const calculation: TutorDraft['calculations'][number] = {
+    left: { value: 5, unit: 'A' }, operation: 'multiply', right: { value: 10, unit: 'Ω' },
+    result: { value: 50, unit: 'V' },
+  };
+  assert.match(verifyCalculations([{ ...calculation, result: { value: 50, unit: 'А' } }]).issues[0], /dimensional/);
+  assert.match(verifyCalculations([{ ...calculation, result: { value: 51, unit: 'В' } }]).issues[0], /arithmetic/);
+  for (const unit of ['KΩ', 'MA', 'constructor', '__proto__']) {
+    assert.match(verifyCalculations([{ ...calculation, right: { value: 10, unit } }]).issues[0], /unsupported/);
+  }
+});
+
+test('corrected review can consolidate failed draft checks but cannot erase all checks', async () => {
+  const bad = { ...ohm, result: { value: 30, unit: 'mA' } };
+  for (const calculations of [[ohm], [], [bad]]) {
+    let calls = 0;
+    const pipeline = createTutorPipeline(async () => JSON.stringify({
+      ...draft('Corrected public explanation'),
+      calculations: ++calls === 1 ? [bad, bad] : calculations,
+    }));
+    const result = await pipeline({ plan: planTutoring('Show full solution', []), knowledge: known, language: 'en' });
+    assert.equal(calls, 2);
+    if (calculations[0] === ohm) assert.equal(result, 'Corrected public explanation');
+    else assert.match(result, /I could not reliably check/);
+  }
+});
+
+test('reviewed uncertainty returns localized clarification even with valid calculations', async () => {
+  const prefixes = { ru: 'Не удалось надёжно', kk: 'Түсіндірмені сенімді', en: 'I could not reliably' };
+  for (const language of ['ru', 'kk', 'en'] as const) {
+    let calls = 0;
+    const pipeline = createTutorPipeline(async () => JSON.stringify({
+      ...draft('Uncertain public explanation'), calculations: [ohm], uncertain: ++calls === 2,
+    }));
+    const result = await pipeline({ plan: planTutoring('Show full solution', []), knowledge: known, language });
+    assert.ok(result.startsWith(prefixes[language]));
+    assert.doesNotMatch(result, /Uncertain public explanation/);
+  }
+  let calls = 0;
+  const pipeline = createTutorPipeline(async () => JSON.stringify({
+    ...draft('Resolved explanation'), calculations: [ohm], uncertain: ++calls === 1,
+  }));
+  assert.equal(await pipeline({ plan: planTutoring('Show full solution', []), knowledge: known, language: 'en' }),
+    'Resolved explanation');
+});
+
 test('uncorrected units or a premature final answer produce clarification, not unchecked results', () => {
   const invalid = { ...draft('Bad result'), calculations: [{ ...ohm, result: { value: 3, unit: 'V' } }] };
   assert.doesNotMatch(formatVerifiedTutor(invalid, planTutoring('Show full solution', []), 'en'), /Bad result/);

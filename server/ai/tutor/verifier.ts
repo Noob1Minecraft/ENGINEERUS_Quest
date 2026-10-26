@@ -9,6 +9,16 @@ const units = {
   V: [1, [1, 2, -3, -1]], Ohm: [1, [1, 2, -3, -2]], kOhm: [1000, [1, 2, -3, -2]],
   W: [1, [1, 2, -3, 0]], Pa: [1, [1, -1, -2, 0]], MPa: [1e6, [1, -1, -2, 0]],
 } satisfies Record<string, [number, number[]]>;
+// Explicit aliases only: SI prefixes are case-sensitive (mA must not become MA).
+const unitAliases = new Map<string, keyof typeof units>([
+  ['Ω', 'Ohm'], ['Ω', 'Ohm'], ['ohm', 'Ohm'], ['ohms', 'Ohm'], ['Ом', 'Ohm'],
+  ['kΩ', 'kOhm'], ['kΩ', 'kOhm'], ['кОм', 'kOhm'], ['А', 'A'], ['В', 'V'],
+]);
+function resolveUnit(raw: string): [number, number[]] | undefined {
+  const trimmed = raw.trim();
+  const normalized = unitAliases.get(trimmed) ?? trimmed;
+  return Object.hasOwn(units, normalized) ? units[normalized as keyof typeof units] : undefined;
+}
 const quantity = z.object({ value: z.number().finite(), unit: z.string().max(12) }).strict();
 const calculation = z.object({
   left: quantity, operation: z.enum(['add', 'subtract', 'multiply', 'divide']), right: quantity, result: quantity,
@@ -35,9 +45,9 @@ export function verifyCalculations(calculations: TutorDraft['calculations']): { 
   let checked = 0;
   const issues: string[] = [];
   calculations.forEach((item, index) => {
-    const left = units[item.left.unit as keyof typeof units];
-    const right = units[item.right.unit as keyof typeof units];
-    const result = units[item.result.unit as keyof typeof units];
+    const left = resolveUnit(item.left.unit);
+    const right = resolveUnit(item.right.unit);
+    const result = resolveUnit(item.result.unit);
     if (!left || !right || !result) { issues.push(`check ${index}: unsupported unit; not verified`); return; }
     const additive = item.operation === 'add' || item.operation === 'subtract';
     const dimensions = additive ? left[1] : left[1].map((value, i) => value + right[1][i] * (item.operation === 'divide' ? -1 : 1));

@@ -81,7 +81,9 @@ If missing information prevents a sound answer, set uncertain=true and ask for c
     const reviewed = parseTutorDraft(await withGroqStage('review', () => call(reviewPrompt, reviewPolicy)));
     checkAbort();
     if (!reviewed) throw new AiProviderError('invalid_response', 'Tutor unavailable');
-    if (checks.issues.length && reviewed.calculations.length < draft.calculations.length) return CLARIFY[input.language];
+    // A review may consolidate redundant checks; reject erasing all failed checks,
+    // but judge corrected calculations on their own dimensions and arithmetic.
+    if (checks.issues.length && reviewed.calculations.length === 0) return CLARIFY[input.language];
     return formatVerifiedTutor(reviewed, input.plan, input.language);
   };
 }
@@ -89,7 +91,7 @@ If missing information prevents a sound answer, set uncertain=true and ask for c
 export function formatVerifiedTutor(draft: TutorDraft, plan: TutorPlan, language: SupportedLanguage): string {
   const checks = verifyCalculations(draft.calculations);
   const withholdAnswer = plan.mode === 'hint' || plan.mode === 'step_by_step' || plan.mode === 'quiz_me';
-  if (checks.issues.length || (withholdAnswer && draft.revealsFinalAnswer)) return CLARIFY[language];
+  if (draft.uncertain || checks.issues.length || (withholdAnswer && draft.revealsFinalAnswer)) return CLARIFY[language];
   // The review's public explanation alone is persisted; internal checks/metadata never enter chat history.
   return draft.response;
 }
