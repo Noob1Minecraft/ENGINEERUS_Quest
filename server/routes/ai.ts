@@ -335,6 +335,7 @@ export function createAiRouter(
       const generate = (policy: string) => tutorPlan && dependencies.tutorPipeline
         ? dependencies.tutorPipeline({
           plan: tutorPlan,
+          originalTask: canonicalPrompt,
           knowledge: existingTutorKnowledge({ prompt: providerPrompt, policy, sources: [
             ...(prepared.lookupResult ? ["standards" as const] : []),
             ...(documentContext ? ["document" as const] : []),

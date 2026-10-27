@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { readFileSync } from 'node:fs';
 import express, { type RequestHandler } from 'express';
 import { planTutoring, routeTutorTask } from '../server/ai/tutor/taskRouter';
 import { existingTutorKnowledge } from '../server/ai/tutor/knowledge';
@@ -19,6 +20,98 @@ const message = (text: string, id = text): PersistedChatMessage => ({
   id, text, sender: 'user', module: 'tutor', timestamp: '2026-10-18T00:00:00Z',
 });
 const known = existingTutorKnowledge({ prompt: 'Calculate current: U=12 V, R=4 Ohm.', policy: 'Preserve safety.', sources: [] });
+
+test('ordinary frontend module request omits tutor_mode', () => {
+  const source = readFileSync(new URL('../src/components/AIAssistantTab.tsx', import.meta.url), 'utf8');
+  const request = source.match(/apiFetch<ModuleAiResponse>\('\/api\/module',[\s\S]*?\n      \}\);/u)?.[0];
+  assert.ok(request);
+  assert.match(request, /module: submissionModule/);
+  assert.doesNotMatch(request, /tutor_mode/);
+});
+
+test('hint and step modes block obvious final results even when model flag is false', async () => {
+  const task = 'I = 5 A, R = 10 Ω. Найди U.';
+  const allowed = [
+    'U = I * R',
+    'Дано: I = 5 A, R = 10 Ω.',
+    'Промежуточный шаг: R = 0.01 kOhm. Теперь выбери формулу.',
+    'Промежуточный результат: 10 Ω',
+    'Как связаны напряжение, ток и сопротивление?',
+  ];
+  const blocked = ['Answer: 50 V', 'Ответ: 50 В', 'Жауап: 50 В', 'Жауабы: 50 В',
+    '**Final answer:** 50 V', 'U = 50 V', 'U = I * R = 5 * 10 = 50 V', '= 50 V'];
+  for (const mode of ['hint', 'step_by_step'] as const) {
+    for (const text of [...allowed, ...blocked]) {
+      let calls = 0;
+      const pipeline = createTutorPipeline(async () => { calls++; return JSON.stringify(draft(text)); });
+      const result = await pipeline({ plan: planTutoring(task, [], mode), language: 'ru', originalTask: task,
+        knowledge: existingTutorKnowledge({ prompt: task, policy: '', sources: [] }) });
+      assert.equal(calls, 2);
+      if (allowed.includes(text)) assert.equal(result, text);
+      else assert.match(result, /^Не удалось надёжно проверить/u, text);
+    }
+  }
+  const currentTask = 'U = 12 V, R = 4 Ω. Найди I.';
+  for (const text of ['Ответ: 3 А', 'I = 12/4 = 3 A', '= 3 A']) {
+    assert.match(formatVerifiedTutor(draft(text), planTutoring(currentTask, []), 'ru', currentTask), /^Не удалось/u);
+  }
+  for (const text of blocked) {
+    assert.equal(formatVerifiedTutor(draft(text), planTutoring(task, [], 'full_explanation'), 'ru', task), text);
+  }
+  assert.equal(formatVerifiedTutor(draft('U = 12 V'), planTutoring(currentTask, []), 'ru', currentTask), 'U = 12 V');
+  const givenTarget = 'U = 12 V. Find U in the diagram.';
+  assert.equal(formatVerifiedTutor(draft('U = 12 V'), planTutoring(givenTarget, []), 'en', givenTarget), 'U = 12 V');
+});
+
+test('frontend-shaped first calculation uses hint policy through module route and both passes', async () => {
+  for (const text of ['I = 5 A, R = 10 Ω. Найди U.', 'U = 12 V, R = 4 Ω. Найди I.']) {
+    const policies: string[] = [];
+    const sessionId = '123e4567-e89b-42d3-a456-426614174000';
+    const hint = 'Какая формула закона Ома связывает искомую величину с известными?';
+    const full = text.startsWith('I') ? 'U = I × R = 5 × 10 = 50 V.' : 'I = U/R = 12/4 = 3 A.';
+    let revealOnReview = false;
+    const generator = async (_prompt: string, _module: any, _language: any, policy?: string) => {
+      policies.push(policy ?? '');
+      const isReview = policy?.includes('[VERIFIER PASS]');
+      const explicitFull = policy?.includes('Provide a complete explanation.');
+      const reveals = !isReview || revealOnReview || explicitFull;
+      return JSON.stringify({ ...draft(reveals ? full : hint), revealsFinalAnswer: Boolean(reveals) });
+    };
+    const repository = {
+      async beginExchange() { return { userMessage: message(text), assistantMessage: null, progress: {} }; },
+      async messages() { return { items: [], nextCursor: null }; },
+      async completeExchange(_user: string, _token: string, _session: string, _key: string, response: string) {
+        return { userMessage: message(text), assistantMessage: { ...message(response), sender: 'ai' }, progress: {}, awarded: true };
+      },
+    } as unknown as ChatRepository;
+    const authenticate: RequestHandler = (_req, res, next) => {
+      res.locals.auth = { userId: 'owner', accessToken: 'test-only', claims: {} }; next();
+    };
+    const app = express(); app.use(express.json());
+    app.use(createAiRouter(authenticate, (_req, _res, next) => next(), {
+      repository, detectLanguage: () => 'ru', generateResponse: generator, tutorPipeline: createTutorPipeline(generator),
+    }));
+    await withServer(app, async (url) => {
+      const submit = async (extra = {}) => {
+        const response = await fetch(`${url}/api/module`, { method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Idempotency-Key': `hint-test-${policies.length}` },
+          body: JSON.stringify({ session_id: sessionId, module: 'tutor', text, lang: 'ru', ...extra }) });
+        assert.equal(response.status, 200);
+        return (await response.json()).assistant_message.text;
+      };
+      assert.equal(await submit(), hint);
+      assert.equal(policies.length, 2);
+      for (const policy of policies) {
+        assert.match(policy, /Hint level 1/);
+        assert.match(policy, /Do not use \$\$\.\.\.\$\$/);
+        assert.doesNotMatch(policy, /Provide a complete explanation\./);
+      }
+      revealOnReview = true;
+      assert.match(await submit(), /^Не удалось надёжно проверить/u);
+      assert.equal(await submit({ tutor_mode: 'full_explanation' }), full);
+    });
+  }
+});
 
 test('router returns structured categories and calculations default to level-one hints', () => {
   const samples = {
@@ -118,6 +211,56 @@ test('alias normalization does not relax dimensions, arithmetic or unsupported u
     assert.match(verifyCalculations([{ ...calculation, right: { value: 10, unit } }]).issues[0], /unsupported/);
   }
 });
+
+// Synthetic provider fixtures: these isolate fallback predicates, not live model behavior.
+for (const [text, resistance, current, currentUnit] of [
+  ['U = 12 В, R = 4 Ом. Найди I.', 'Ом', 3, 'А'],
+  ['U = 12 V, R = 4 kΩ. Найди I.', 'kΩ', 3, 'mA'],
+] as const) {
+  test(`full pipeline isolates fallback reasons for ${text}`, async () => {
+    const plan = planTutoring(text, []);
+    assert.equal(plan.category, 'calculation');
+    assert.equal(plan.mode, 'hint');
+    assert.equal(plan.hintLevel, 1);
+    const valid: TutorDraft['calculations'][number] = {
+      left: { value: 12, unit: 'В' }, operation: 'divide', right: { value: 4, unit: resistance },
+      result: { value: current, unit: currentUnit },
+    };
+    const invalid = { ...valid, result: { value: current, unit: 'V' } };
+    const hint = draft('Используй закон Ома: I = U/R. Сначала проверь единицы сопротивления.');
+    const scenarios: { name: string; initial: TutorDraft; review: TutorDraft; clarify: boolean }[] = [
+      { name: 'valid checked hint', initial: hint, review: { ...hint, calculations: [valid] }, clarify: false },
+      { name: 'no calculations in conceptual hint', initial: hint, review: hint, clarify: false },
+      { name: 'review corrects invalid dimensions', initial: { ...hint, calculations: [invalid] },
+        review: { ...hint, calculations: [valid] }, clarify: false },
+      { name: 'review uncertain', initial: hint, review: { ...hint, uncertain: true }, clarify: true },
+      { name: 'review deletes all failed checks', initial: { ...hint, calculations: [invalid] }, review: hint, clarify: true },
+      { name: 'review invalid dimensions', initial: hint, review: { ...hint, calculations: [invalid] }, clarify: true },
+      { name: 'review incorrect arithmetic', initial: hint, review: { ...hint, calculations: [
+        { ...valid, result: { value: 30, unit: currentUnit } },
+      ] }, clarify: true },
+      { name: 'review reveals final answer in hint mode', initial: hint,
+        review: { ...draft(`I = ${current} ${currentUnit}`), calculations: [valid], revealsFinalAnswer: true }, clarify: true },
+    ];
+    for (const scenario of scenarios) {
+      let calls = 0;
+      const pipeline = createTutorPipeline(async (prompt) => {
+        calls++;
+        if (calls === 1) assert.equal(prompt, text);
+        else {
+          assert.ok(prompt.startsWith(text));
+          assert.ok(prompt.includes(JSON.stringify(scenario.initial)));
+        }
+        return JSON.stringify(calls === 1 ? scenario.initial : scenario.review);
+      });
+      const result = await pipeline({ plan, language: 'ru',
+        knowledge: existingTutorKnowledge({ prompt: text, policy: '', sources: [] }) });
+      assert.equal(calls, 2, scenario.name);
+      assert.equal(result.startsWith('Не удалось надёжно проверить объяснение'), scenario.clarify, scenario.name);
+      if (!scenario.clarify) assert.equal(result, scenario.review.response, scenario.name);
+    }
+  });
+}
 
 test('corrected review can consolidate failed draft checks but cannot erase all checks', async () => {
   const bad = { ...ohm, result: { value: 30, unit: 'mA' } };
