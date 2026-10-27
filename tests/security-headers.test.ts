@@ -23,7 +23,7 @@ function normalizeCsp(value: string): string {
 
 const env = loadServerEnv({
   NODE_ENV: "production",
-  SUPABASE_URL: "https://example.supabase.co",
+  SUPABASE_URL: PRODUCTION_SUPABASE_ORIGIN,
   SUPABASE_PUBLISHABLE_KEY: "test-publishable-placeholder",
   SUPABASE_SECRET_KEY: "test-secret-placeholder",
 });
@@ -64,6 +64,35 @@ test("Preview CSP allows only the Preview API while production allows only the p
   assert.equal(production.includes(PREVIEW_SUPABASE_ORIGIN), false);
   assert.equal(PREVIEW_CSP_VALUE.includes("*"), false);
   assert.equal(PRODUCTION_CSP_VALUE.includes("*"), false);
+});
+
+test("Render CSP derives exact Supabase HTTPS/WSS origins from configuration", async () => {
+  const stagingEnv = { ...env, SUPABASE_URL: PREVIEW_SUPABASE_ORIGIN };
+  await withServer(createApp(stagingEnv), async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/health`);
+    const csp = response.headers.get(CONTENT_SECURITY_POLICY_HEADER) ?? "";
+    const connect = csp.split(";").find((part) => part.trim().startsWith("connect-src "))!
+      .trim().split(/\s+/u).slice(1);
+    assert.deepEqual(connect, [
+      "'self'", PRODUCTION_API_ORIGIN, PREVIEW_SUPABASE_ORIGIN,
+      PREVIEW_SUPABASE_ORIGIN.replace("https://", "wss://"),
+    ]);
+    assert.equal(connect.includes(PRODUCTION_SUPABASE_ORIGIN), false);
+    assert.equal(connect.includes("https://unrelated.example"), false);
+    assert.equal(connect.some((origin) => origin.includes("*")), false);
+  });
+  const configured = createContentSecurityPolicyDirectives("production", "https://another-project.supabase.co/");
+  assert.ok(configured["connect-src"].includes("https://another-project.supabase.co"));
+  assert.ok(configured["connect-src"].includes("wss://another-project.supabase.co"));
+});
+
+test("CSP configuration rejects insecure deployed URLs, credentials and wildcards", () => {
+  for (const url of [
+    "http://example.supabase.co", "https://user:password@example.supabase.co",
+    "https://*.supabase.co", "not-a-url",
+  ]) {
+    assert.throws(() => createContentSecurityPolicyDirectives("production", url));
+  }
 });
 
 test("development-only connection origins do not leak into the production policy", () => {

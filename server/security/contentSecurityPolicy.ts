@@ -47,8 +47,26 @@ export function createFrontendContentSecurityPolicyDirectives(
   ) as Record<string, string[]>;
 }
 
-export function createContentSecurityPolicyDirectives(nodeEnv: string): Record<string, string[]> {
+export function createContentSecurityPolicyDirectives(
+  nodeEnv: string,
+  supabaseUrl = PRODUCTION_SUPABASE_ORIGIN,
+): Record<string, string[]> {
   const directives = createFrontendContentSecurityPolicyDirectives("production");
+  const configuredUrl = new URL(supabaseUrl);
+  const localHttp = nodeEnv !== "production"
+    && configuredUrl.protocol === "http:"
+    && ["localhost", "127.0.0.1", "[::1]"].includes(configuredUrl.hostname);
+  if ((configuredUrl.protocol !== "https:" && !localHttp)
+    || configuredUrl.username || configuredUrl.password || configuredUrl.hostname.includes("*")) {
+    throw new Error("Invalid Supabase origin for Content-Security-Policy");
+  }
+  // Use the configured project only, never a wildcard or request-supplied origin.
+  directives["connect-src"] = [
+    "'self'",
+    PRODUCTION_API_ORIGIN,
+    configuredUrl.origin,
+    configuredUrl.origin.replace(/^http/u, "ws"),
+  ];
 
   if (nodeEnv !== "production") {
     directives["connect-src"].push(

@@ -66,7 +66,7 @@ export function createApp(env: ServerEnv, options: {
   app.use(helmet({
     contentSecurityPolicy: {
       useDefaults: false,
-      directives: createContentSecurityPolicyDirectives(env.NODE_ENV),
+      directives: createContentSecurityPolicyDirectives(env.NODE_ENV, env.SUPABASE_URL),
       reportOnly: false,
     },
   }));
