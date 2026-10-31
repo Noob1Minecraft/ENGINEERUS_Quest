@@ -10,6 +10,7 @@ export type LearningContext = {
   hintLevel: 0 | 1 | 2 | 3;
   neededFullExplanation: boolean;
   submittedSolution: boolean;
+  candidateAnswer: boolean;
 };
 export type TutorPlan = LearningContext & { mode: TutorMode; followUp: boolean };
 
@@ -19,10 +20,18 @@ const CHECK = /(?:check\s+my\s+(?:answer|solution|work)|проверь\s+(?:мо
 const QUIZ = /(?:quiz\s+me|test\s+my\s+knowledge|проверь\s+мои\s+знания|задай\s+(?:мне\s+)?вопрос|мені\s+сына|білімімді\s+тексер)/iu;
 const HINT = /(?:give\s+(?:me\s+)?(?:a\s+)?hint|подсказ|кеңес\s+бер|ишара)/iu;
 const STEPS = /(?:step[ -]by[ -]step|пошагов|қадамдап)/iu;
+const CANDIDATE_ANSWER = /(?:\b(?:answer|result)\s+(?:(?:is|will\s+be|would\s+be)\s+)?|(?:ответ|результат)\s+(?:(?:будет|получится|равен|это)\s+)?|(?:жауап|нәтиже)(?:ы)?\s+(?:(?:болады|шығады|тең)\s+)?)[^\d+−-]{0,20}[-+−]?\d+(?:[.,]\d+)?/iu;
+const SYMBOLIC_CANDIDATE = /^\s*[UIR]\s*=\s*[-+−]?\d+(?:[.,]\d+)?(?:\s*(?:mA|A|А|mV|kV|V|В|kΩ|Ω|кОм|Ом|kOhm|Ohm))?\s*[.!?？]*\s*$/u;
+const SYMBOLIC_FORMULA = /^\s*[UIR]\s*=\s*[UIR](?:\s*[*/+−-]\s*[UIR])+\s*[.!?？]*\s*$/u;
+
+export function hasCandidateAnswer(text: string): boolean {
+  return CANDIDATE_ANSWER.test(text.normalize('NFKC')) || SYMBOLIC_CANDIDATE.test(text.normalize('NFKC'));
+}
 
 export function isSymbolicEngineeringFollowUp(text: string): boolean {
   const trimmed = text.trim();
   if (trimmed.length === 0 || trimmed.length > 120) return false;
+  if (SYMBOLIC_FORMULA.test(trimmed.normalize('NFKC'))) return true;
   if (!/\d/u.test(trimmed) || !/[=?:]/u.test(trimmed)) return false;
   const words = trimmed.match(/\p{L}+/gu) ?? [];
   if (words.length === 0) return false;
@@ -31,11 +40,12 @@ export function isSymbolicEngineeringFollowUp(text: string): boolean {
 
 export function isTutorFollowUp(text: string): boolean {
   return MORE.test(text) || FULL.test(text) || CHECK.test(text) || QUIZ.test(text) || HINT.test(text) || STEPS.test(text)
-    || isSymbolicEngineeringFollowUp(text);
+    || isSymbolicEngineeringFollowUp(text) || hasCandidateAnswer(text);
 }
 
 function isStandaloneControl(text: string): boolean {
-  return /^(?:please\s+)?(?:i\s+(?:still\s+)?(?:don['’]?t|do not)\s+understand|explain\s+(?:more|simpler)|show\s+(?:the\s+)?full\s+(?:solution|explanation)|give\s+(?:me\s+)?(?:a\s+)?hint|check\s+my\s+(?:answer|solution|work)|quiz\s+me|step[ -]by[ -]step|не\s+понимаю|объясни\s+(?:подробнее|проще)|покажи\s+(?:полное\s+)?(?:решение|ответ)|реши\s+полностью|дай\s+подсказку|проверь\s+(?:мо[йёею]\s+)?(?:решение|ответ)|түсінбедім|түсінбеймін|толығырақ\s+түсіндір|толық\s+шешім|ишара|қадамдап|мені\s+сына)\s*[.!?]*$/iu.test(text.trim());
+  return /^(?:please\s+)?(?:i\s+(?:still\s+)?(?:don['’]?t|do not)\s+understand|explain\s+(?:more|simpler)|show\s+(?:the\s+)?full\s+(?:solution|explanation)|give\s+(?:me\s+)?(?:a\s+)?hint|check\s+my\s+(?:answer|solution|work)|quiz\s+me|step[ -]by[ -]step|не\s+понимаю|объясни\s+(?:подробнее|проще)|покажи\s+(?:полное\s+)?(?:решение|ответ)|реши\s+полностью|дай\s+подсказку|проверь\s+(?:мо[йёею]\s+)?(?:решение|ответ)|түсінбедім|түсінбеймін|толығырақ\s+түсіндір|толық\s+шешім|ишара|қадамдап|мені\s+сына)\s*[.!?]*$/iu.test(text.trim())
+    || isSymbolicEngineeringFollowUp(text) || hasCandidateAnswer(text);
 }
 
 export function routeTutorTask(text: string): TaskCategory {
@@ -60,7 +70,8 @@ export function planTutoring(text: string, history: readonly PersistedChatMessag
   users.forEach((message, index) => { if (!isStandaloneControl(message.text)) anchorIndex = index; });
   const category = standalone && anchorIndex >= 0 ? routeTutorTask(users[anchorIndex].text) : routeTutorTask(text);
   const completedFollowUps = standalone ? anchorIndex >= 0 ? users.length - anchorIndex - 1 : users.length : 0;
-  let mode: TutorMode = explicit ?? (FULL.test(text) ? 'full_explanation'
+  const candidateAnswer = hasCandidateAnswer(text);
+  let mode: TutorMode = explicit ?? (candidateAnswer ? 'check_my_solution' : FULL.test(text) ? 'full_explanation'
     : CHECK.test(text) ? 'check_my_solution' : QUIZ.test(text) ? 'quiz_me'
       : STEPS.test(text) ? 'step_by_step' : 'hint');
   let hintLevel: 0 | 1 | 2 | 3 = mode === 'hint' ? (MORE.test(text) || HINT.test(text)) && users.length > 0
@@ -69,5 +80,5 @@ export function planTutoring(text: string, history: readonly PersistedChatMessag
     mode = 'full_explanation'; hintLevel = 0;
   }
   return { category, mode, hintLevel, followUp: standalone, difficulty: 'unknown',
-    neededFullExplanation: mode === 'full_explanation', submittedSolution: mode === 'check_my_solution' };
+    neededFullExplanation: mode === 'full_explanation', submittedSolution: mode === 'check_my_solution', candidateAnswer };
 }

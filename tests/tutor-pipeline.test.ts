@@ -157,6 +157,60 @@ test('explicit modes, complete explanation, evaluation, quiz and default theory 
   assert.equal(planTutoring('Give me a hint about CAD design', [message('Calculate force')]).category, 'cad_design');
 });
 
+test('candidate-answer follow-up verifies or corrects only learner-supplied numeric results', async () => {
+  const initial = 'U = 12 V, R = 4 Ω. Найди I.';
+  const formula = 'I=U/R';
+  const history = [message(initial), message(formula)];
+  const calculation: TutorDraft['calculations'][number] = {
+    left: { value: 12, unit: 'V' }, operation: 'divide', right: { value: 4, unit: 'Ω' },
+    result: { value: 3, unit: 'A' },
+  };
+  for (const [latest, reviewed] of [
+    ['ответ будет 3 в задаче ?', 'Да, верно. I = 3 A.'],
+    ['ответ будет 4 в задаче ?', 'Нет. Правильный результат: I = 3 A.'],
+  ] as const) {
+    const plan = planTutoring(latest, history);
+    assert.equal(plan.followUp, true);
+    assert.equal(plan.category, 'calculation');
+    assert.equal(plan.mode, 'check_my_solution');
+    assert.equal(plan.candidateAnswer, true);
+    let calls = 0;
+    const pipeline = createTutorPipeline(async () => {
+      calls++;
+      return JSON.stringify({ ...draft(reviewed), calculations: [calculation], revealsFinalAnswer: true });
+    });
+    assert.equal(await pipeline({ plan, language: 'ru', originalTask: latest,
+      knowledge: existingTutorKnowledge({ prompt: initial, policy: '', sources: ['conversation'] }) }), reviewed);
+    assert.equal(calls, 2);
+  }
+
+  const unverified = { ...draft('Да, верно. I = 3 A.'), revealsFinalAnswer: true };
+  assert.match(formatVerifiedTutor(unverified, planTutoring('ответ будет 3?', history), 'ru', 'ответ будет 3?'),
+    /^Не удалось надёжно/u);
+  const inconsistent = { ...draft('Нет. Правильный результат: I = 4 A.'),
+    calculations: [calculation], revealsFinalAnswer: true };
+  assert.match(formatVerifiedTutor(inconsistent, planTutoring('ответ будет 4?', history), 'ru', 'ответ будет 4?'),
+    /^Не удалось надёжно/u);
+});
+
+test('candidate recognition does not weaken first-turn, formula-only, or vague-answer hint protection', async () => {
+  const initial = 'U = 12 V, R = 4 Ω. Найди I.';
+  const final = { ...draft('Ответ: 3 A'), revealsFinalAnswer: true };
+  assert.match(formatVerifiedTutor(final, planTutoring(initial, []), 'ru', initial), /^Не удалось надёжно/u);
+
+  const formulaPlan = planTutoring('I=U/R', [message(initial)]);
+  assert.equal(formulaPlan.followUp, true);
+  assert.equal(formulaPlan.mode, 'hint');
+  assert.equal(formulaPlan.candidateAnswer, false);
+  assert.equal(formatVerifiedTutor(draft('I = U/R'), formulaPlan, 'ru', 'I=U/R'), 'I = U/R');
+
+  const vague = 'какой ответ?';
+  const vaguePlan = planTutoring(vague, [message(initial), message('I=U/R')]);
+  assert.equal(vaguePlan.candidateAnswer, false);
+  assert.equal(vaguePlan.mode, 'hint');
+  assert.match(formatVerifiedTutor(final, vaguePlan, 'ru', vague), /^Не удалось надёжно/u);
+});
+
 const ohm: TutorDraft['calculations'][number] = {
   left: { value: 12, unit: 'V' }, operation: 'divide', right: { value: 4, unit: 'kOhm' },
   result: { value: 3, unit: 'mA' },

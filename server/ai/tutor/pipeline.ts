@@ -3,6 +3,7 @@ import { AiProviderError } from '../groqClient';
 import type { AiVisionImage } from '../groqClient';
 import type { SupportedLanguage } from '../languagePolicy';
 import type { TutorPlan } from './taskRouter';
+import { hasCandidateAnswer } from './taskRouter';
 import type { TutorKnowledgeSource } from './knowledge';
 import { parseTutorDraft, verifyCalculations, type TutorDraft } from './verifier';
 import { withGroqStage } from '../usageDiagnostics';
@@ -22,7 +23,9 @@ export function tutoringPolicy(plan: TutorPlan): string {
       : plan.hintLevel === 2 ? 'give the relevant principle/formula and one intermediate step, no final answer'
         : 'guide the setup and most educational steps; leave the final calculation to the learner'}. Keep it short; never reveal the final answer.`
     : plan.mode === 'step_by_step' ? 'Guide the setup and intermediate steps. Leave the last step to the learner; do not reveal the final answer.'
-      : plan.mode === 'check_my_solution' ? 'Evaluate the learner work first. Identify the first mistake and explain it; do not replace their work with a complete solution. If no work was supplied, ask for it.'
+      : plan.mode === 'check_my_solution' ? plan.candidateAnswer
+        ? 'Verify the learner-proposed numeric result. Confirm it only when the declared calculations verify it. If it is wrong, give the corrected result only with valid declared calculations; keep the explanation concise.'
+        : 'Evaluate the learner work first. Identify the first mistake and explain it; do not replace their work with a complete solution. If no work was supplied, ask for it.'
         : plan.mode === 'quiz_me' ? 'Ask one relevant question and wait. Do not include the answer key.'
           : 'Provide a complete explanation. For calculations use: Given; Find; Formula/principle; Unit conversion; Solution steps; Final answer; Quick check. For theory answer directly without an artificial calculation template.';
   return `[TUTOR TEACHING POLICY]\nAct as a patient engineering tutor.\n${teaching}\nTask category: ${plan.category}.
@@ -76,7 +79,7 @@ export function createTutorPipeline(generate: ReturnType<typeof createGroqRespon
     const reviewPolicy = `${policy}\n[VERIFIER PASS]
 Review the draft against the ORIGINAL task and teaching mode. Correct arithmetic, units, formula applicability, invented assumptions and contradictions BEFORE returning the JSON.
 Keep response and declared calculations consistent. Independently recompute; do not simply approve the draft or erase failed checks to evade review.
-For hint/step/check/quiz modes remove any premature final answer or fully worked solution. Enforce the concise dialogue formatting rules from the teaching policy.
+For hint/step/quiz modes remove any premature final answer or fully worked solution. In check mode, confirm or correct a numeric answer only when it was supplied in the latest learner message and the declared calculations verify the result. Enforce the concise dialogue formatting rules from the teaching policy.
 When the revised response contains only a clue, formula, known values, or a non-final intermediate step, set revealsFinalAnswer=false. Do not mark a normal hint as revealing the final answer.
 Acknowledge uncertainty; never claim independent proof.
 If missing information prevents a sound answer, set uncertain=true and ask for clarification instead of inventing a result.`;
@@ -116,10 +119,47 @@ function leaksFinalAnswer(response: string, task: string): boolean {
   return new RegExp(String.raw`^=\s*${numericEnd}`, 'u').test(lines.at(-1) ?? '');
 }
 
+function numericConclusion(response: string): { value: number; unit?: string } | undefined {
+  const clean = response.normalize('NFKC').replace(/[*`$]/gu, '').trim();
+  const number = String.raw`([-+−]?\d+(?:[.,]\d+)?(?:[eE][-+]?\d+)?)`;
+  const unit = String.raw`(mA|A|А|mV|kV|V|В|kΩ|Ω|кОм|Ом|kOhm|Ohm)?`;
+  const patterns = [
+    new RegExp(String.raw`(?:final\s+answer|answer|result|итоговый\s+ответ|ответ|результат|жауабы|жауап|нәтиже)\s*[:=—–-]?\s*(?:[UIR]\s*=\s*)?${number}\s*${unit}`, 'giu'),
+    new RegExp(String.raw`(?:^|[^\p{L}])[UIR]\s*=\s*${number}\s*${unit}\s*[.!;]?\s*$`, 'gimu'),
+  ];
+  const matches = patterns.flatMap((pattern) => [...clean.matchAll(pattern)]).sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
+  const match = matches.at(-1);
+  if (!match) return undefined;
+  const value = Number(match[1].replace('−', '-').replace(',', '.'));
+  return Number.isFinite(value) ? { value, ...(match[2] ? { unit: match[2] } : {}) } : undefined;
+}
+
+function conclusionMatchesVerifiedCalculation(
+  conclusion: { value: number; unit?: string }, calculations: TutorDraft['calculations'],
+): boolean {
+  const aliases = new Map([
+    ['А', 'A'], ['В', 'V'], ['Ω', 'Ohm'], ['Ω', 'Ohm'], ['ohm', 'Ohm'], ['ohms', 'Ohm'], ['Ом', 'Ohm'],
+    ['kΩ', 'kOhm'], ['kΩ', 'kOhm'], ['кОм', 'kOhm'],
+  ]);
+  const normalizedUnit = conclusion.unit ? aliases.get(conclusion.unit) ?? conclusion.unit : undefined;
+  return calculations.some(({ result }) => {
+    const resultUnit = aliases.get(result.unit.trim()) ?? result.unit.trim();
+    const sameValue = Math.abs(result.value - conclusion.value)
+      <= 1e-6 * Math.max(Math.abs(result.value), Math.abs(conclusion.value), 1e-12);
+    return sameValue && (normalizedUnit === undefined || normalizedUnit === resultUnit);
+  });
+}
+
 export function formatVerifiedTutor(draft: TutorDraft, plan: TutorPlan, language: SupportedLanguage, originalTask = ''): string {
   const checks = verifyCalculations(draft.calculations);
-  const withholdAnswer = plan.mode === 'hint' || plan.mode === 'step_by_step' || plan.mode === 'quiz_me';
+  const candidateVerification = plan.candidateAnswer && hasCandidateAnswer(originalTask);
+  const withholdAnswer = !candidateVerification
+    && (plan.mode === 'hint' || plan.mode === 'step_by_step' || plan.mode === 'quiz_me');
   if (draft.uncertain || checks.issues.length || (withholdAnswer && draft.revealsFinalAnswer)) return CLARIFY[language];
+  const conclusion = candidateVerification ? numericConclusion(draft.response) : undefined;
+  if (conclusion && (checks.checked === 0 || !conclusionMatchesVerifiedCalculation(conclusion, draft.calculations))) {
+    return CLARIFY[language];
+  }
   if ((plan.mode === 'hint' || plan.mode === 'step_by_step') && leaksFinalAnswer(draft.response, originalTask)) return CLARIFY[language];
   // The review's public explanation alone is persisted; internal checks/metadata never enter chat history.
   return draft.response;
