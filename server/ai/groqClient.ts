@@ -8,6 +8,10 @@ const FALLBACK_MODELS = ["openai/gpt-oss-120b", "openai/gpt-oss-20b"];
 const VISION_CAPABLE_MODELS = new Set(["qwen/qwen3.8-27b"]);
 const MODEL_FALLBACK_STATUSES = new Set([400, 404]);
 const CREDENTIAL_FALLBACK_STATUSES = new Set([401, 403]);
+const RATE_LIMIT_BACKOFF_BASE_MS = 500;
+const RATE_LIMIT_BACKOFF_JITTER_MS = 250;
+const MAX_RATE_LIMIT_WAIT_MS = 5_000;
+const MAX_SAFE_RETRY_AFTER_SECONDS = 300;
 
 export type AiProviderFailureCategory = "aborted" | "authentication" | "invalid_response" | "model" | "network" | "provider" | "rate_limit" | "timeout" | "vision_unavailable";
 
@@ -22,6 +26,7 @@ export class AiProviderError extends Error {
     readonly category: AiProviderFailureCategory,
     readonly fallbackContent: string,
     readonly providerStatus?: number,
+    readonly retryAfterSeconds?: number,
   ) {
     super(`AI provider failure: ${category}`);
     this.name = "AiProviderError";
@@ -36,7 +41,40 @@ type GroqResponderOptions = {
   model: string;
   fetchImpl?: Fetch;
   timeoutMs?: number;
+  /** Test seam; production uses an abortable timer. */
+  retryDelay?: (delayMs: number, signal?: AbortSignal) => Promise<void>;
+  random?: () => number;
+  now?: () => number;
 };
+
+export function parseRetryAfter(value: string | null, now = Date.now()): number | undefined {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  const deltaSeconds = /^\d+(?:\.\d+)?$/u.test(trimmed) ? Number(trimmed) : undefined;
+  const seconds = deltaSeconds !== undefined
+    ? deltaSeconds
+    : (Date.parse(trimmed) - now) / 1_000;
+  if (!Number.isFinite(seconds)) return undefined;
+  return Math.min(MAX_SAFE_RETRY_AFTER_SECONDS, Math.max(1, Math.ceil(seconds)));
+}
+
+function abortableDelay(delayMs: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) return Promise.reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(done, delayMs);
+    function done() {
+      signal?.removeEventListener("abort", aborted);
+      resolve();
+    }
+    function aborted() {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", aborted);
+      reject(signal?.reason ?? new DOMException("Aborted", "AbortError"));
+    }
+    signal?.addEventListener("abort", aborted, { once: true });
+  });
+}
 
 function fallbackResponse(prompt: string, language: "ru" | "kk" | "en", demoMode: boolean): string {
   const excerpt = prompt.trim().slice(0, 50);
@@ -59,6 +97,9 @@ export function createGroqResponder(options: GroqResponderOptions) {
   const fetchImpl = options.fetchImpl ?? fetch;
   const apiKeys = [...new Set([options.apiKey, options.secondaryApiKey].filter((key): key is string => Boolean(key)))];
   const modelCandidates = [...new Set([options.model, ...FALLBACK_MODELS])];
+  const delay = options.retryDelay ?? abortableDelay;
+  const random = options.random ?? Math.random;
+  const now = options.now ?? Date.now;
 
   return async function generateResponse(
     prompt: string,
@@ -77,6 +118,7 @@ export function createGroqResponder(options: GroqResponderOptions) {
     }
     const requestModels = hasImages ? [options.model] : modelCandidates;
     const boundedStagingRequest = module === "tutor" && stagingAiLimitsEnabled();
+    let lastRetryAfterSeconds: number | undefined;
     const userContent = hasImages
       ? [
         { type: "text", text: `${prompt}\n\nRespond in ${languageName(language)}. Preserve technical notation and identifiers.` },
@@ -100,8 +142,10 @@ export function createGroqResponder(options: GroqResponderOptions) {
           model,
           language,
           credential_slot: keyAttempt === 0 ? "primary" : "secondary",
-          retry_attempt: modelAttempt + 1,
-          retry_limit: requestModels.length,
+          credential_attempt: keyAttempt + 1,
+          credential_attempt_limit: apiKeys.length,
+          model_attempt: modelAttempt + 1,
+          model_attempt_limit: requestModels.length,
           vision_image_count: images.length,
         });
 
@@ -179,8 +223,41 @@ export function createGroqResponder(options: GroqResponderOptions) {
             error_category: category,
           });
 
-          if ((CREDENTIAL_FALLBACK_STATUSES.has(response.status) || response.status === 429)
-              && keyAttempt < apiKeys.length - 1) break;
+          if (response.status === 429) {
+            const retryAfterSeconds = parseRetryAfter(response.headers.get("Retry-After"), now());
+            const fallbackDelayMs = RATE_LIMIT_BACKOFF_BASE_MS * (2 ** keyAttempt)
+              + Math.floor(random() * RATE_LIMIT_BACKOFF_JITTER_MS);
+            const retryDelayMs = retryAfterSeconds === undefined ? fallbackDelayMs : retryAfterSeconds * 1_000;
+            const safeRetryAfterSeconds = retryAfterSeconds ?? lastRetryAfterSeconds
+              ?? Math.max(1, Math.ceil(retryDelayMs / 1_000));
+            lastRetryAfterSeconds = safeRetryAfterSeconds;
+            if (keyAttempt >= apiKeys.length - 1) {
+              throw new AiProviderError(category, fallbackResponse(prompt, language, false), response.status,
+                safeRetryAfterSeconds);
+            }
+            if (retryDelayMs > MAX_RATE_LIMIT_WAIT_MS) {
+              throw new AiProviderError(category, fallbackResponse(prompt, language, false), response.status,
+                safeRetryAfterSeconds);
+            }
+            securityLogger.info("ai_provider_retry_scheduled", {
+              provider: "groq",
+              error_category: category,
+              credential_attempt: keyAttempt + 1,
+              next_credential_attempt: keyAttempt + 2,
+              retry_delay_ms: retryDelayMs,
+            });
+            try {
+              await delay(retryDelayMs, signal);
+            } catch {
+              if (signal?.reason?.name !== "TimeoutError") {
+                throw new AiProviderError("aborted", fallbackResponse(prompt, language, false));
+              }
+              throw new AiProviderError(category, fallbackResponse(prompt, language, false), response.status,
+                safeRetryAfterSeconds);
+            }
+            break;
+          }
+          if (CREDENTIAL_FALLBACK_STATUSES.has(response.status) && keyAttempt < apiKeys.length - 1) break;
           if (modelAttempt < requestModels.length - 1 && MODEL_FALLBACK_STATUSES.has(response.status)) continue;
           throw new AiProviderError(category, fallbackResponse(prompt, language, false), response.status);
         }

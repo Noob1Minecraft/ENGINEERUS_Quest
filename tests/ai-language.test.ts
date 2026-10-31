@@ -1,12 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { AiProviderError, createGroqResponder } from "../server/ai/groqClient";
+import express, { type RequestHandler } from "express";
+import { AiProviderError, createGroqResponder, parseRetryAfter } from "../server/ai/groqClient";
 import {
   buildSystemPrompt,
   resolveResponseLanguage,
   type AiModule,
   type SupportedLanguage,
 } from "../server/ai/languagePolicy";
+import { createTutorPipeline } from "../server/ai/tutor/pipeline";
+import type { ChatRepository, PersistedChatMessage } from "../server/persistence/chats";
+import { createAiRouter } from "../server/routes/ai";
+import { withServer } from "./helpers";
 
 const detectionCases: Array<[string, string, SupportedLanguage]> = [
   ["Как рассчитать torque для этого вала?", "en", "ru"],
@@ -268,22 +273,194 @@ test("surfaces a typed rate-limit failure instead of returning provider fallback
 
 test("retries a rate-limited primary credential once with the distinct secondary credential", async () => {
   const authorizationHeaders: string[] = [];
+  const delays: number[] = [];
   const respond = createGroqResponder({
     apiKey: "primary-placeholder",
     secondaryApiKey: "secondary-placeholder",
     model: "test-model",
     fetchImpl: async (_input, init) => {
       authorizationHeaders.push(new Headers(init?.headers).get("Authorization") ?? "");
-      if (authorizationHeaders.length === 1) return new Response("{}", { status: 429 });
+      if (authorizationHeaders.length === 1) {
+        return new Response("{}", { status: 429, headers: { "Retry-After": "2" } });
+      }
       return new Response(JSON.stringify({ choices: [{ message: { content: "secondary success" } }] }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
       });
     },
+    retryDelay: async (delayMs) => { delays.push(delayMs); },
   });
 
   assert.equal(await respond("Какие стандарты относятся к безопасности машин?", "tutor", "ru"), "secondary success");
   assert.deepEqual(authorizationHeaders, ["Bearer primary-placeholder", "Bearer secondary-placeholder"]);
+  assert.deepEqual(delays, [2_000]);
+});
+
+test("parses Retry-After delta seconds and HTTP dates into bounded safe seconds", () => {
+  const now = Date.parse("2026-10-31T12:00:00.000Z");
+  assert.equal(parseRetryAfter("4", now), 4);
+  assert.equal(parseRetryAfter("Sat, 31 Oct 2026 12:00:07 GMT", now), 7);
+  assert.equal(parseRetryAfter("invalid", now), undefined);
+  assert.equal(parseRetryAfter("99999", now), 300);
+});
+
+test("uses bounded jittered backoff when Retry-After is absent", async () => {
+  const delays: number[] = [];
+  let calls = 0;
+  const respond = createGroqResponder({
+    apiKey: "primary-placeholder", secondaryApiKey: "secondary-placeholder", model: "test-model",
+    random: () => 0.4,
+    retryDelay: async (delayMs) => { delays.push(delayMs); },
+    fetchImpl: async () => ++calls === 1
+      ? new Response("{}", { status: 429 })
+      : Response.json({ choices: [{ message: { content: "secondary success" } }] }),
+  });
+  assert.equal(await respond("Explain stress", "tutor", "en"), "secondary success");
+  assert.deepEqual(delays, [600]);
+  assert.equal(calls, 2);
+});
+
+test("aborting during the rate-limit wait cancels failover and makes no secondary request", async () => {
+  let calls = 0;
+  const controller = new AbortController();
+  const respond = createGroqResponder({
+    apiKey: "primary-placeholder", secondaryApiKey: "secondary-placeholder", model: "test-model",
+    fetchImpl: async () => { calls += 1; return new Response("{}", { status: 429, headers: { "Retry-After": "1" } }); },
+  });
+  const pending = respond("Explain stress", "tutor", "en", undefined, [], controller.signal);
+  setTimeout(() => controller.abort(new DOMException("cancelled", "AbortError")), 10);
+  await assert.rejects(pending, (error: unknown) => error instanceof AiProviderError && error.category === "aborted");
+  assert.equal(calls, 1);
+});
+
+test("an expiring request deadline cancels the wait and fails closed as rate_limit", async () => {
+  let calls = 0;
+  const deadline = new AbortController();
+  const respond = createGroqResponder({
+    apiKey: "primary-placeholder", secondaryApiKey: "secondary-placeholder", model: "test-model",
+    fetchImpl: async () => { calls += 1; return new Response("{}", { status: 429, headers: { "Retry-After": "1" } }); },
+  });
+  const pending = respond("Explain stress", "tutor", "en", undefined, [], deadline.signal);
+  setTimeout(() => deadline.abort(new DOMException("deadline exceeded", "TimeoutError")), 10);
+  await assert.rejects(pending, (error: unknown) => (
+    error instanceof AiProviderError && error.category === "rate_limit" && error.retryAfterSeconds === 1
+  ));
+  assert.equal(calls, 1);
+});
+
+test("an excessive Retry-After skips the secondary credential", async () => {
+  let calls = 0;
+  const respond = createGroqResponder({
+    apiKey: "primary-placeholder", secondaryApiKey: "secondary-placeholder", model: "test-model",
+    fetchImpl: async () => { calls += 1; return new Response("{}", { status: 429, headers: { "Retry-After": "10" } }); },
+  });
+  await assert.rejects(respond("Explain stress", "tutor", "en"), (error: unknown) => (
+    error instanceof AiProviderError && error.category === "rate_limit" && error.retryAfterSeconds === 10
+  ));
+  assert.equal(calls, 1);
+});
+
+test("provider telemetry distinguishes credential and model attempts", async () => {
+  const entries: Array<Record<string, unknown>> = [];
+  const originalLog = console.log;
+  console.log = (line?: unknown) => {
+    if (typeof line === "string") {
+      try { entries.push(JSON.parse(line)); } catch { /* Ignore non-structured test output. */ }
+    }
+  };
+  try {
+    let calls = 0;
+    const respond = createGroqResponder({
+      apiKey: "primary-placeholder", secondaryApiKey: "secondary-placeholder", model: "test-model",
+      fetchImpl: async () => ++calls === 1
+        ? new Response("{}", { status: 401 })
+        : Response.json({ choices: [{ message: { content: "secondary success" } }] }),
+    });
+    await respond("Explain stress", "tutor", "en");
+  } finally {
+    console.log = originalLog;
+  }
+  const requests = entries.filter(({ event }) => event === "ai_provider_request");
+  assert.deepEqual(requests.map(({ credential_attempt, model_attempt }) => ({ credential_attempt, model_attempt })), [
+    { credential_attempt: 1, model_attempt: 1 },
+    { credential_attempt: 2, model_attempt: 1 },
+  ]);
+});
+
+test("review rate limiting returns safe HTTP 429 without exposing or persisting the draft", async () => {
+  const sessionId = "123e4567-e89b-42d3-a456-426614174000";
+  const userMessage: PersistedChatMessage = {
+    id: "user-message", text: "Explain Ohm's law", sender: "user", module: "tutor",
+    timestamp: "2026-10-31T00:00:00.000Z",
+  };
+  let providerCalls = 0;
+  let completionCalls = 0;
+  const draft = JSON.stringify({ response: "UNREVIEWED DRAFT", calculations: [], revealsFinalAnswer: false, uncertain: false });
+  const respond = createGroqResponder({
+    apiKey: "primary-placeholder", secondaryApiKey: "secondary-placeholder", model: "test-model",
+    retryDelay: async () => {},
+    fetchImpl: async () => {
+      providerCalls += 1;
+      if (providerCalls === 1) return Response.json({ choices: [{ message: { content: draft } }] });
+      return new Response("{}", { status: 429, headers: { "Retry-After": providerCalls === 2 ? "1" : "7" } });
+    },
+  });
+  const repository = {
+    async beginExchange() { return { userMessage, assistantMessage: null, progress: {} }; },
+    async messages() { return { items: [], nextCursor: null }; },
+    async completeExchange() { completionCalls += 1; throw new Error("must not persist an unreviewed draft"); },
+  } as unknown as ChatRepository;
+  const authenticate: RequestHandler = (_request, response, next) => {
+    response.locals.auth = { userId: "owner", accessToken: "test-only", claims: {} }; next();
+  };
+  const app = express(); app.use(express.json());
+  app.use(createAiRouter(authenticate, (_request, _response, next) => next(), {
+    repository, detectLanguage: () => "en", generateResponse: respond, tutorPipeline: createTutorPipeline(respond),
+  }));
+  await withServer(app, async (url) => {
+    const response = await fetch(`${url}/api/ai`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Idempotency-Key": "review-rate-limit" },
+      body: JSON.stringify({ session_id: sessionId, text: userMessage.text, lang: "en" }),
+    });
+    assert.equal(response.status, 429);
+    assert.equal(response.headers.get("Retry-After"), "7");
+    const body = await response.json() as { error: { code: string }; user_message: PersistedChatMessage; assistant_message: null };
+    assert.equal(body.error.code, "ai_provider_rate_limited");
+    assert.equal(body.user_message.id, userMessage.id);
+    assert.equal(body.assistant_message, null);
+    assert.doesNotMatch(JSON.stringify(body), /UNREVIEWED DRAFT/u);
+  });
+  assert.equal(providerCalls, 3);
+  assert.equal(completionCalls, 0);
+});
+
+test("a completed idempotent replay performs no provider call", async () => {
+  const sessionId = "123e4567-e89b-42d3-a456-426614174000";
+  const userMessage = { id: "user", text: "Explain stress", sender: "user" as const, module: "tutor" as const,
+    timestamp: "2026-10-31T00:00:00.000Z" };
+  const assistantMessage = { ...userMessage, id: "assistant", sender: "ai" as const, text: "Reviewed response" };
+  let providerCalls = 0;
+  const repository = {
+    async beginExchange() { return { userMessage, assistantMessage, progress: {} }; },
+  } as unknown as ChatRepository;
+  const authenticate: RequestHandler = (_request, response, next) => {
+    response.locals.auth = { userId: "owner", accessToken: "test-only", claims: {} }; next();
+  };
+  const app = express(); app.use(express.json());
+  app.use(createAiRouter(authenticate, (_request, _response, next) => next(), {
+    repository, detectLanguage: () => "en", generateResponse: async () => { providerCalls += 1; return "unused"; },
+  }));
+  await withServer(app, async (url) => {
+    const response = await fetch(`${url}/api/ai`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Idempotency-Key": "completed-replay" },
+      body: JSON.stringify({ session_id: sessionId, text: userMessage.text, lang: "en" }),
+    });
+    assert.equal(response.status, 200);
+    assert.equal((await response.json() as { idempotent_replay: boolean }).idempotent_replay, true);
+  });
+  assert.equal(providerCalls, 0);
 });
 test("local fallback responses use the supplied resolved language", async () => {
   const respond = createGroqResponder({ model: "test-model" });

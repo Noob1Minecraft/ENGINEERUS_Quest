@@ -361,10 +361,19 @@ export function createAiRouter(
           error_category: error.category,
           ...(error.providerStatus !== undefined ? { provider_status: error.providerStatus } : {}),
         });
-        response.status(503).json({
+        const rateLimited = error.category === "rate_limit";
+        const retryAfterSeconds = error.retryAfterSeconds !== undefined && Number.isFinite(error.retryAfterSeconds)
+          ? Math.min(300, Math.max(1, Math.ceil(error.retryAfterSeconds)))
+          : undefined;
+        if (rateLimited && retryAfterSeconds !== undefined) {
+          response.setHeader("Retry-After", String(retryAfterSeconds));
+        }
+        response.status(rateLimited ? 429 : 503).json({
           error: {
-            code: "ai_provider_unavailable",
-            message: "The question was saved, but the AI response could not be completed.",
+            code: rateLimited ? "ai_provider_rate_limited" : "ai_provider_unavailable",
+            message: rateLimited
+              ? "The question was saved. The AI service is busy; try again later."
+              : "The question was saved, but the AI response could not be completed.",
           },
           user_message: started.userMessage,
           assistant_message: null,
