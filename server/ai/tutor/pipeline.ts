@@ -3,6 +3,7 @@ import { AiProviderError } from '../groqClient';
 import type { AiVisionImage } from '../groqClient';
 import type { SupportedLanguage } from '../languagePolicy';
 import type { TutorPlan } from './taskRouter';
+import type { VerifiedCandidateEvidence } from './deterministicFollowUp';
 import type { TutorKnowledgeSource } from './knowledge';
 import { parseTutorDraft, verifyCalculations, type TutorDraft } from './verifier';
 import { withGroqStage } from '../usageDiagnostics';
@@ -45,8 +46,17 @@ const CLARIFY: Record<SupportedLanguage, string> = {
 export type TutorPipelineInput = {
   plan: TutorPlan; knowledge: TutorKnowledgeSource; language: SupportedLanguage;
   originalTask?: string;
+  verifiedCandidateEvidence?: VerifiedCandidateEvidence;
   images?: readonly AiVisionImage[]; signal?: AbortSignal;
 };
+
+function verifiedEvidenceCalculation(
+  evidence: VerifiedCandidateEvidence | undefined,
+): TutorDraft['calculations'][number] | undefined {
+  if (!evidence) return undefined;
+  const checks = verifyCalculations([evidence.calculation]);
+  return checks.checked === 1 && checks.issues.length === 0 ? evidence.calculation : undefined;
+}
 
 export function createTutorPipeline(generate: ReturnType<typeof createGroqResponder>) {
   return async (input: TutorPipelineInput): Promise<string> => {
@@ -88,8 +98,10 @@ If missing information prevents a sound answer, set uncertain=true and ask for c
     if (!reviewed) throw new AiProviderError('invalid_response', 'Tutor unavailable');
     // A review may consolidate redundant checks; reject erasing all failed checks,
     // but judge corrected calculations on their own dimensions and arithmetic.
-    if (checks.issues.length && reviewed.calculations.length === 0) return CLARIFY[input.language];
-    return formatVerifiedTutor(reviewed, input.plan, input.language, input.originalTask ?? knowledge.prompt);
+    if (checks.issues.length && reviewed.calculations.length === 0
+      && !verifiedEvidenceCalculation(input.verifiedCandidateEvidence)) return CLARIFY[input.language];
+    return formatVerifiedTutor(reviewed, input.plan, input.language,
+      input.originalTask ?? knowledge.prompt, input.verifiedCandidateEvidence);
   };
 }
 
@@ -149,15 +161,30 @@ function conclusionMatchesVerifiedCalculation(
   });
 }
 
-export function formatVerifiedTutor(draft: TutorDraft, plan: TutorPlan, language: SupportedLanguage, originalTask = ''): string {
-  const checks = verifyCalculations(draft.calculations);
+export function formatVerifiedTutor(
+  draft: TutorDraft,
+  plan: TutorPlan,
+  language: SupportedLanguage,
+  originalTask = '',
+  verifiedCandidateEvidence?: VerifiedCandidateEvidence,
+): string {
+  const verifiedCandidateCalculation = verifiedEvidenceCalculation(verifiedCandidateEvidence);
+  const evidenceCalculation = draft.calculations.length === 0 ? verifiedCandidateCalculation : undefined;
+  const calculations = draft.calculations.length > 0
+    ? draft.calculations : evidenceCalculation ? [evidenceCalculation] : [];
+  const checks = verifyCalculations(calculations);
   const candidateVerification = plan.candidateAnswer;
   const withholdAnswer = !candidateVerification
     && (plan.mode === 'hint' || plan.mode === 'step_by_step' || plan.mode === 'quiz_me');
   if (draft.uncertain || checks.issues.length || (withholdAnswer && draft.revealsFinalAnswer)) return CLARIFY[language];
   const conclusion = candidateVerification ? numericConclusion(draft.response) : undefined;
-  if (candidateVerification && (checks.checked === 0 || (draft.revealsFinalAnswer
-    && (!conclusion || !conclusionMatchesVerifiedCalculation(conclusion, draft.calculations))))) {
+  const evidenceFallback = Boolean(evidenceCalculation && draft.calculations.length === 0);
+  if (candidateVerification && (checks.checked === 0
+    || (verifiedCandidateCalculation && conclusion
+      && !conclusionMatchesVerifiedCalculation(conclusion, [verifiedCandidateCalculation]))
+    || (evidenceFallback && (!conclusion || !conclusionMatchesVerifiedCalculation(conclusion, calculations)))
+    || (!evidenceFallback && draft.revealsFinalAnswer
+      && (!conclusion || !conclusionMatchesVerifiedCalculation(conclusion, calculations))))) {
     return CLARIFY[language];
   }
   if ((plan.mode === 'hint' || plan.mode === 'step_by_step') && leaksFinalAnswer(draft.response, originalTask)) return CLARIFY[language];

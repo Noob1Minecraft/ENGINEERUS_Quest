@@ -5,7 +5,11 @@ import express, { type RequestHandler } from 'express';
 import { findTutorAnchor, planTutoring, routeTutorTask } from '../server/ai/tutor/taskRouter';
 import { existingTutorKnowledge } from '../server/ai/tutor/knowledge';
 import { createTutorPipeline, formatVerifiedTutor, tutoringPolicy } from '../server/ai/tutor/pipeline';
-import { hasVerifiedTutorWorkContext, resolveDeterministicTutorFollowUp } from '../server/ai/tutor/deterministicFollowUp';
+import {
+  hasVerifiedTutorWorkContext,
+  resolveDeterministicTutorFollowUp,
+  resolveVerifiedCandidateEvidence,
+} from '../server/ai/tutor/deterministicFollowUp';
 import { parseTutorDraft, verifyCalculations, type TutorDraft } from '../server/ai/tutor/verifier';
 import { AiProviderError } from '../server/ai/groqClient';
 import { createAiRouter } from '../server/routes/ai';
@@ -298,14 +302,70 @@ test('short results become reviewed candidates only after verified owner-scoped 
     left: { value: 12, unit: 'V' }, operation: 'divide', right: { value: 4, unit: 'Ω' },
     result: { value: 3, unit: 'A' },
   };
+  const evidence = resolveVerifiedCandidateEvidence({
+    text: '3 A', history, language: 'ru', hasDocument: false, hasImages: false,
+  });
+  assert.ok(evidence);
+  assert.deepEqual(evidence, {
+    kind: 'ohm_law', anchorMessageId: initial.id,
+    formulaMessageId: formula.id, arithmeticMessageId: arithmetic.id,
+    target: 'I', candidate: { value: 3, unit: 'A' },
+    calculation: { ...checkedCalculation, right: { value: 4, unit: 'Ohm' } },
+  });
   assert.match(formatVerifiedTutor({ ...draft('Да, верно. I = 3 A.'), revealsFinalAnswer: true }, barePlan, 'ru', '3'),
     /^Не удалось надёжно/u);
   assert.match(formatVerifiedTutor(draft('Да, верно.'), barePlan, 'ru', '3'), /^Не удалось надёжно/u);
+  assert.equal(formatVerifiedTutor({ ...draft('Да, верно. I = 3 A.'), revealsFinalAnswer: true }, barePlan,
+    'ru', '3 A', evidence), 'Да, верно. I = 3 A.');
+  const symbolicEvidence = resolveVerifiedCandidateEvidence({
+    text: 'I = 3 A', history, language: 'ru', hasDocument: false, hasImages: false,
+  });
+  assert.ok(symbolicEvidence);
+  assert.equal(formatVerifiedTutor({ ...draft('Да, верно. I = 3 A.'), revealsFinalAnswer: true }, barePlan,
+    'ru', 'I = 3 A', symbolicEvidence), 'Да, верно. I = 3 A.');
   assert.equal(formatVerifiedTutor({ ...draft('Да, верно. I = 3 A.'), calculations: [checkedCalculation],
-    revealsFinalAnswer: true }, barePlan, 'ru', '3'), 'Да, верно. I = 3 A.');
+    revealsFinalAnswer: true }, barePlan, 'ru', '3', {
+      ...evidence, calculation: { ...checkedCalculation, result: { value: 4, unit: 'A' } },
+    }), 'Да, верно. I = 3 A.');
+  assert.match(formatVerifiedTutor({ ...draft('Да, верно. I = 4 A.'), revealsFinalAnswer: true }, barePlan,
+    'ru', '3 A', evidence), /^Не удалось надёжно/u);
+  assert.match(formatVerifiedTutor({ ...draft('Да, верно. I = 4 A.'), calculations: [{
+    left: { value: 16, unit: 'V' }, operation: 'divide', right: { value: 4, unit: 'Ohm' },
+    result: { value: 4, unit: 'A' },
+  }], revealsFinalAnswer: true }, barePlan, 'ru', '3 A', evidence), /^Не удалось надёжно/u);
+  assert.match(formatVerifiedTutor({ ...draft('Да, верно. I = 3 A.'), revealsFinalAnswer: true, uncertain: true },
+    barePlan, 'ru', '3 A', evidence), /^Не удалось надёжно/u);
   const wrongPlan = planTutoring('4 A', history, undefined, { contextualCandidate: true });
   assert.equal(formatVerifiedTutor({ ...draft('Нет. Правильный результат: I = 3 A.'), calculations: [checkedCalculation],
     revealsFinalAnswer: true }, wrongPlan, 'ru', '4 A'), 'Нет. Правильный результат: I = 3 A.');
+});
+
+test('verified candidate evidence rejects mismatched or incomplete Ohm-law chains', () => {
+  const initial = message('U = 12 V, R = 4 Ω. Найди I.', 'evidence-anchor');
+  const hint = assistantMessage();
+  const formula = message('I = U/R', 'evidence-formula');
+  const arithmetic = message('12 / 4 = 3', 'evidence-arithmetic');
+  const history = [initial, hint, formula, assistantMessage('formula acknowledged'),
+    arithmetic, assistantMessage('arithmetic acknowledged')];
+  const input = { history, language: 'ru' as const, hasDocument: false, hasImages: false };
+
+  assert.equal(resolveVerifiedCandidateEvidence({ ...input, text: '4 A' }), undefined);
+  assert.equal(resolveVerifiedCandidateEvidence({ ...input, text: '3 V' }), undefined);
+  assert.equal(resolveVerifiedCandidateEvidence({ ...input, text: '3 A',
+    history: [initial, hint, message('I = U*R'), arithmetic] }), undefined);
+  assert.equal(resolveVerifiedCandidateEvidence({ ...input, text: '5 A',
+    history: [initial, hint, formula, message('10 / 2 = 5')] }), undefined);
+  assert.equal(resolveVerifiedCandidateEvidence({ ...input, text: '3 A',
+    history: [initial, hint, arithmetic] }), undefined);
+  assert.equal(resolveVerifiedCandidateEvidence({ ...input, text: '3 A', history: [] }), undefined);
+  assert.equal(resolveVerifiedCandidateEvidence({ ...input, text: '3 A', hasDocument: true }), undefined);
+  assert.equal(resolveVerifiedCandidateEvidence({ ...input, text: '3 A', hasImages: true }), undefined);
+  assert.equal(resolveVerifiedCandidateEvidence({ ...input, text: '3 A', hasStandards: true }), undefined);
+  assert.equal(resolveVerifiedCandidateEvidence({ ...input, text: '3 A', history: [
+    message('Using ISO 12345, U = 12 V, R = 4 Ω. Найди I.'), hint, formula, arithmetic,
+  ] }), undefined);
+  assert.equal(resolveVerifiedCandidateEvidence({ ...input, text: '3 A', history: [] }), undefined);
+  assert.equal(planTutoring('3 A', []).candidateAnswer, false);
 });
 
 test('short candidate context fails closed across sessions and external knowledge contexts', () => {
@@ -402,12 +462,19 @@ test('route fast path makes zero provider calls while reviewed modes and isolate
 test('route enables reviewed short candidates only from the same owner-scoped verified sequence', async () => {
   const sessionId = '123e4567-e89b-42d3-a456-426614174001';
   const initial = message('U = 12 V, R = 4 Ω. Find I.', 'short-anchor');
+  const formula = message('I = U/R', 'short-formula');
+  const formulaAck = resolveDeterministicTutorFollowUp({
+    text: formula.text, history: [initial, assistantMessage()], language: 'en', hasDocument: false, hasImages: false,
+  });
+  assert.ok(formulaAck);
   const arithmetic = message('12 / 4 = 3', 'short-arithmetic');
   const arithmeticAck = resolveDeterministicTutorFollowUp({
-    text: arithmetic.text, history: [initial, assistantMessage()], language: 'en', hasDocument: false, hasImages: false,
+    text: arithmetic.text, history: [initial, assistantMessage(), formula, assistantMessage(formulaAck)],
+    language: 'en', hasDocument: false, hasImages: false,
   });
   assert.ok(arithmeticAck);
-  const seed = () => [initial, assistantMessage(), arithmetic, assistantMessage(arithmeticAck)];
+  const seed = () => [initial, assistantMessage(), formula, assistantMessage(formulaAck),
+    arithmetic, assistantMessage(arithmeticAck)];
   const histories = new Map<string, PersistedChatMessage[]>([
     ['bare-owner', seed()], ['unit-owner', seed()], ['symbol-owner', seed()],
   ]);
@@ -415,7 +482,7 @@ test('route enables reviewed short candidates only from the same owner-scoped ve
   const policies: string[] = [];
   let providerCalls = 0;
   const checkedCalculation: TutorDraft['calculations'][number] = {
-    left: { value: 12, unit: 'V' }, operation: 'divide', right: { value: 4, unit: 'Ω' },
+    left: { value: 12, unit: 'V' }, operation: 'divide', right: { value: 4, unit: 'Ohm' },
     result: { value: 3, unit: 'A' },
   };
   const repository = {
@@ -440,7 +507,8 @@ test('route enables reviewed short candidates only from the same owner-scoped ve
   };
   const generator = async (_prompt: string, _module: any, _language: any, policy?: string) => {
     providerCalls++; policies.push(policy ?? '');
-    return JSON.stringify({ ...draft('Yes. I = 3 A.'), calculations: [checkedCalculation], revealsFinalAnswer: true });
+    return JSON.stringify({ ...draft('Yes. I = 3 A.'),
+      ...(providerCalls <= 2 ? { calculations: [checkedCalculation] } : {}), revealsFinalAnswer: true });
   };
   const app = express(); app.use(express.json());
   app.use(createAiRouter(authenticate, (_request, _response, next) => next(), {

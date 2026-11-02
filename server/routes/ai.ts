@@ -38,6 +38,7 @@ import type { createTutorPipeline } from "../ai/tutor/pipeline";
 import {
   isDeterministicTutorFollowUpCandidate,
   hasVerifiedTutorWorkContext,
+  resolveVerifiedCandidateEvidence,
   resolveDeterministicTutorFollowUp,
 } from "../ai/tutor/deterministicFollowUp";
 import { withGroqUsage } from "../ai/usageDiagnostics";
@@ -378,6 +379,17 @@ export function createAiRouter(
           hasStandards: Boolean(prepared.lookupResult),
         })
         : false;
+      const verifiedCandidateEvidence = contextualCandidate
+        ? resolveVerifiedCandidateEvidence({
+          text: canonicalPrompt,
+          history: tutorHistory,
+          language: detectedLanguage,
+          explicitMode: input.tutor_mode,
+          hasDocument: Boolean(documentId),
+          hasImages: Boolean(imageIds?.length),
+          hasStandards: Boolean(prepared.lookupResult),
+        })
+        : undefined;
       const tutorPlan = moduleName === "tutor" && dependencies.tutorPipeline
         ? planTutoring(canonicalPrompt, tutorHistory, input.tutor_mode, { contextualCandidate }) : undefined;
       const clientSignal = response.locals.aiAbortSignal as AbortSignal | undefined;
@@ -389,6 +401,7 @@ export function createAiRouter(
         ? dependencies.tutorPipeline({
           plan: tutorPlan,
           originalTask: canonicalPrompt,
+          verifiedCandidateEvidence,
           knowledge: existingTutorKnowledge({ prompt: providerPrompt, policy, sources: [
             ...(prepared.lookupResult ? ["standards" as const] : []),
             ...(documentContext ? ["document" as const] : []),
