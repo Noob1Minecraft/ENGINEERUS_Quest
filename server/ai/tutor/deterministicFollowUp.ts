@@ -48,6 +48,7 @@ export type VerifiedCandidateEvidence = Readonly<{
   arithmeticMessageId: string;
   target: OhmSymbol;
   candidate: Readonly<ParsedQuantity>;
+  expectedResult: Readonly<ParsedQuantity>;
   calculation: TutorDraft['calculations'][number];
 }>;
 
@@ -183,7 +184,13 @@ function parseCandidate(text: string, target: OhmSymbol): ParsedQuantity | undef
   if (!match || (match[1] && match[1].toUpperCase() !== target)) return undefined;
   const value = normalizeNumber(match[2]);
   const unit = normalizeOhmUnit(match[3]);
-  return Number.isFinite(value) && unit && unitMatchesSymbol(target, unit) ? { value, unit } : undefined;
+  return Number.isFinite(value) && unit ? { value, unit } : undefined;
+}
+
+function expectedOhmResultUnit(target: OhmSymbol, right: ParsedQuantity): string {
+  if (target === 'U') return 'V';
+  if (target === 'I') return right.unit === 'kOhm' ? 'mA' : 'A';
+  return right.unit === 'mA' ? 'kOhm' : 'Ohm';
 }
 
 function nearlyEqual(left: number, right: number): boolean {
@@ -211,7 +218,7 @@ export function resolveVerifiedCandidateEvidence(
   const formula = parseApprovedFormula(formulaMessage.text);
   const arithmetic = parseArithmetic(arithmeticMessage.text);
   if (!formula || formula.target !== parsedAnchor.target || !arithmetic || !correctArithmetic(arithmeticMessage.text)
-    || formula.operation !== arithmetic.operation || !nearlyEqual(arithmetic.result, candidate.value)) return undefined;
+    || formula.operation !== arithmetic.operation) return undefined;
 
   const left = parsedAnchor.quantities.get(formula.left);
   const right = parsedAnchor.quantities.get(formula.right);
@@ -222,15 +229,19 @@ export function resolveVerifiedCandidateEvidence(
     : nearlyEqual(arithmetic.left, left.value) && nearlyEqual(arithmetic.right, right.value);
   if (!operandsMatch) return undefined;
 
+  const expectedResult = {
+    value: arithmetic.result,
+    unit: expectedOhmResultUnit(parsedAnchor.target, right),
+  };
   const calculation: TutorDraft['calculations'][number] = {
-    left, operation: formula.operation, right, result: candidate,
+    left, operation: formula.operation, right, result: expectedResult,
   };
   const checks = verifyCalculations([calculation]);
   if (checks.checked !== 1 || checks.issues.length !== 0) return undefined;
   return {
     kind: 'ohm_law', anchorMessageId: anchor.id,
     formulaMessageId: formulaMessage.id, arithmeticMessageId: arithmeticMessage.id,
-    target: parsedAnchor.target, candidate, calculation,
+    target: parsedAnchor.target, candidate, expectedResult, calculation,
   };
 }
 

@@ -310,6 +310,7 @@ test('short results become reviewed candidates only after verified owner-scoped 
     kind: 'ohm_law', anchorMessageId: initial.id,
     formulaMessageId: formula.id, arithmeticMessageId: arithmetic.id,
     target: 'I', candidate: { value: 3, unit: 'A' },
+    expectedResult: { value: 3, unit: 'A' },
     calculation: { ...checkedCalculation, right: { value: 4, unit: 'Ohm' } },
   });
   assert.match(formatVerifiedTutor({ ...draft('Да, верно. I = 3 A.'), revealsFinalAnswer: true }, barePlan, 'ru', '3'),
@@ -323,10 +324,11 @@ test('short results become reviewed candidates only after verified owner-scoped 
   assert.ok(symbolicEvidence);
   assert.equal(formatVerifiedTutor({ ...draft('Да, верно. I = 3 A.'), revealsFinalAnswer: true }, barePlan,
     'ru', 'I = 3 A', symbolicEvidence), 'Да, верно. I = 3 A.');
-  assert.equal(formatVerifiedTutor({ ...draft('Да, верно. I = 3 A.'), calculations: [checkedCalculation],
+  assert.match(formatVerifiedTutor({ ...draft('Да, верно. I = 3 A.'), calculations: [checkedCalculation],
     revealsFinalAnswer: true }, barePlan, 'ru', '3', {
-      ...evidence, calculation: { ...checkedCalculation, result: { value: 4, unit: 'A' } },
-    }), 'Да, верно. I = 3 A.');
+      ...evidence, expectedResult: { value: 4, unit: 'A' },
+      calculation: { ...checkedCalculation, result: { value: 4, unit: 'A' } },
+    }), /^Не удалось надёжно/u);
   assert.match(formatVerifiedTutor({ ...draft('Да, верно. I = 4 A.'), revealsFinalAnswer: true }, barePlan,
     'ru', '3 A', evidence), /^Не удалось надёжно/u);
   assert.match(formatVerifiedTutor({ ...draft('Да, верно. I = 4 A.'), calculations: [{
@@ -336,8 +338,17 @@ test('short results become reviewed candidates only after verified owner-scoped 
   assert.match(formatVerifiedTutor({ ...draft('Да, верно. I = 3 A.'), revealsFinalAnswer: true, uncertain: true },
     barePlan, 'ru', '3 A', evidence), /^Не удалось надёжно/u);
   const wrongPlan = planTutoring('4 A', history, undefined, { contextualCandidate: true });
-  assert.equal(formatVerifiedTutor({ ...draft('Нет. Правильный результат: I = 3 A.'), calculations: [checkedCalculation],
-    revealsFinalAnswer: true }, wrongPlan, 'ru', '4 A'), 'Нет. Правильный результат: I = 3 A.');
+  for (const text of ['4 A', '3 V', 'I = 4 A']) {
+    const wrongEvidence = resolveVerifiedCandidateEvidence({
+      text, history, language: 'ru', hasDocument: false, hasImages: false,
+    });
+    assert.ok(wrongEvidence, text);
+    const plan = planTutoring(text, history, undefined, { contextualCandidate: true });
+    assert.equal(formatVerifiedTutor({
+      ...draft('Отлично! Вы правы. Итоговый ответ: I = 3 A.'),
+      calculations: [checkedCalculation], revealsFinalAnswer: true,
+    }, plan, 'ru', text, wrongEvidence), 'Нет. Проверенный результат: I = 3 A.', text);
+  }
 });
 
 test('verified candidate evidence rejects mismatched or incomplete Ohm-law chains', () => {
@@ -349,8 +360,8 @@ test('verified candidate evidence rejects mismatched or incomplete Ohm-law chain
     arithmetic, assistantMessage('arithmetic acknowledged')];
   const input = { history, language: 'ru' as const, hasDocument: false, hasImages: false };
 
-  assert.equal(resolveVerifiedCandidateEvidence({ ...input, text: '4 A' }), undefined);
-  assert.equal(resolveVerifiedCandidateEvidence({ ...input, text: '3 V' }), undefined);
+  assert.deepEqual(resolveVerifiedCandidateEvidence({ ...input, text: '4 A' })?.candidate, { value: 4, unit: 'A' });
+  assert.deepEqual(resolveVerifiedCandidateEvidence({ ...input, text: '3 V' })?.candidate, { value: 3, unit: 'V' });
   assert.equal(resolveVerifiedCandidateEvidence({ ...input, text: '3 A',
     history: [initial, hint, message('I = U*R'), arithmetic] }), undefined);
   assert.equal(resolveVerifiedCandidateEvidence({ ...input, text: '5 A',
@@ -477,6 +488,7 @@ test('route enables reviewed short candidates only from the same owner-scoped ve
     arithmetic, assistantMessage(arithmeticAck)];
   const histories = new Map<string, PersistedChatMessage[]>([
     ['bare-owner', seed()], ['unit-owner', seed()], ['symbol-owner', seed()],
+    ['wrong-value-owner', seed()], ['wrong-unit-owner', seed()], ['wrong-symbol-owner', seed()],
   ]);
   const exchanges = new Map<string, { userMessage: PersistedChatMessage; assistantMessage: PersistedChatMessage | null }>();
   const policies: string[] = [];
@@ -525,6 +537,15 @@ test('route enables reviewed short candidates only from the same owner-scoped ve
       assert.equal(response.status, 200);
       assert.equal((await response.json()).response, 'Yes. I = 3 A.');
       assert.match(policies.at(-2)!, /Verify the learner-proposed numeric result/);
+      expectedProviderCalls += 2;
+      assert.equal(providerCalls, expectedProviderCalls);
+    }
+    for (const [user, text] of [
+      ['wrong-value-owner', '4 A'], ['wrong-unit-owner', '3 V'], ['wrong-symbol-owner', 'I = 4 A'],
+    ] as const) {
+      const response = await submit(user, text);
+      assert.equal(response.status, 200);
+      assert.equal((await response.json()).response, 'No. The verified result is I = 3 A.');
       expectedProviderCalls += 2;
       assert.equal(providerCalls, expectedProviderCalls);
     }

@@ -58,6 +58,21 @@ function verifiedEvidenceCalculation(
   return checks.checked === 1 && checks.issues.length === 0 ? evidence.calculation : undefined;
 }
 
+function candidateMatchesVerifiedEvidence(evidence: VerifiedCandidateEvidence | undefined): boolean {
+  const calculation = verifiedEvidenceCalculation(evidence);
+  if (!evidence || !calculation) return false;
+  const checks = verifyCalculations([{ ...calculation, result: evidence.candidate }]);
+  return checks.checked === 1 && checks.issues.length === 0;
+}
+
+function formatCandidateCorrection(evidence: VerifiedCandidateEvidence, language: SupportedLanguage): string {
+  const value = String(evidence.expectedResult.value);
+  const result = `${evidence.target} = ${value} ${evidence.expectedResult.unit}`;
+  if (language === 'ru') return `Нет. Проверенный результат: ${result}.`;
+  if (language === 'kk') return `Жоқ. Тексерілген нәтиже: ${result}.`;
+  return `No. The verified result is ${result}.`;
+}
+
 export function createTutorPipeline(generate: ReturnType<typeof createGroqResponder>) {
   return async (input: TutorPipelineInput): Promise<string> => {
     // A single budget covers both passes, shorter than the existing two-minute capacity lease.
@@ -176,16 +191,21 @@ export function formatVerifiedTutor(
   const candidateVerification = plan.candidateAnswer;
   const withholdAnswer = !candidateVerification
     && (plan.mode === 'hint' || plan.mode === 'step_by_step' || plan.mode === 'quiz_me');
-  if (draft.uncertain || checks.issues.length || (withholdAnswer && draft.revealsFinalAnswer)) return CLARIFY[language];
+  if (draft.uncertain || checks.issues.length || (verifiedCandidateEvidence && !verifiedCandidateCalculation)
+    || (withholdAnswer && draft.revealsFinalAnswer)) return CLARIFY[language];
   const conclusion = candidateVerification ? numericConclusion(draft.response) : undefined;
   const evidenceFallback = Boolean(evidenceCalculation && draft.calculations.length === 0);
   if (candidateVerification && (checks.checked === 0
-    || (verifiedCandidateCalculation && conclusion
-      && !conclusionMatchesVerifiedCalculation(conclusion, [verifiedCandidateCalculation]))
+    || (verifiedCandidateCalculation
+      && (!conclusion || !conclusionMatchesVerifiedCalculation(conclusion, [verifiedCandidateCalculation])))
     || (evidenceFallback && (!conclusion || !conclusionMatchesVerifiedCalculation(conclusion, calculations)))
-    || (!evidenceFallback && draft.revealsFinalAnswer
-      && (!conclusion || !conclusionMatchesVerifiedCalculation(conclusion, calculations))))) {
+    || (!evidenceFallback && conclusion
+      && !conclusionMatchesVerifiedCalculation(conclusion, calculations)))) {
     return CLARIFY[language];
+  }
+  if (candidateVerification && verifiedCandidateEvidence
+    && !candidateMatchesVerifiedEvidence(verifiedCandidateEvidence)) {
+    return formatCandidateCorrection(verifiedCandidateEvidence, language);
   }
   if ((plan.mode === 'hint' || plan.mode === 'step_by_step') && leaksFinalAnswer(draft.response, originalTask)) return CLARIFY[language];
   // The review's public explanation alone is persisted; internal checks/metadata never enter chat history.
