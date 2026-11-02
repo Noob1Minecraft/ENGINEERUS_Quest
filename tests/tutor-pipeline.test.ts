@@ -5,6 +5,7 @@ import express, { type RequestHandler } from 'express';
 import { planTutoring, routeTutorTask } from '../server/ai/tutor/taskRouter';
 import { existingTutorKnowledge } from '../server/ai/tutor/knowledge';
 import { createTutorPipeline, formatVerifiedTutor, tutoringPolicy } from '../server/ai/tutor/pipeline';
+import { resolveDeterministicTutorFollowUp } from '../server/ai/tutor/deterministicFollowUp';
 import { parseTutorDraft, verifyCalculations, type TutorDraft } from '../server/ai/tutor/verifier';
 import { AiProviderError } from '../server/ai/groqClient';
 import { createAiRouter } from '../server/routes/ai';
@@ -18,6 +19,9 @@ const draft = (response = 'Which relationship connects voltage, current and resi
 });
 const message = (text: string, id = text): PersistedChatMessage => ({
   id, text, sender: 'user', module: 'tutor', timestamp: '2026-10-18T00:00:00Z',
+});
+const assistantMessage = (text = 'Which relationship should you use?'): PersistedChatMessage => ({
+  ...message(text, `assistant-${text}`), sender: 'ai',
 });
 const known = existingTutorKnowledge({ prompt: 'Calculate current: U=12 V, R=4 Ohm.', policy: 'Preserve safety.', sources: [] });
 
@@ -209,6 +213,124 @@ test('candidate recognition does not weaken first-turn, formula-only, or vague-a
   assert.equal(vaguePlan.candidateAnswer, false);
   assert.equal(vaguePlan.mode, 'hint');
   assert.match(formatVerifiedTutor(final, vaguePlan, 'ru', vague), /^Не удалось надёжно/u);
+});
+
+test('deterministic Tutor follow-ups accept only whitelisted Ohm formulas and correct simple arithmetic', () => {
+  const anchor = message('U = 12 V, R = 4 Ω. Найди I.');
+  const history = [anchor, assistantMessage()];
+  const resolve = (text: string, language: 'ru' | 'kk' | 'en' = 'ru', extra = {}) =>
+    resolveDeterministicTutorFollowUp({ text, history, language, hasDocument: false, hasImages: false, ...extra });
+
+  for (const formula of ['I = U/R', 'U=I*R', 'U = I × R', 'U=IR', 'R = U / I', 'i=u/r']) {
+    const response = resolve(formula);
+    assert.ok(response, formula);
+    assert.doesNotMatch(response, /\d/u);
+  }
+  for (const wrong of ['I = U * R', 'U = I / R', 'R = U * I']) assert.equal(resolve(wrong), undefined, wrong);
+
+  const arithmetic = resolve('12 / 4 = 3');
+  assert.ok(arithmetic);
+  assert.doesNotMatch(arithmetic, /(?:^|\s)(?:A|V|W|Ohm|А|В|Ω)(?:\s|[.,!?]|$)|(?:final|итог|жауап)/iu);
+  assert.equal(resolve('12 / 4 = 4'), undefined);
+  assert.equal(resolve('12 / 0 = 0'), undefined);
+  assert.equal(resolve('12 / 4 + 1 = 4'), undefined);
+
+  for (const language of ['ru', 'kk', 'en'] as const) {
+    const formula = resolve('I=U/R', language);
+    const calculation = resolve('12/4=3', language);
+    assert.ok(formula && calculation);
+    assert.doesNotMatch(`${formula} ${calculation}`, /\d/u);
+  }
+});
+
+test('deterministic Tutor follow-ups require isolated unambiguous context and no external context or explicit mode', () => {
+  const text = 'I=U/R';
+  const base = { text, language: 'en' as const, hasDocument: false, hasImages: false };
+  assert.equal(resolveDeterministicTutorFollowUp({ ...base, history: [] }), undefined);
+  assert.equal(resolveDeterministicTutorFollowUp({ ...base,
+    history: [message('U = 12 V, R = 4 Ω. Find I.')] }), undefined);
+  assert.equal(resolveDeterministicTutorFollowUp({ ...base,
+    history: [message('Explain a beam'), assistantMessage()] }), undefined);
+  const history = [message('U = 12 V, R = 4 Ω. Find I.'), assistantMessage()];
+  assert.equal(resolveDeterministicTutorFollowUp({ ...base, history, hasDocument: true }), undefined);
+  assert.equal(resolveDeterministicTutorFollowUp({ ...base, history, hasImages: true }), undefined);
+  assert.equal(resolveDeterministicTutorFollowUp({ ...base, history, explicitMode: 'full_explanation' }), undefined);
+  assert.equal(resolveDeterministicTutorFollowUp({ ...base,
+    history: [message('Using ISO 12345, U = 12 V, R = 4 Ω. Find I.'), assistantMessage()] }), undefined);
+  assert.equal(resolveDeterministicTutorFollowUp({ ...base, text: 'Ответ 3 A, верно?', history }), undefined);
+});
+
+test('route fast path makes zero provider calls while reviewed modes and isolated users fall back safely', async () => {
+  const sessionId = '123e4567-e89b-42d3-a456-426614174000';
+  const histories = new Map<string, PersistedChatMessage[]>([[
+    'owner', [message('U = 12 V, R = 4 Ω. Find I.', 'anchor'), assistantMessage()],
+  ]]);
+  const exchanges = new Map<string, { userMessage: PersistedChatMessage; assistantMessage: PersistedChatMessage | null }>();
+  let providerCalls = 0;
+  const repository = {
+    async beginExchange(user: string, _token: string, _session: string, key: string, text: string) {
+      const id = `${user}:${key}`;
+      if (!exchanges.has(id)) {
+        const userMessage = message(text, `user-${id}`);
+        exchanges.set(id, { userMessage, assistantMessage: null });
+        histories.set(user, [...(histories.get(user) ?? []), userMessage]);
+      }
+      return { ...exchanges.get(id)!, progress: { xp: 0 } };
+    },
+    async messages(user: string) { return { items: [...(histories.get(user) ?? [])], nextCursor: null }; },
+    async completeExchange(user: string, _token: string, _session: string, key: string, text: string) {
+      const id = `${user}:${key}`;
+      const exchange = exchanges.get(id)!;
+      if (!exchange.assistantMessage) {
+        exchange.assistantMessage = { ...assistantMessage(text), id: `assistant-${id}`, xpEarned: 10 };
+        histories.set(user, [...(histories.get(user) ?? []), exchange.assistantMessage]);
+        return { ...exchange, progress: { xp: 10 }, awarded: true };
+      }
+      return { ...exchange, progress: { xp: 10 }, awarded: false };
+    },
+  } as unknown as ChatRepository;
+  const authenticate: RequestHandler = (request, response, next) => {
+    response.locals.auth = { userId: request.header('x-test-user') ?? 'owner', accessToken: 'test-only', claims: {} };
+    next();
+  };
+  const generator = async () => {
+    providerCalls++;
+    return JSON.stringify(draft('Continue with the next safe learning step.'));
+  };
+  const app = express(); app.use(express.json());
+  app.use(createAiRouter(authenticate, (_request, _response, next) => next(), {
+    repository, detectLanguage: (_text, requested) => requested, generateResponse: generator,
+    tutorPipeline: createTutorPipeline(generator),
+  }));
+  await withServer(app, async (url) => {
+    const submit = (key: string, text: string, user = 'owner', extra = {}) => fetch(`${url}/api/module`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': key, 'x-test-user': user },
+      body: JSON.stringify({ session_id: sessionId, module: 'tutor', text, lang: 'en', ...extra }),
+    });
+
+    const formula = await submit('formula-fast', 'I=U/R');
+    assert.equal(formula.status, 200);
+    assert.equal(providerCalls, 0);
+    const formulaBody = await formula.json();
+    assert.match(formulaBody.response, /formula is written correctly/i);
+    const replay = await submit('formula-fast', 'I=U/R');
+    assert.equal(replay.status, 200);
+    assert.equal((await replay.json()).idempotent_replay, true);
+    assert.equal(providerCalls, 0);
+
+    assert.equal((await submit('arithmetic-fast', '12 / 4 = 3')).status, 200);
+    assert.equal(providerCalls, 0);
+
+    assert.equal((await submit('candidate-reviewed', 'Answer 3 A, correct?')).status, 200);
+    assert.equal(providerCalls, 2);
+    assert.equal((await submit('full-reviewed', 'Show the full solution', 'owner', { tutor_mode: 'full_explanation' })).status, 200);
+    assert.equal(providerCalls, 4);
+    assert.equal((await submit('wrong-formula-reviewed', 'I=U*R')).status, 200);
+    assert.equal(providerCalls, 6);
+
+    assert.equal((await submit('isolated-user', 'I=U/R', 'outsider')).status, 200);
+    assert.equal(providerCalls, 8);
+  });
 });
 
 const ohm: TutorDraft['calculations'][number] = {

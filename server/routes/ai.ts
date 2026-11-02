@@ -35,6 +35,10 @@ import { guardMaterialPropertyResponse } from "../ai/materialPropertyGuard";
 import { isSymbolicEngineeringFollowUp, isTutorFollowUp, planTutoring, TUTOR_MODES } from "../ai/tutor/taskRouter";
 import { existingTutorKnowledge } from "../ai/tutor/knowledge";
 import type { createTutorPipeline } from "../ai/tutor/pipeline";
+import {
+  isDeterministicTutorFollowUpCandidate,
+  resolveDeterministicTutorFollowUp,
+} from "../ai/tutor/deterministicFollowUp";
 import { withGroqUsage } from "../ai/usageDiagnostics";
 import { createAiDeadline, createStagingAiBudget, inputTooLarge, stagingAiLimitsEnabled, withinAiDeadline } from "../ai/stagingUsageLimits";
 import type { PersistedChatMessage } from "../persistence/chats";
@@ -231,7 +235,8 @@ export function createAiRouter(
       let conversationContext: ReturnType<typeof buildBoundedConversationContext>;
       let tutorHistory: PersistedChatMessage[] = [];
       if ((isContextualEngineeringFollowUp(canonicalPrompt)
-          || (moduleName === "tutor" && dependencies.tutorPipeline && (isTutorFollowUp(canonicalPrompt) || input.tutor_mode)))
+          || (moduleName === "tutor" && dependencies.tutorPipeline
+            && (isTutorFollowUp(canonicalPrompt) || isDeterministicTutorFollowUpCandidate(canonicalPrompt) || input.tutor_mode)))
           && typeof dependencies.repository.messages === "function") {
         try {
           const history = await dependencies.repository.messages(userId, accessToken, sessionId, 8);
@@ -258,6 +263,41 @@ export function createAiRouter(
         has_document: Boolean(documentId),
         image_count: imageIds?.length ?? 0,
       });
+
+      const deterministicTutorResponse = moduleName === "tutor" && dependencies.tutorPipeline
+        ? resolveDeterministicTutorFollowUp({
+          text: canonicalPrompt,
+          history: tutorHistory,
+          language: detectedLanguage,
+          explicitMode: input.tutor_mode,
+          hasDocument: Boolean(documentId),
+          hasImages: Boolean(imageIds?.length),
+        })
+        : undefined;
+      if (deterministicTutorResponse) {
+        const completed = await dependencies.repository.completeExchange(
+          userId, accessToken, sessionId, requestId, deterministicTutorResponse, moduleName, xpAmount,
+        );
+        if (completed.assistantMessage) {
+          await trackProductEvent(dependencies.recordEvent, userId, "ai_message_sent", {
+            module: moduleName,
+            language: detectedLanguage,
+            has_document: false,
+            image_count: 0,
+          }, completed.assistantMessage.id);
+        }
+        response.json({
+          status: "ok",
+          response_type: "completion",
+          response: completed.assistantMessage?.text ?? deterministicTutorResponse,
+          user_message: completed.userMessage,
+          assistant_message: completed.assistantMessage,
+          ...completed.progress,
+          lang: detectedLanguage,
+          idempotent_replay: completed.awarded === false,
+        });
+        return;
+      }
 
       if (engineeringDomain === "OUT_OF_SCOPE") {
         const responseText = engineeringOffTopicRedirect(detectedLanguage);

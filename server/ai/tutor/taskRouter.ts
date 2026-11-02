@@ -38,9 +38,12 @@ export function isSymbolicEngineeringFollowUp(text: string): boolean {
   return words.every((word) => word.length <= 4);
 }
 
+export function isTutorControlFollowUp(text: string): boolean {
+  return MORE.test(text) || FULL.test(text) || CHECK.test(text) || QUIZ.test(text) || HINT.test(text) || STEPS.test(text);
+}
+
 export function isTutorFollowUp(text: string): boolean {
-  return MORE.test(text) || FULL.test(text) || CHECK.test(text) || QUIZ.test(text) || HINT.test(text) || STEPS.test(text)
-    || isSymbolicEngineeringFollowUp(text) || hasCandidateAnswer(text);
+  return isTutorControlFollowUp(text) || isSymbolicEngineeringFollowUp(text) || hasCandidateAnswer(text);
 }
 
 function isStandaloneControl(text: string): boolean {
