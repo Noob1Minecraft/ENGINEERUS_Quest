@@ -32,11 +32,12 @@ import {
 } from "../ai/engineeringPolicy";
 import { buildBoundedConversationContext } from "../ai/conversationContext";
 import { guardMaterialPropertyResponse } from "../ai/materialPropertyGuard";
-import { isSymbolicEngineeringFollowUp, isTutorFollowUp, planTutoring, TUTOR_MODES } from "../ai/tutor/taskRouter";
+import { isShortTutorResult, isSymbolicEngineeringFollowUp, isTutorFollowUp, planTutoring, TUTOR_MODES } from "../ai/tutor/taskRouter";
 import { existingTutorKnowledge } from "../ai/tutor/knowledge";
 import type { createTutorPipeline } from "../ai/tutor/pipeline";
 import {
   isDeterministicTutorFollowUpCandidate,
+  hasVerifiedTutorWorkContext,
   resolveDeterministicTutorFollowUp,
 } from "../ai/tutor/deterministicFollowUp";
 import { withGroqUsage } from "../ai/usageDiagnostics";
@@ -236,7 +237,8 @@ export function createAiRouter(
       let tutorHistory: PersistedChatMessage[] = [];
       if ((isContextualEngineeringFollowUp(canonicalPrompt)
           || (moduleName === "tutor" && dependencies.tutorPipeline
-            && (isTutorFollowUp(canonicalPrompt) || isDeterministicTutorFollowUpCandidate(canonicalPrompt) || input.tutor_mode)))
+            && (isTutorFollowUp(canonicalPrompt) || isShortTutorResult(canonicalPrompt)
+              || isDeterministicTutorFollowUpCandidate(canonicalPrompt) || input.tutor_mode)))
           && typeof dependencies.repository.messages === "function") {
         try {
           const history = await dependencies.repository.messages(userId, accessToken, sessionId, 8);
@@ -365,8 +367,19 @@ export function createAiRouter(
         documentContext?.systemPolicy,
         imageContext?.length ? visionSystemPolicy() : undefined,
       ].filter(Boolean).join("\n\n");
+      const contextualCandidate = moduleName === "tutor" && dependencies.tutorPipeline
+        ? hasVerifiedTutorWorkContext({
+          text: canonicalPrompt,
+          history: tutorHistory,
+          language: detectedLanguage,
+          explicitMode: input.tutor_mode,
+          hasDocument: Boolean(documentId),
+          hasImages: Boolean(imageIds?.length),
+          hasStandards: Boolean(prepared.lookupResult),
+        })
+        : false;
       const tutorPlan = moduleName === "tutor" && dependencies.tutorPipeline
-        ? planTutoring(canonicalPrompt, tutorHistory, input.tutor_mode) : undefined;
+        ? planTutoring(canonicalPrompt, tutorHistory, input.tutor_mode, { contextualCandidate }) : undefined;
       const clientSignal = response.locals.aiAbortSignal as AbortSignal | undefined;
       // Includes a possible standards retry; stays below the existing capacity lease TTL.
       const tutorSignal = deadline?.signal ?? (tutorPlan ? AbortSignal.any([

@@ -1,7 +1,13 @@
 import type { SupportedLanguage } from '../languagePolicy';
 import type { PersistedChatMessage } from '../../persistence/chats';
 import { isStandardsLookupWarranted } from '../../standards/standardsPolicy';
-import { hasCandidateAnswer, isTutorControlFollowUp } from './taskRouter';
+import {
+  findTutorAnchor,
+  hasCandidateAnswer,
+  isArithmeticOnlyTutorStep,
+  isFormulaOnlyTutorStep,
+  isShortTutorResult,
+} from './taskRouter';
 
 const FORMULA = /^\s*([uir])\s*=\s*([uir](?:\s*(?:\*|×)\s*)?[uir]|[uir]\s*\/\s*[uir])\s*[.!?？]*\s*$/iu;
 const ARITHMETIC = /^\s*([-+−]?\d+(?:[.,]\d+)?)\s*([+\-−*/×])\s*([-+−]?\d+(?:[.,]\d+)?)\s*=\s*([-+−]?\d+(?:[.,]\d+)?)\s*[.!?？]*\s*$/u;
@@ -69,17 +75,6 @@ function hasUnambiguousOhmContext(text: string): boolean {
   return electrical && symbols.size === 3 && /(?:find|calculate|compute|найди|найти|вычисли|рассчитай|тап|есепте|=\s*\?)/iu.test(normalized);
 }
 
-function anchorFrom(history: readonly PersistedChatMessage[]): { message: PersistedChatMessage; index: number } | undefined {
-  for (let index = history.length - 1; index >= 0; index -= 1) {
-    const message = history[index];
-    if (message.module !== 'tutor' || message.sender !== 'user') continue;
-    if (isDeterministicTutorFollowUpCandidate(message.text)
-      || isTutorControlFollowUp(message.text) || hasCandidateAnswer(message.text)) continue;
-    return { message, index };
-  }
-  return undefined;
-}
-
 export type DeterministicTutorFollowUpInput = {
   text: string;
   history: readonly PersistedChatMessage[];
@@ -87,7 +82,27 @@ export type DeterministicTutorFollowUpInput = {
   explicitMode?: string;
   hasDocument: boolean;
   hasImages: boolean;
+  hasStandards?: boolean;
 };
+
+const DETERMINISTIC_ACKNOWLEDGEMENTS = new Set([
+  ...Object.values(FORMULA_RESPONSES), ...Object.values(ARITHMETIC_RESPONSES),
+]);
+
+export function hasVerifiedTutorWorkContext(input: DeterministicTutorFollowUpInput): boolean {
+  if (!isShortTutorResult(input.text) || input.explicitMode
+    || input.hasDocument || input.hasImages || input.hasStandards) return false;
+  const tutorHistory = input.history.filter((message) => message.module === 'tutor');
+  const assistant = tutorHistory.at(-1);
+  const learnerStep = tutorHistory.at(-2);
+  if (!assistant || assistant.sender !== 'ai' || !DETERMINISTIC_ACKNOWLEDGEMENTS.has(assistant.text)) return false;
+  if (!learnerStep || learnerStep.sender !== 'user'
+    || !(formulaIsWhitelisted(learnerStep.text)
+      || (isArithmeticOnlyTutorStep(learnerStep.text) && correctArithmetic(learnerStep.text)))) return false;
+  const anchor = findTutorAnchor(input.history);
+  return Boolean(anchor && hasUnambiguousOhmContext(anchor.text)
+    && !isStandardsLookupWarranted(anchor.text) && !isStandardsLookupWarranted(input.text));
+}
 
 /**
  * Returns fixed text only for tightly bounded, owner-scoped follow-ups. Any
@@ -96,14 +111,16 @@ export type DeterministicTutorFollowUpInput = {
 export function resolveDeterministicTutorFollowUp(
   input: DeterministicTutorFollowUpInput,
 ): string | undefined {
-  if (input.explicitMode || input.hasDocument || input.hasImages || hasCandidateAnswer(input.text)) return undefined;
+  if (input.explicitMode || input.hasDocument || input.hasImages || input.hasStandards
+    || hasCandidateAnswer(input.text)) return undefined;
   const kind = followUpKind(input.text);
   if (!kind || (kind === 'arithmetic' && !correctArithmetic(input.text))) return undefined;
-  const anchor = anchorFrom(input.history);
-  if (!anchor || isStandardsLookupWarranted(anchor.message.text) || isStandardsLookupWarranted(input.text)) return undefined;
-  const hasAssistantReply = input.history.slice(anchor.index + 1)
+  const anchor = findTutorAnchor(input.history);
+  if (!anchor || isStandardsLookupWarranted(anchor.text) || isStandardsLookupWarranted(input.text)) return undefined;
+  const anchorIndex = input.history.indexOf(anchor);
+  const hasAssistantReply = input.history.slice(anchorIndex + 1)
     .some((message) => message.module === 'tutor' && message.sender === 'ai');
   if (!hasAssistantReply) return undefined;
-  if (kind === 'formula' && !hasUnambiguousOhmContext(anchor.message.text)) return undefined;
+  if (kind === 'formula' && !hasUnambiguousOhmContext(anchor.text)) return undefined;
   return kind === 'formula' ? FORMULA_RESPONSES[input.language] : ARITHMETIC_RESPONSES[input.language];
 }

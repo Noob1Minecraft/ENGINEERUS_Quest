@@ -12,7 +12,7 @@ export type LearningContext = {
   submittedSolution: boolean;
   candidateAnswer: boolean;
 };
-export type TutorPlan = LearningContext & { mode: TutorMode; followUp: boolean };
+export type TutorPlan = LearningContext & { mode: TutorMode; followUp: boolean; anchorTask?: string };
 
 const MORE = /(?:i\s+(?:still\s+)?(?:don['’]?t|do not)\s+understand|explain\s+(?:more|simpler)|не\s+понимаю|объясни\s+(?:подробнее|проще)|түсінбедім|түсінбеймін|толығырақ\s+түсіндір)/iu;
 const FULL = /(?:show\s+(?:the\s+)?full\s+(?:solution|explanation)|give\s+(?:the\s+)?(?:full\s+)?answer|полное\s+решение|реши\s+полностью|покажи\s+(?:решение|ответ)|толық\s+(?:шешім|шешу|түсіндір)|жауабын\s+көрсет)/iu;
@@ -23,9 +23,24 @@ const STEPS = /(?:step[ -]by[ -]step|пошагов|қадамдап)/iu;
 const CANDIDATE_ANSWER = /(?:\b(?:answer|result)\s+(?:(?:is|will\s+be|would\s+be)\s+)?|(?:ответ|результат)\s+(?:(?:будет|получится|равен|это)\s+)?|(?:жауап|нәтиже)(?:ы)?\s+(?:(?:болады|шығады|тең)\s+)?)[^\d+−-]{0,20}[-+−]?\d+(?:[.,]\d+)?/iu;
 const SYMBOLIC_CANDIDATE = /^\s*[UIR]\s*=\s*[-+−]?\d+(?:[.,]\d+)?(?:\s*(?:mA|A|А|mV|kV|V|В|kΩ|Ω|кОм|Ом|kOhm|Ohm))?\s*[.!?？]*\s*$/u;
 const SYMBOLIC_FORMULA = /^\s*[UIR]\s*=\s*[UIR](?:\s*[*/+−-]\s*[UIR])+\s*[.!?？]*\s*$/u;
+const BARE_RESULT = /^\s*[-+−]?\d+(?:[.,]\d+)?(?:\s*(?:mA|A|А|mV|kV|V|В|kΩ|Ω|кОм|Ом|kOhm|Ohm))?\s*[.!?？]*\s*$/u;
+const ARITHMETIC_STEP = /^\s*[-+−]?\d+(?:[.,]\d+)?\s*[+\-−*/×]\s*[-+−]?\d+(?:[.,]\d+)?\s*=\s*[-+−]?\d+(?:[.,]\d+)?\s*[.!?？]*\s*$/u;
 
 export function hasCandidateAnswer(text: string): boolean {
   return CANDIDATE_ANSWER.test(text.normalize('NFKC')) || SYMBOLIC_CANDIDATE.test(text.normalize('NFKC'));
+}
+
+export function isShortTutorResult(text: string): boolean {
+  const normalized = text.normalize('NFKC');
+  return BARE_RESULT.test(normalized) || SYMBOLIC_CANDIDATE.test(normalized);
+}
+
+export function isFormulaOnlyTutorStep(text: string): boolean {
+  return SYMBOLIC_FORMULA.test(text.trim().normalize('NFKC'));
+}
+
+export function isArithmeticOnlyTutorStep(text: string): boolean {
+  return ARITHMETIC_STEP.test(text.normalize('NFKC'));
 }
 
 export function isSymbolicEngineeringFollowUp(text: string): boolean {
@@ -43,12 +58,22 @@ export function isTutorControlFollowUp(text: string): boolean {
 }
 
 export function isTutorFollowUp(text: string): boolean {
-  return isTutorControlFollowUp(text) || isSymbolicEngineeringFollowUp(text) || hasCandidateAnswer(text);
+  return isTutorControlFollowUp(text) || isSymbolicEngineeringFollowUp(text)
+    || isArithmeticOnlyTutorStep(text) || hasCandidateAnswer(text);
 }
 
 function isStandaloneControl(text: string): boolean {
   return /^(?:please\s+)?(?:i\s+(?:still\s+)?(?:don['’]?t|do not)\s+understand|explain\s+(?:more|simpler)|show\s+(?:the\s+)?full\s+(?:solution|explanation)|give\s+(?:me\s+)?(?:a\s+)?hint|check\s+my\s+(?:answer|solution|work)|quiz\s+me|step[ -]by[ -]step|не\s+понимаю|объясни\s+(?:подробнее|проще)|покажи\s+(?:полное\s+)?(?:решение|ответ)|реши\s+полностью|дай\s+подсказку|проверь\s+(?:мо[йёею]\s+)?(?:решение|ответ)|түсінбедім|түсінбеймін|толығырақ\s+түсіндір|толық\s+шешім|ишара|қадамдап|мені\s+сына)\s*[.!?]*$/iu.test(text.trim())
-    || isSymbolicEngineeringFollowUp(text) || hasCandidateAnswer(text);
+    || isFormulaOnlyTutorStep(text) || isArithmeticOnlyTutorStep(text) || hasCandidateAnswer(text);
+}
+
+function isNonAnchorTutorStep(text: string): boolean {
+  return isStandaloneControl(text) || isShortTutorResult(text);
+}
+
+export function findTutorAnchor(history: readonly PersistedChatMessage[]): PersistedChatMessage | undefined {
+  return [...history].reverse().find((message) => message.sender === 'user'
+    && message.module === 'tutor' && !isNonAnchorTutorStep(message.text));
 }
 
 export function routeTutorTask(text: string): TaskCategory {
@@ -65,15 +90,22 @@ export function routeTutorTask(text: string): TaskCategory {
 }
 
 /** Reconstructed per request from owner-scoped history; no user profile or global cache. */
-export function planTutoring(text: string, history: readonly PersistedChatMessage[], explicit?: TutorMode): TutorPlan {
+export function planTutoring(
+  text: string,
+  history: readonly PersistedChatMessage[],
+  explicit?: TutorMode,
+  options: { contextualCandidate?: boolean } = {},
+): TutorPlan {
   const users = history.filter((message) => message.sender === 'user' && message.module === 'tutor').slice(-4);
   // Only a short, stand-alone tutoring control inherits the prior task, not a new question.
-  const standalone = isStandaloneControl(text);
+  const contextualCandidate = Boolean(options.contextualCandidate && isShortTutorResult(text));
+  const standalone = isStandaloneControl(text) || contextualCandidate;
   let anchorIndex = -1;
-  users.forEach((message, index) => { if (!isStandaloneControl(message.text)) anchorIndex = index; });
+  users.forEach((message, index) => { if (!isNonAnchorTutorStep(message.text)) anchorIndex = index; });
   const category = standalone && anchorIndex >= 0 ? routeTutorTask(users[anchorIndex].text) : routeTutorTask(text);
   const completedFollowUps = standalone ? anchorIndex >= 0 ? users.length - anchorIndex - 1 : users.length : 0;
-  const candidateAnswer = hasCandidateAnswer(text);
+  const contextFreeCandidate = hasCandidateAnswer(text) && !isShortTutorResult(text);
+  const candidateAnswer = contextFreeCandidate || contextualCandidate;
   let mode: TutorMode = explicit ?? (candidateAnswer ? 'check_my_solution' : FULL.test(text) ? 'full_explanation'
     : CHECK.test(text) ? 'check_my_solution' : QUIZ.test(text) ? 'quiz_me'
       : STEPS.test(text) ? 'step_by_step' : 'hint');
@@ -82,6 +114,6 @@ export function planTutoring(text: string, history: readonly PersistedChatMessag
   if (!explicit && mode === 'hint' && MORE.test(text) && completedFollowUps >= 2) {
     mode = 'full_explanation'; hintLevel = 0;
   }
-  return { category, mode, hintLevel, followUp: standalone, difficulty: 'unknown',
+  return { category, mode, hintLevel, followUp: standalone, ...(anchorIndex >= 0 ? { anchorTask: users[anchorIndex].text } : {}), difficulty: 'unknown',
     neededFullExplanation: mode === 'full_explanation', submittedSolution: mode === 'check_my_solution', candidateAnswer };
 }

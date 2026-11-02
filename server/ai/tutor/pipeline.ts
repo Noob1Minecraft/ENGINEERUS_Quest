@@ -3,7 +3,6 @@ import { AiProviderError } from '../groqClient';
 import type { AiVisionImage } from '../groqClient';
 import type { SupportedLanguage } from '../languagePolicy';
 import type { TutorPlan } from './taskRouter';
-import { hasCandidateAnswer } from './taskRouter';
 import type { TutorKnowledgeSource } from './knowledge';
 import { parseTutorDraft, verifyCalculations, type TutorDraft } from './verifier';
 import { withGroqStage } from '../usageDiagnostics';
@@ -152,12 +151,13 @@ function conclusionMatchesVerifiedCalculation(
 
 export function formatVerifiedTutor(draft: TutorDraft, plan: TutorPlan, language: SupportedLanguage, originalTask = ''): string {
   const checks = verifyCalculations(draft.calculations);
-  const candidateVerification = plan.candidateAnswer && hasCandidateAnswer(originalTask);
+  const candidateVerification = plan.candidateAnswer;
   const withholdAnswer = !candidateVerification
     && (plan.mode === 'hint' || plan.mode === 'step_by_step' || plan.mode === 'quiz_me');
   if (draft.uncertain || checks.issues.length || (withholdAnswer && draft.revealsFinalAnswer)) return CLARIFY[language];
   const conclusion = candidateVerification ? numericConclusion(draft.response) : undefined;
-  if (conclusion && (checks.checked === 0 || !conclusionMatchesVerifiedCalculation(conclusion, draft.calculations))) {
+  if (candidateVerification && (checks.checked === 0 || (draft.revealsFinalAnswer
+    && (!conclusion || !conclusionMatchesVerifiedCalculation(conclusion, draft.calculations))))) {
     return CLARIFY[language];
   }
   if ((plan.mode === 'hint' || plan.mode === 'step_by_step') && leaksFinalAnswer(draft.response, originalTask)) return CLARIFY[language];

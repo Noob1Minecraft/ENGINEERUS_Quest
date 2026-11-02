@@ -2,10 +2,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import express, { type RequestHandler } from 'express';
-import { planTutoring, routeTutorTask } from '../server/ai/tutor/taskRouter';
+import { findTutorAnchor, planTutoring, routeTutorTask } from '../server/ai/tutor/taskRouter';
 import { existingTutorKnowledge } from '../server/ai/tutor/knowledge';
 import { createTutorPipeline, formatVerifiedTutor, tutoringPolicy } from '../server/ai/tutor/pipeline';
-import { resolveDeterministicTutorFollowUp } from '../server/ai/tutor/deterministicFollowUp';
+import { hasVerifiedTutorWorkContext, resolveDeterministicTutorFollowUp } from '../server/ai/tutor/deterministicFollowUp';
 import { parseTutorDraft, verifyCalculations, type TutorDraft } from '../server/ai/tutor/verifier';
 import { AiProviderError } from '../server/ai/groqClient';
 import { createAiRouter } from '../server/routes/ai';
@@ -260,6 +260,72 @@ test('deterministic Tutor follow-ups require isolated unambiguous context and no
   assert.equal(resolveDeterministicTutorFollowUp({ ...base, text: 'Ответ 3 A, верно?', history }), undefined);
 });
 
+test('short results become reviewed candidates only after verified owner-scoped work and retain the original anchor', () => {
+  const initial = message('U = 12 V, R = 4 Ω. Найди I.', 'original-task');
+  const initialHint = assistantMessage('Вспомни закон Ома и вырази силу тока.');
+  const formula = message('I=U/R', 'formula-step');
+  const formulaAck = resolveDeterministicTutorFollowUp({
+    text: formula.text, history: [initial, initialHint], language: 'ru', hasDocument: false, hasImages: false,
+  });
+  assert.ok(formulaAck);
+  const arithmetic = message('12 / 4 = 3', 'arithmetic-step');
+  const arithmeticAck = resolveDeterministicTutorFollowUp({
+    text: arithmetic.text,
+    history: [initial, initialHint, formula, assistantMessage(formulaAck)],
+    language: 'ru', hasDocument: false, hasImages: false,
+  });
+  assert.ok(arithmeticAck);
+  const history = [initial, initialHint, formula, assistantMessage(formulaAck), arithmetic, assistantMessage(arithmeticAck)];
+
+  assert.equal(planTutoring('3', []).candidateAnswer, false);
+  assert.equal(planTutoring('3 A', []).candidateAnswer, false);
+  assert.equal(findTutorAnchor(history)?.id, initial.id);
+  for (const text of ['3', '3 A', 'I = 3 A']) {
+    const contextualCandidate = hasVerifiedTutorWorkContext({
+      text, history, language: 'ru', hasDocument: false, hasImages: false,
+    });
+    assert.equal(contextualCandidate, true, text);
+    const plan = planTutoring(text, history, undefined, { contextualCandidate });
+    assert.equal(plan.mode, 'check_my_solution', text);
+    assert.equal(plan.followUp, true, text);
+    assert.equal(plan.candidateAnswer, true, text);
+    assert.equal(plan.category, 'calculation', text);
+    assert.equal(plan.anchorTask, initial.text, text);
+  }
+
+  const barePlan = planTutoring('3', history, undefined, { contextualCandidate: true });
+  const checkedCalculation: TutorDraft['calculations'][number] = {
+    left: { value: 12, unit: 'V' }, operation: 'divide', right: { value: 4, unit: 'Ω' },
+    result: { value: 3, unit: 'A' },
+  };
+  assert.match(formatVerifiedTutor({ ...draft('Да, верно. I = 3 A.'), revealsFinalAnswer: true }, barePlan, 'ru', '3'),
+    /^Не удалось надёжно/u);
+  assert.match(formatVerifiedTutor(draft('Да, верно.'), barePlan, 'ru', '3'), /^Не удалось надёжно/u);
+  assert.equal(formatVerifiedTutor({ ...draft('Да, верно. I = 3 A.'), calculations: [checkedCalculation],
+    revealsFinalAnswer: true }, barePlan, 'ru', '3'), 'Да, верно. I = 3 A.');
+  const wrongPlan = planTutoring('4 A', history, undefined, { contextualCandidate: true });
+  assert.equal(formatVerifiedTutor({ ...draft('Нет. Правильный результат: I = 3 A.'), calculations: [checkedCalculation],
+    revealsFinalAnswer: true }, wrongPlan, 'ru', '4 A'), 'Нет. Правильный результат: I = 3 A.');
+});
+
+test('short candidate context fails closed across sessions and external knowledge contexts', () => {
+  const initial = message('U = 12 V, R = 4 Ω. Find I.');
+  const arithmetic = message('12 / 4 = 3');
+  const arithmeticAck = resolveDeterministicTutorFollowUp({
+    text: arithmetic.text, history: [initial, assistantMessage()], language: 'en', hasDocument: false, hasImages: false,
+  });
+  assert.ok(arithmeticAck);
+  const history = [initial, assistantMessage(), arithmetic, assistantMessage(arithmeticAck)];
+  const base = { text: '3 A', history, language: 'en' as const, hasDocument: false, hasImages: false };
+  assert.equal(hasVerifiedTutorWorkContext({ ...base, history: [] }), false);
+  assert.equal(hasVerifiedTutorWorkContext({ ...base, hasDocument: true }), false);
+  assert.equal(hasVerifiedTutorWorkContext({ ...base, hasImages: true }), false);
+  assert.equal(hasVerifiedTutorWorkContext({ ...base, hasStandards: true }), false);
+  assert.equal(hasVerifiedTutorWorkContext({ ...base,
+    history: [message('Using ISO 12345, U = 12 V, R = 4 Ω. Find I.'), assistantMessage(),
+      arithmetic, assistantMessage(arithmeticAck)] }), false);
+});
+
 test('route fast path makes zero provider calls while reviewed modes and isolated users fall back safely', async () => {
   const sessionId = '123e4567-e89b-42d3-a456-426614174000';
   const histories = new Map<string, PersistedChatMessage[]>([[
@@ -330,6 +396,75 @@ test('route fast path makes zero provider calls while reviewed modes and isolate
 
     assert.equal((await submit('isolated-user', 'I=U/R', 'outsider')).status, 200);
     assert.equal(providerCalls, 8);
+  });
+});
+
+test('route enables reviewed short candidates only from the same owner-scoped verified sequence', async () => {
+  const sessionId = '123e4567-e89b-42d3-a456-426614174001';
+  const initial = message('U = 12 V, R = 4 Ω. Find I.', 'short-anchor');
+  const arithmetic = message('12 / 4 = 3', 'short-arithmetic');
+  const arithmeticAck = resolveDeterministicTutorFollowUp({
+    text: arithmetic.text, history: [initial, assistantMessage()], language: 'en', hasDocument: false, hasImages: false,
+  });
+  assert.ok(arithmeticAck);
+  const seed = () => [initial, assistantMessage(), arithmetic, assistantMessage(arithmeticAck)];
+  const histories = new Map<string, PersistedChatMessage[]>([
+    ['bare-owner', seed()], ['unit-owner', seed()], ['symbol-owner', seed()],
+  ]);
+  const exchanges = new Map<string, { userMessage: PersistedChatMessage; assistantMessage: PersistedChatMessage | null }>();
+  const policies: string[] = [];
+  let providerCalls = 0;
+  const checkedCalculation: TutorDraft['calculations'][number] = {
+    left: { value: 12, unit: 'V' }, operation: 'divide', right: { value: 4, unit: 'Ω' },
+    result: { value: 3, unit: 'A' },
+  };
+  const repository = {
+    async beginExchange(user: string, _token: string, _session: string, key: string, text: string) {
+      const id = `${user}:${key}`;
+      const userMessage = message(text, `user-${id}`);
+      if (!exchanges.has(id)) {
+        exchanges.set(id, { userMessage, assistantMessage: null });
+        histories.set(user, [...(histories.get(user) ?? []), userMessage]);
+      }
+      return { ...exchanges.get(id)!, progress: {} };
+    },
+    async messages(user: string) { return { items: [...(histories.get(user) ?? [])], nextCursor: null }; },
+    async completeExchange(user: string, _token: string, _session: string, key: string, text: string) {
+      const exchange = exchanges.get(`${user}:${key}`)!;
+      exchange.assistantMessage ??= { ...assistantMessage(text), id: `assistant-${user}:${key}`, xpEarned: 10 };
+      return { ...exchange, progress: {}, awarded: true };
+    },
+  } as unknown as ChatRepository;
+  const authenticate: RequestHandler = (request, response, next) => {
+    response.locals.auth = { userId: request.header('x-test-user'), accessToken: 'test-only', claims: {} }; next();
+  };
+  const generator = async (_prompt: string, _module: any, _language: any, policy?: string) => {
+    providerCalls++; policies.push(policy ?? '');
+    return JSON.stringify({ ...draft('Yes. I = 3 A.'), calculations: [checkedCalculation], revealsFinalAnswer: true });
+  };
+  const app = express(); app.use(express.json());
+  app.use(createAiRouter(authenticate, (_request, _response, next) => next(), {
+    repository, detectLanguage: () => 'en', generateResponse: generator, tutorPipeline: createTutorPipeline(generator),
+  }));
+  await withServer(app, async (url) => {
+    let expectedProviderCalls = 0;
+    const submit = (user: string, text: string) => fetch(`${url}/api/module`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': `short-${user}`, 'x-test-user': user },
+      body: JSON.stringify({ session_id: sessionId, module: 'tutor', text, lang: 'en' }),
+    });
+    for (const [user, text] of [['bare-owner', '3'], ['unit-owner', '3 A'], ['symbol-owner', 'I = 3 A']] as const) {
+      const response = await submit(user, text);
+      assert.equal(response.status, 200);
+      assert.equal((await response.json()).response, 'Yes. I = 3 A.');
+      assert.match(policies.at(-2)!, /Verify the learner-proposed numeric result/);
+      expectedProviderCalls += 2;
+      assert.equal(providerCalls, expectedProviderCalls);
+    }
+    const isolated = await submit('other-session-owner', '3 A');
+    assert.equal(isolated.status, 200);
+    assert.match((await isolated.json()).response, /^I could not reliably check/u);
+    assert.match(policies.at(-2)!, /Hint level 1/);
+    assert.equal(providerCalls, expectedProviderCalls + 2);
   });
 });
 
