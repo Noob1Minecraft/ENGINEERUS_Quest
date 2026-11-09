@@ -27,7 +27,7 @@ function encodeCursor(value: object | null): string | null {
   return value ? Buffer.from(JSON.stringify(value), "utf8").toString("base64url") : null;
 }
 
-function decodeCursor<T>(value: string | undefined, schema: z.ZodTypeAny): T | undefined {
+function decodeCursor<T>(value: string | undefined, schema: z.ZodType<T>): T | undefined {
   if (!value) return undefined;
   try {
     const parsed: unknown = JSON.parse(Buffer.from(value, "base64url").toString("utf8"));
