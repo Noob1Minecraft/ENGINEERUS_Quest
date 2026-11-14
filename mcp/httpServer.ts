@@ -9,6 +9,7 @@ import { createMcpHandler, type McpServer } from "@modelcontextprotocol/server";
 import { toNodeHandler } from "@modelcontextprotocol/node";
 
 import { createConfiguredGiveHintHandler, createEngineerusMcpServer } from "./createServer";
+import { createPersonalOAuthServer, type PersonalOAuthConfig, type PersonalOAuthServer } from "./oauthServer";
 
 const DEFAULT_PORT = 3100;
 const MAX_REQUEST_BODY_SIZE = 64 * 1024;
@@ -24,12 +25,14 @@ type RemoteMcpHttpServerOptions = {
   burstLimit?: number;
   sustainedLimit?: number;
   now?: () => number;
+  oauth?: PersonalOAuthConfig;
 };
 
 type RemoteMcpConfig = {
   enabled: boolean;
   authToken: string;
   port: number;
+  oauth?: PersonalOAuthConfig;
 };
 
 function json(res: ServerResponse, status: number, payload: Record<string, unknown>): void {
@@ -92,10 +95,28 @@ export function loadRemoteMcpConfig(source: NodeJS.ProcessEnv = process.env): Re
     throw new Error("MCP_PORT must be a valid TCP port.");
   }
 
+  const oauthEnabled = source.MCP_OAUTH_ENABLED === "true";
+  let oauth: PersonalOAuthConfig | undefined;
+  if (oauthEnabled) {
+    const issuer = source.MCP_PUBLIC_BASE_URL ?? "";
+    const allowedRedirectUris = (source.MCP_OAUTH_REDIRECT_URIS ?? "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean);
+    oauth = {
+      issuer,
+      resource: `${issuer.replace(/\/$/, "")}/mcp`,
+      adminSecret: source.MCP_OAUTH_ADMIN_SECRET ?? "",
+      signingSecret: source.MCP_OAUTH_SIGNING_SECRET ?? "",
+      allowedRedirectUris,
+    };
+  }
+
   return {
     enabled: source.MCP_REMOTE_ENABLED === "true",
     authToken: source.MCP_AUTH_TOKEN ?? "",
     port,
+    oauth,
   };
 }
 
@@ -118,6 +139,9 @@ export function createRemoteMcpHttpServer(options: RemoteMcpHttpServerOptions): 
     sustainedLimit: options.sustainedLimit,
     now: options.now ?? Date.now,
   });
+  const oauth: PersonalOAuthServer | undefined = options.oauth
+    ? createPersonalOAuthServer(options.oauth)
+    : undefined;
 
   const server = createServer(async (req, res) => {
     res.setHeader("Cache-Control", "no-store");
@@ -128,6 +152,7 @@ export function createRemoteMcpHttpServer(options: RemoteMcpHttpServerOptions): 
       json(res, 200, { status: "ok" });
       return;
     }
+    if (oauth && await oauth.handleRequest(req, res)) return;
     if (req.url !== "/mcp") {
       json(res, 404, { error: "Not found." });
       return;
@@ -138,8 +163,10 @@ export function createRemoteMcpHttpServer(options: RemoteMcpHttpServerOptions): 
     }
 
     const bearer = readBearerToken(req.headers.authorization);
-    if (!bearer || !safeTokenEquals(bearer, options.authToken)) {
-      res.setHeader("WWW-Authenticate", "Bearer");
+    const legacyAuthorized = Boolean(bearer) && safeTokenEquals(bearer!, options.authToken);
+    const oauthAuthorized = Boolean(bearer) && Boolean(oauth) && await oauth!.verifyAccessToken(bearer!);
+    if (!legacyAuthorized && !oauthAuthorized) {
+      res.setHeader("WWW-Authenticate", oauth?.challenge ?? "Bearer");
       json(res, 401, { error: "Unauthorized." });
       return;
     }
@@ -179,7 +206,8 @@ export async function main(): Promise<void> {
   const giveHint = createConfiguredGiveHintHandler();
   const server = createRemoteMcpHttpServer({
     authToken: config.authToken,
-    createMcpServer: () => createEngineerusMcpServer(giveHint),
+    createMcpServer: () => createEngineerusMcpServer(giveHint, { oauthEnabled: Boolean(config.oauth) }),
+    oauth: config.oauth,
   });
 
   await new Promise<void>((resolvePromise, reject) => {

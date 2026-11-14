@@ -1,6 +1,6 @@
 # Engineerus Quest MCP prototype
 
-This directory contains an isolated Model Context Protocol server for Engineerus Quest. It supports local stdio and an opt-in Streamable HTTP transport. Both transports expose the same single tool:
+This directory contains an isolated Model Context Protocol server for Engineerus Quest. It supports local stdio and an opt-in Streamable HTTP transport. Remote HTTP can use the original private bearer token or an opt-in OAuth 2.1 authorization-code flow for personal ChatGPT testing. All modes expose the same single tool:
 
 ## `give_hint`
 
@@ -31,6 +31,16 @@ Remote HTTP mode additionally uses:
 - `MCP_PORT` — optional local port; when omitted, `PORT` is used, then `3100`.
 
 The bearer token is a temporary boundary for private/personal testing. Store it in a secret manager or untracked local environment only.
+
+OAuth mode is disabled by default and additionally uses:
+
+- `MCP_OAUTH_ENABLED=true` — explicit OAuth opt-in.
+- `MCP_PUBLIC_BASE_URL` — the canonical HTTPS service origin, without `/mcp`.
+- `MCP_OAUTH_ADMIN_SECRET` — a random personal authorization secret of at least 32 characters.
+- `MCP_OAUTH_SIGNING_SECRET` — a different random signing secret of at least 32 characters.
+- `MCP_OAUTH_REDIRECT_URIS` — exact comma-separated callback URI(s) shown in ChatGPT's MCP management page; wildcards are not accepted.
+
+The OAuth access token is restricted to the canonical `${MCP_PUBLIC_BASE_URL}/mcp` resource and the single `mcp:tools` scope. Do not reuse either OAuth secret as `MCP_AUTH_TOKEN` or as a Groq credential.
 
 ## Run locally
 
@@ -66,6 +76,36 @@ curl.exe -X POST http://127.0.0.1:3100/mcp `
 
 Do not put the real bearer token in documentation, committed MCP configuration, URLs, or shell scripts. A supported MCP client should send it as an `Authorization: Bearer ...` header.
 
+## OAuth 2.1 personal-test mode
+
+OAuth mode implements the MCP authorization-code profile with PKCE `S256`, Dynamic Client Registration (DCR), protected-resource discovery, authorization-server discovery, exact redirect validation, short-lived one-time codes, and short-lived audience-bound access tokens. It does not change stdio or `give_hint` behavior.
+
+Configure only placeholder or secret-manager values; never paste real secrets into committed scripts or client-visible configuration:
+
+```powershell
+$env:MCP_REMOTE_ENABLED = "true"
+$env:MCP_OAUTH_ENABLED = "true"
+$env:MCP_PUBLIC_BASE_URL = "https://your-mcp-service.example"
+$env:MCP_OAUTH_REDIRECT_URIS = "https://chatgpt.com/connector/oauth/<callback-id>"
+$env:MCP_OAUTH_ADMIN_SECRET = "<random-secret-at-least-32-characters>"
+$env:MCP_OAUTH_SIGNING_SECRET = "<different-random-secret-at-least-32-characters>"
+npm run mcp:http
+```
+
+The relevant local/public routes are:
+
+- `GET /.well-known/oauth-protected-resource`
+- `GET /.well-known/oauth-protected-resource/mcp`
+- `GET /.well-known/oauth-authorization-server`
+- `POST /oauth/register`
+- `GET|POST /oauth/authorize`
+- `POST /oauth/token`
+- `POST /mcp`
+
+Use the official MCP Inspector OAuth flow for local testing. Register only an exact HTTPS callback or a loopback callback that is explicitly included in `MCP_OAUTH_REDIRECT_URIS`. The authorization page asks for the personal authorization secret; the secret is submitted only to the MCP service and is never placed in a redirect or access token.
+
+When adding the deployed `/mcp` URL in ChatGPT, select **OAuth** authentication and choose **Dynamic Client Registration** if the UI asks for a client-registration method. Copy the exact callback URI shown by ChatGPT into `MCP_OAUTH_REDIRECT_URIS` before starting the connection.
+
 ## Test
 
 ```powershell
@@ -74,12 +114,14 @@ npm run typecheck
 npm run build
 ```
 
-The focused tests cover a successful hint, invalid language, empty input, sanitized Tutor failure, the existing no-final-answer guard, HTTP startup, bearer authentication, tool discovery/calls, body limits, throttling, and browser-origin rejection.
+The focused tests cover a successful hint, invalid language, empty input, sanitized Tutor failure, the existing no-final-answer guard, HTTP startup, bearer authentication, tool discovery/calls, body limits, throttling, browser-origin rejection, OAuth discovery/DCR, authorization and PKCE, redirect validation, code expiry/replay, OAuth access to `/mcp`, and sanitized OAuth errors.
 
 ## Render deployment notes
 
 Use a separate private-test web service with `npm run mcp:http` as its start command. Set `MCP_REMOTE_ENABLED=true`, inject `MCP_AUTH_TOKEN` and the existing Groq credential as secrets, and leave `MCP_PORT` unset so Render's `PORT` is used. Render terminates HTTPS and forwards traffic to the HTTP listener. The MCP endpoint is `https://<service-host>/mcp`; `/health` can be used as the health-check path.
 
+To opt in to OAuth on that dedicated service, add `MCP_OAUTH_ENABLED=true`, the service's exact HTTPS origin in `MCP_PUBLIC_BASE_URL`, two independently generated secrets in `MCP_OAUTH_ADMIN_SECRET` and `MCP_OAUTH_SIGNING_SECRET`, and ChatGPT's exact callback URI in `MCP_OAUTH_REDIRECT_URIS`. Do not alter the main Engineerus Quest web/API service for this personal MCP test.
+
 This prototype rejects requests carrying a browser `Origin` header instead of enabling broad CORS, accepts at most 64 KiB per request, and applies a bounded in-memory global limiter (8 requests per 10 seconds and 30 per minute). The limiter resets on restart and does not coordinate across instances.
 
-Before any production-public or multi-user deployment, replace the shared static token with stronger identity and authorization, enforce tenant isolation, use distributed rate/concurrency controls, add privacy-safe monitoring and abuse protection, and define secret rotation and incident procedures. These limitations make the current HTTP mode appropriate only for private/personal ChatGPT or Codex testing.
+The built-in OAuth server intentionally has no social login, Engineerus Quest user accounts, or multi-tenancy. DCR registrations and authorization codes are bounded but stored in process memory, so a restart invalidates registered clients and pending codes; a multi-instance service would not share them. Access tokens expire after 15 minutes and no refresh token is issued, so reauthorization is expected. Open DCR can still be a denial-of-service target even though redirect URIs are allowlisted and tool access requires the personal secret. For a public, durable, multi-user, or multi-instance service, use an established identity provider with persistent client registration, refresh-token rotation/revocation, distributed abuse controls, monitoring, and tenant isolation.

@@ -7,7 +7,10 @@ import { createGiveHintHandler, giveHintInputSchema } from "./tools/giveHint";
 
 export type GiveHintHandler = ReturnType<typeof createGiveHintHandler>;
 
-export function createEngineerusMcpServer(giveHint: GiveHintHandler): McpServer {
+export function createEngineerusMcpServer(
+  giveHint: GiveHintHandler,
+  options: { oauthEnabled?: boolean } = {},
+): McpServer {
   const server = new McpServer({ name: "engineerus-quest", version: "0.1.0" });
 
   server.registerTool(
@@ -17,6 +20,9 @@ export function createEngineerusMcpServer(giveHint: GiveHintHandler): McpServer 
       description: "Return a guided Engineerus Quest hint without revealing a prohibited full answer.",
       inputSchema: giveHintInputSchema,
       annotations: { readOnlyHint: true, openWorldHint: false },
+      ...(options.oauthEnabled
+        ? { _meta: { securitySchemes: [{ type: "oauth2", scopes: ["mcp:tools"] }] } }
+        : {}),
     },
     (input, context) => giveHint(input, context.mcpReq.signal),
   );
