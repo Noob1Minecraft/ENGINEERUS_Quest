@@ -14,7 +14,7 @@ const CALLBACK = "https://chatgpt.com/connector/oauth/test-callback";
 
 type StartedServer = Awaited<ReturnType<typeof startOAuthServer>>;
 
-async function startOAuthServer(options: { now?: () => number } = {}) {
+async function startOAuthServer(options: { now?: () => number; allowedRedirectUris?: string[] } = {}) {
   const giveHint = createGiveHintHandler(async () => "Use the governing law first.");
   const server = createRemoteMcpHttpServer({
     authToken: INTERNAL_TOKEN,
@@ -24,7 +24,7 @@ async function startOAuthServer(options: { now?: () => number } = {}) {
       resource: "https://engineerus-quest-mcp-private.onrender.com/mcp",
       adminSecret: ADMIN_SECRET,
       signingSecret: SIGNING_SECRET,
-      allowedRedirectUris: [CALLBACK],
+      allowedRedirectUris: options.allowedRedirectUris ?? [CALLBACK],
       now: options.now,
     },
   });
@@ -145,6 +145,30 @@ test("OAuth discovery advertises protected resource, authorization endpoints, sc
   assert.equal(metadata.registration_endpoint, "https://engineerus-quest-mcp-private.onrender.com/oauth/register");
   assert.deepEqual(metadata.code_challenge_methods_supported, ["S256"]);
   assert.deepEqual(metadata.token_endpoint_auth_methods_supported, ["none"]);
+});
+
+test("OAuth discovery starts with no redirect allowlist while registration remains closed", async (t) => {
+  const app = await startOAuthServer({ allowedRedirectUris: [] });
+  t.after(app.close);
+
+  const discovery = await fetch(`${app.baseUrl}/.well-known/oauth-authorization-server`);
+  assert.equal(discovery.status, 200);
+
+  const registration = await fetch(`${app.baseUrl}/oauth/register`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      redirect_uris: [CALLBACK],
+      grant_types: ["authorization_code"],
+      response_types: ["code"],
+      token_endpoint_auth_method: "none",
+    }),
+  });
+  assert.equal(registration.status, 400);
+  assert.deepEqual(await registration.json(), { error: "invalid_redirect_uri" });
+
+  const legacy = await mcpList(app, INTERNAL_TOKEN);
+  assert.equal(legacy.status, 200);
 });
 
 test("valid DCR, personal approval, and PKCE token reach the protected MCP tool list", async (t) => {

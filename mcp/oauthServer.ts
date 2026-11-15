@@ -179,7 +179,6 @@ export function createPersonalOAuthServer(config: PersonalOAuthConfig): Personal
   if (config.adminSecret.length < MIN_SECRET_LENGTH || config.signingSecret.length < MIN_SECRET_LENGTH) {
     throw new Error(`MCP OAuth secrets must contain at least ${MIN_SECRET_LENGTH} characters.`);
   }
-  if (config.allowedRedirectUris.length < 1) throw new Error("At least one MCP OAuth redirect URI is required.");
   const allowedRedirectUris = new Set(config.allowedRedirectUris.map(validateRedirectUri));
   if (allowedRedirectUris.size !== config.allowedRedirectUris.length) {
     throw new Error("MCP OAuth redirect URIs must be unique.");
