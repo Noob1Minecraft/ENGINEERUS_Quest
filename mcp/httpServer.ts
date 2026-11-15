@@ -198,6 +198,12 @@ export function createRemoteMcpHttpServer(options: RemoteMcpHttpServerOptions): 
 
 export async function main(): Promise<void> {
   const config = loadRemoteMcpConfig();
+  console.error(`MCP_OAUTH_ENABLED present: ${Object.hasOwn(process.env, "MCP_OAUTH_ENABLED")}.`);
+  console.error(`OAuth enabled: ${process.env.MCP_OAUTH_ENABLED === "true"}.`);
+  console.error(`MCP_PUBLIC_BASE_URL present: ${Boolean(process.env.MCP_PUBLIC_BASE_URL)}.`);
+  console.error(`MCP_OAUTH_ADMIN_SECRET present: ${Boolean(process.env.MCP_OAUTH_ADMIN_SECRET)}.`);
+  console.error(`MCP_OAUTH_SIGNING_SECRET present: ${Boolean(process.env.MCP_OAUTH_SIGNING_SECRET)}.`);
+  console.error(`OAuth config resolved: ${Boolean(config.oauth)}.`);
   if (!config.enabled) throw new Error("Remote MCP is disabled.");
   if (config.authToken.length < MIN_AUTH_TOKEN_LENGTH) {
     throw new Error(`MCP_AUTH_TOKEN must contain at least ${MIN_AUTH_TOKEN_LENGTH} characters.`);
