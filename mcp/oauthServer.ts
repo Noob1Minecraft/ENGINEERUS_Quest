@@ -6,9 +6,11 @@ import { jwtVerify, SignJWT } from "jose";
 const OAUTH_SCOPE = "mcp:tools";
 const AUTHORIZATION_CODE_TTL_MS = 120_000;
 const ACCESS_TOKEN_TTL_SECONDS = 900;
+const REFRESH_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60;
 const MAX_OAUTH_BODY_SIZE = 16 * 1024;
 const MAX_REGISTERED_CLIENTS = 100;
 const MAX_PENDING_CODES = 100;
+const MAX_ACTIVE_REFRESH_TOKENS = 100;
 const MIN_SECRET_LENGTH = 32;
 const MAX_FAILED_APPROVALS = 5;
 const APPROVAL_WINDOW_MS = 5 * 60_000;
@@ -33,6 +35,14 @@ type AuthorizationCode = {
   resource: string;
   scope: string;
   codeChallenge: string;
+  expiresAt: number;
+};
+
+type RefreshTokenRecord = {
+  clientId: string;
+  resource: string;
+  scope: string;
+  familyId: string;
   expiresAt: number;
 };
 
@@ -259,6 +269,8 @@ export function createPersonalOAuthServer(config: PersonalOAuthConfig): Personal
   const signingKey = new TextEncoder().encode(config.signingSecret);
   const clients = new Map<string, RegisteredClient>();
   const codes = new Map<string, AuthorizationCode>();
+  const activeRefreshTokens = new Map<string, RefreshTokenRecord>();
+  const activeRefreshTokenByFamily = new Map<string, string>();
   let failedApprovals: number[] = [];
   const metadataUrl = `${issuer}/.well-known/oauth-protected-resource`;
   const challenge = `Bearer resource_metadata="${metadataUrl}", scope="${OAUTH_SCOPE}"`;
@@ -268,6 +280,77 @@ export function createPersonalOAuthServer(config: PersonalOAuthConfig): Personal
     for (const [digest, record] of codes) {
       if (record.expiresAt <= current) codes.delete(digest);
     }
+  }
+
+  function pruneRefreshTokens(): void {
+    const current = now();
+    for (const [jti, record] of activeRefreshTokens) {
+      if (record.expiresAt <= current) {
+        activeRefreshTokens.delete(jti);
+        if (activeRefreshTokenByFamily.get(record.familyId) === jti) {
+          activeRefreshTokenByFamily.delete(record.familyId);
+        }
+      }
+    }
+  }
+
+  function keepRefreshTokensBounded(): void {
+    while (activeRefreshTokens.size >= MAX_ACTIVE_REFRESH_TOKENS) {
+      const oldestJti = activeRefreshTokens.keys().next().value as string | undefined;
+      if (!oldestJti) break;
+      const record = activeRefreshTokens.get(oldestJti);
+      activeRefreshTokens.delete(oldestJti);
+      if (record && activeRefreshTokenByFamily.get(record.familyId) === oldestJti) {
+        activeRefreshTokenByFamily.delete(record.familyId);
+      }
+    }
+  }
+
+  function revokeRefreshFamily(familyId: string): void {
+    const activeJti = activeRefreshTokenByFamily.get(familyId);
+    if (activeJti) activeRefreshTokens.delete(activeJti);
+    activeRefreshTokenByFamily.delete(familyId);
+  }
+
+  async function issueAccessToken(scope: string): Promise<string> {
+    const issuedAt = Math.floor(now() / 1_000);
+    return new SignJWT({ scope, token_use: "access" })
+      .setProtectedHeader({ alg: "HS256", typ: "JWT" })
+      .setIssuer(issuer)
+      .setAudience(resource)
+      .setSubject("engineerus-personal-owner")
+      .setJti(randomBytes(16).toString("base64url"))
+      .setIssuedAt(issuedAt)
+      .setExpirationTime(issuedAt + ACCESS_TOKEN_TTL_SECONDS)
+      .sign(signingKey);
+  }
+
+  async function issueRefreshToken(record: Omit<RefreshTokenRecord, "expiresAt">): Promise<{ token: string; jti: string; expiresAt: number }> {
+    const issuedAt = Math.floor(now() / 1_000);
+    const expiresAt = (issuedAt + REFRESH_TOKEN_TTL_SECONDS) * 1_000;
+    const jti = randomBytes(16).toString("base64url");
+    const token = await new SignJWT({
+      scope: record.scope,
+      token_use: "refresh",
+      client_id: record.clientId,
+      family_id: record.familyId,
+    })
+      .setProtectedHeader({ alg: "HS256", typ: "JWT" })
+      .setIssuer(issuer)
+      .setAudience(record.resource)
+      .setSubject("engineerus-personal-owner")
+      .setJti(jti)
+      .setIssuedAt(issuedAt)
+      .setExpirationTime(issuedAt + REFRESH_TOKEN_TTL_SECONDS)
+      .sign(signingKey);
+    return { token, jti, expiresAt };
+  }
+
+  function storeActiveRefreshToken(jti: string, record: RefreshTokenRecord): void {
+    pruneRefreshTokens();
+    keepRefreshTokensBounded();
+    activeRefreshTokens.set(jti, record);
+    activeRefreshTokenByFamily.set(record.familyId, jti);
   }
 
   async function handleRegistration(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -303,7 +386,13 @@ export function createPersonalOAuthServer(config: PersonalOAuthConfig): Personal
       json(res, 400, { error: "invalid_redirect_uri" });
       return;
     }
-    if (!Array.isArray(grants) || grants.length !== 1 || grants[0] !== "authorization_code") {
+    if (
+      !Array.isArray(grants)
+      || grants.length !== 2
+      || new Set(grants).size !== 2
+      || !grants.includes("authorization_code")
+      || !grants.includes("refresh_token")
+    ) {
       logDcrDiagnostic(400, "grant_types_invalid", body);
       json(res, 400, { error: "invalid_client_metadata" });
       return;
@@ -333,7 +422,7 @@ export function createPersonalOAuthServer(config: PersonalOAuthConfig): Personal
       client_id_issued_at: Math.floor(now() / 1_000),
       client_name: typeof body.client_name === "string" ? body.client_name.slice(0, 100) : "MCP client",
       redirect_uris: redirectUris,
-      grant_types: ["authorization_code"],
+      grant_types: ["authorization_code", "refresh_token"],
       response_types: ["code"],
       token_endpoint_auth_method: "none",
       scope: OAUTH_SCOPE,
@@ -424,8 +513,92 @@ export function createPersonalOAuthServer(config: PersonalOAuthConfig): Personal
       json(res, 400, { error: "invalid_request" });
       return;
     }
-    if (params.get("grant_type") !== "authorization_code") {
+    const grantType = params.get("grant_type");
+    if (grantType !== "authorization_code" && grantType !== "refresh_token") {
       json(res, 400, { error: "unsupported_grant_type" });
+      return;
+    }
+
+    if (grantType === "refresh_token") {
+      const refreshToken = params.get("refresh_token") ?? "";
+      try {
+        pruneRefreshTokens();
+        const { payload } = await jwtVerify(refreshToken, signingKey, {
+          algorithms: ["HS256"],
+          issuer,
+          audience: resource,
+          currentDate: new Date(now()),
+        });
+        const jti = payload.jti ?? "";
+        const familyId = typeof payload.family_id === "string" ? payload.family_id : "";
+        const record = activeRefreshTokens.get(jti);
+        const requestedScope = params.get("scope");
+        if (
+          payload.token_use !== "refresh"
+          || payload.sub !== "engineerus-personal-owner"
+          || typeof payload.client_id !== "string"
+          || typeof payload.scope !== "string"
+          || !jti
+          || !familyId
+          || !clients.has(payload.client_id)
+          || params.get("client_id") !== payload.client_id
+          || params.get("resource") !== resource
+          || (requestedScope !== null && requestedScope !== payload.scope)
+        ) {
+          json(res, 400, { error: "invalid_grant" });
+          return;
+        }
+        if (!record) {
+          revokeRefreshFamily(familyId);
+          json(res, 400, { error: "invalid_grant" });
+          return;
+        }
+        if (
+          payload.client_id !== record.clientId
+          || payload.scope !== record.scope
+          || familyId !== record.familyId
+          || record.resource !== resource
+        ) {
+          json(res, 400, { error: "invalid_grant" });
+          return;
+        }
+
+        const [nextRefresh, accessToken] = await Promise.all([
+          issueRefreshToken({
+            clientId: record.clientId,
+            resource: record.resource,
+            scope: record.scope,
+            familyId: record.familyId,
+          }),
+          issueAccessToken(record.scope),
+        ]);
+        if (
+          activeRefreshTokens.get(jti) !== record
+          || activeRefreshTokenByFamily.get(record.familyId) !== jti
+        ) {
+          revokeRefreshFamily(record.familyId);
+          json(res, 400, { error: "invalid_grant" });
+          return;
+        }
+        activeRefreshTokens.delete(jti);
+        activeRefreshTokenByFamily.delete(record.familyId);
+        storeActiveRefreshToken(nextRefresh.jti, {
+          clientId: record.clientId,
+          resource: record.resource,
+          scope: record.scope,
+          familyId: record.familyId,
+          expiresAt: nextRefresh.expiresAt,
+        });
+        json(res, 200, {
+          access_token: accessToken,
+          token_type: "Bearer",
+          expires_in: ACCESS_TOKEN_TTL_SECONDS,
+          scope: record.scope,
+          refresh_token: nextRefresh.token,
+        });
+      } catch {
+        json(res, 400, { error: "invalid_grant" });
+      }
       return;
     }
 
@@ -448,21 +621,26 @@ export function createPersonalOAuthServer(config: PersonalOAuthConfig): Personal
       return;
     }
 
-    const issuedAt = Math.floor(now() / 1_000);
-    const accessToken = await new SignJWT({ scope: record.scope })
-      .setProtectedHeader({ alg: "HS256", typ: "JWT" })
-      .setIssuer(issuer)
-      .setAudience(record.resource)
-      .setSubject("engineerus-personal-owner")
-      .setJti(randomBytes(16).toString("base64url"))
-      .setIssuedAt(issuedAt)
-      .setExpirationTime(issuedAt + ACCESS_TOKEN_TTL_SECONDS)
-      .sign(signingKey);
+    const familyId = randomBytes(16).toString("base64url");
+    const refreshToken = await issueRefreshToken({
+      clientId: record.clientId,
+      resource: record.resource,
+      scope: record.scope,
+      familyId,
+    });
+    storeActiveRefreshToken(refreshToken.jti, {
+      clientId: record.clientId,
+      resource: record.resource,
+      scope: record.scope,
+      familyId,
+      expiresAt: refreshToken.expiresAt,
+    });
     json(res, 200, {
-      access_token: accessToken,
+      access_token: await issueAccessToken(record.scope),
       token_type: "Bearer",
       expires_in: ACCESS_TOKEN_TTL_SECONDS,
       scope: record.scope,
+      refresh_token: refreshToken.token,
     });
   }
 
@@ -492,7 +670,7 @@ export function createPersonalOAuthServer(config: PersonalOAuthConfig): Personal
           token_endpoint: `${issuer}/oauth/token`,
           registration_endpoint: `${issuer}/oauth/register`,
           response_types_supported: ["code"],
-          grant_types_supported: ["authorization_code"],
+          grant_types_supported: ["authorization_code", "refresh_token"],
           token_endpoint_auth_methods_supported: ["none"],
           code_challenge_methods_supported: ["S256"],
           scopes_supported: [OAUTH_SCOPE],
@@ -525,7 +703,9 @@ export function createPersonalOAuthServer(config: PersonalOAuthConfig): Personal
         currentDate: new Date(now()),
       });
       const scopes = typeof payload.scope === "string" ? payload.scope.split(/\s+/) : [];
-      return payload.sub === "engineerus-personal-owner" && scopes.includes(OAUTH_SCOPE);
+      return payload.token_use === "access"
+        && payload.sub === "engineerus-personal-owner"
+        && scopes.includes(OAUTH_SCOPE);
     } catch {
       return false;
     }

@@ -47,7 +47,7 @@ async function registerClient(app: StartedServer, redirectUri = CALLBACK): Promi
     body: JSON.stringify({
       client_name: "ChatGPT personal test",
       redirect_uris: [redirectUri],
-      grant_types: ["authorization_code"],
+      grant_types: ["authorization_code", "refresh_token"],
       response_types: ["code"],
       token_endpoint_auth_method: "none",
     }),
@@ -106,6 +106,26 @@ async function exchangeCode(app: StartedServer, clientId: string, code: string, 
   });
 }
 
+async function refreshAccessToken(
+  app: StartedServer,
+  clientId: string,
+  refreshToken: string,
+  overrides: Record<string, string> = {},
+) {
+  return fetch(`${app.baseUrl}/oauth/token`, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "refresh_token",
+      refresh_token: refreshToken,
+      client_id: clientId,
+      resource: "https://engineerus-quest-mcp-private.onrender.com/mcp",
+      scope: "mcp:tools",
+      ...overrides,
+    }),
+  });
+}
+
 async function mcpList(app: StartedServer, token?: string) {
   const headers: Record<string, string> = {
     accept: "application/json, text/event-stream",
@@ -146,6 +166,7 @@ test("OAuth discovery advertises protected resource, authorization endpoints, sc
   assert.equal(metadata.registration_endpoint, "https://engineerus-quest-mcp-private.onrender.com/oauth/register");
   assert.deepEqual(metadata.code_challenge_methods_supported, ["S256"]);
   assert.deepEqual(metadata.token_endpoint_auth_methods_supported, ["none"]);
+  assert.deepEqual(metadata.grant_types_supported, ["authorization_code", "refresh_token"]);
   assert.equal(metadata.authorization_response_iss_parameter_supported, true);
 });
 
@@ -161,7 +182,7 @@ test("OAuth discovery starts with no redirect allowlist while registration remai
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
       redirect_uris: [CALLBACK],
-      grant_types: ["authorization_code"],
+      grant_types: ["authorization_code", "refresh_token"],
       response_types: ["code"],
       token_endpoint_auth_method: "none",
     }),
@@ -291,7 +312,40 @@ test("remote startup reports the give_hint phase safely when Groq credentials ar
   assert.doesNotMatch(logs.join("\n"), new RegExp(`${ADMIN_SECRET}|${SIGNING_SECRET}|${INTERNAL_TOKEN}`));
 });
 
-test("DCR accepts the allowlisted stable ChatGPT callback and PKCE reaches the protected MCP tool list", async (t) => {
+test("ChatGPT DCR payload is accepted and advertises authorization-code plus refresh-token grants", async (t) => {
+  const app = await startOAuthServer();
+  t.after(app.close);
+
+  const response = await fetch(`${app.baseUrl}/oauth/register`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      client_name: "ChatGPT",
+      redirect_uris: [CALLBACK],
+      grant_types: ["authorization_code", "refresh_token"],
+      response_types: ["code"],
+      token_endpoint_auth_method: "none",
+    }),
+  });
+  assert.equal(response.status, 201);
+  const body = await response.json() as Record<string, unknown>;
+  assert.deepEqual(body.grant_types, ["authorization_code", "refresh_token"]);
+
+  const unsupported = await fetch(`${app.baseUrl}/oauth/register`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      redirect_uris: [CALLBACK],
+      grant_types: ["authorization_code", "password"],
+      response_types: ["code"],
+      token_endpoint_auth_method: "none",
+    }),
+  });
+  assert.equal(unsupported.status, 400);
+  assert.deepEqual(await unsupported.json(), { error: "invalid_client_metadata" });
+});
+
+test("authorization code exchange returns refresh token and PKCE access reaches MCP", async (t) => {
   const app = await startOAuthServer();
   t.after(app.close);
   const clientId = await registerClient(app);
@@ -299,15 +353,89 @@ test("DCR accepts the allowlisted stable ChatGPT callback and PKCE reaches the p
   const code = await authorize(app, clientId, pair.challenge);
   const tokenResponse = await exchangeCode(app, clientId, code, pair.verifier);
   assert.equal(tokenResponse.status, 200);
-  const tokenBody = await tokenResponse.json() as { access_token: string; token_type: string; scope: string };
+  const tokenBody = await tokenResponse.json() as { access_token: string; refresh_token: string; token_type: string; scope: string };
   assert.equal(tokenBody.token_type, "Bearer");
   assert.equal(tokenBody.scope, "mcp:tools");
+  assert.match(tokenBody.refresh_token, /^[A-Za-z0-9_.-]+$/);
 
   const toolsResponse = await mcpList(app, tokenBody.access_token);
   const tools = await readMcpPayload(toolsResponse);
   assert.equal(toolsResponse.status, 200);
   assert.deepEqual(tools.result.tools.map((tool: { name: string }) => tool.name), ["give_hint"]);
   assert.deepEqual(tools.result.tools[0]._meta.securitySchemes, [{ type: "oauth2", scopes: ["mcp:tools"] }]);
+});
+
+test("refresh grant rotates tokens, rejects replay, and refresh tokens cannot access MCP", async (t) => {
+  const app = await startOAuthServer();
+  t.after(app.close);
+  const clientId = await registerClient(app);
+  const pair = pkce();
+  const code = await authorize(app, clientId, pair.challenge);
+  const initial = await exchangeCode(app, clientId, code, pair.verifier);
+  const initialBody = await initial.json() as { access_token: string; refresh_token: string };
+
+  const refreshAsAccess = await mcpList(app, initialBody.refresh_token);
+  assert.equal(refreshAsAccess.status, 401);
+  const accessAsRefresh = await refreshAccessToken(app, clientId, initialBody.access_token);
+  assert.equal(accessAsRefresh.status, 400);
+
+  const rotated = await refreshAccessToken(app, clientId, initialBody.refresh_token);
+  assert.equal(rotated.status, 200);
+  const rotatedBody = await rotated.json() as { access_token: string; refresh_token: string; scope: string };
+  assert.notEqual(rotatedBody.refresh_token, initialBody.refresh_token);
+  assert.equal(rotatedBody.scope, "mcp:tools");
+  assert.equal((await mcpList(app, rotatedBody.access_token)).status, 200);
+
+  const replay = await refreshAccessToken(app, clientId, initialBody.refresh_token);
+  assert.equal(replay.status, 400);
+  assert.deepEqual(await replay.json(), { error: "invalid_grant" });
+  const revokedFamily = await refreshAccessToken(app, clientId, rotatedBody.refresh_token);
+  assert.equal(revokedFamily.status, 400);
+  assert.deepEqual(await revokedFamily.json(), { error: "invalid_grant" });
+});
+
+test("concurrent refresh-token replay revokes the whole token family", async (t) => {
+  const app = await startOAuthServer();
+  t.after(app.close);
+  const clientId = await registerClient(app);
+  const pair = pkce();
+  const code = await authorize(app, clientId, pair.challenge);
+  const initial = await exchangeCode(app, clientId, code, pair.verifier);
+  const initialBody = await initial.json() as { refresh_token: string };
+
+  const attempts = await Promise.all([
+    refreshAccessToken(app, clientId, initialBody.refresh_token),
+    refreshAccessToken(app, clientId, initialBody.refresh_token),
+  ]);
+  assert.deepEqual(attempts.map((response) => response.status).sort(), [200, 400]);
+  const successful = attempts.find((response) => response.status === 200)!;
+  const rotated = await successful.json() as { refresh_token: string };
+
+  const familyAfterReplay = await refreshAccessToken(app, clientId, rotated.refresh_token);
+  assert.equal(familyAfterReplay.status, 400);
+  assert.deepEqual(await familyAfterReplay.json(), { error: "invalid_grant" });
+});
+
+test("refresh grant rejects malformed, expired, wrong-client, wrong-resource, and wrong-scope tokens", async (t) => {
+  let now = 1_800_000_000_000;
+  const app = await startOAuthServer({ now: () => now });
+  t.after(app.close);
+  const clientId = await registerClient(app);
+  const otherClientId = await registerClient(app);
+  const pair = pkce();
+  const code = await authorize(app, clientId, pair.challenge);
+  const initial = await exchangeCode(app, clientId, code, pair.verifier);
+  const body = await initial.json() as { refresh_token: string };
+
+  assert.equal((await refreshAccessToken(app, clientId, "malformed-refresh-token")).status, 400);
+  assert.equal((await refreshAccessToken(app, otherClientId, body.refresh_token)).status, 400);
+  assert.equal((await refreshAccessToken(app, clientId, body.refresh_token, { resource: "https://attacker.example/mcp" })).status, 400);
+  assert.equal((await refreshAccessToken(app, clientId, body.refresh_token, { scope: "mcp:admin" })).status, 400);
+
+  now += 31 * 24 * 60 * 60 * 1_000;
+  const expired = await refreshAccessToken(app, clientId, body.refresh_token);
+  assert.equal(expired.status, 400);
+  assert.deepEqual(await expired.json(), { error: "invalid_grant" });
 });
 
 test("safe authorization error redirects include the exact RFC 9207 issuer", async (t) => {
