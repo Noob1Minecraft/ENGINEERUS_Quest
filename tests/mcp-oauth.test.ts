@@ -468,11 +468,23 @@ test("authorization redirect and token receipt diagnostics expose structure only
   t.after(app.close);
   const clientId = await registerClient(app);
   const pair = pkce();
+  const authorizationQuery = new URLSearchParams({
+    response_type: "code",
+    client_id: clientId,
+    redirect_uri: CALLBACK,
+    code_challenge: pair.challenge,
+    code_challenge_method: "S256",
+    resource: "https://engineerus-quest-mcp-private.onrender.com/mcp",
+    scope: "mcp:tools",
+    state: "opaque-test-state",
+  });
   const logs: string[] = [];
   const originalError = console.error;
   let code = "";
   try {
     console.error = (...values: unknown[]) => logs.push(values.map(String).join(" "));
+    const approval = await fetch(`${app.baseUrl}/oauth/authorize?${authorizationQuery}`);
+    assert.equal(approval.status, 200);
     code = await authorize(app, clientId, pair.challenge);
     const token = await exchangeCode(app, clientId, code, pair.verifier);
     assert.equal(token.status, 200);
@@ -491,10 +503,36 @@ test("authorization redirect and token receipt diagnostics expose structure only
     iss_parameter_present: true,
     iss_matches_configured_issuer: true,
     redirect_uri_matches_registered_client: true,
+    returned_state_fingerprint: createHash("sha256").update("opaque-test-state").digest("base64url"),
+    state_matches_incoming_authorization_state: true,
   });
   assert.ok(logs.includes("OAuth token request received: true"));
   assert.ok(logs.includes("POST /oauth/token -> 200"));
+  const stateFingerprint = createHash("sha256").update("opaque-test-state").digest("base64url");
+  const clientIdFingerprint = createHash("sha256").update(clientId).digest("base64url");
+  const requestPrefix = "OAuth authorization request: ";
+  const requestLog = logs.find((entry) => entry.startsWith(requestPrefix));
+  assert.ok(requestLog);
+  assert.deepEqual(JSON.parse(requestLog.slice(requestPrefix.length)), {
+    state_fingerprint: stateFingerprint,
+    client_id_fingerprint: clientIdFingerprint,
+    redirect_uri_matches_registered_client: true,
+    issuer_selected: "https://engineerus-quest-mcp-private.onrender.com",
+  });
+  const submissionPrefix = "OAuth authorization submission: ";
+  const submissionLogs = logs.filter((entry) => entry.startsWith(submissionPrefix));
+  assert.equal(submissionLogs.length, 1);
+  assert.deepEqual(JSON.parse(submissionLogs[0]!.slice(submissionPrefix.length)), {
+    submitted_state_fingerprint: stateFingerprint,
+    client_id_fingerprint: clientIdFingerprint,
+    matches_original_authorization_request: true,
+    submission_count: 1,
+  });
+  const redirectWithFingerprints = JSON.parse(redirectLog.slice(prefix.length)) as Record<string, unknown>;
+  assert.equal(redirectWithFingerprints.returned_state_fingerprint, stateFingerprint);
+  assert.equal(redirectWithFingerprints.state_matches_incoming_authorization_state, true);
   assert.ok(code && !logs.some((entry) => entry.includes(code)));
+  assert.ok(!logs.some((entry) => entry.includes(clientId)));
   assert.ok(!logs.some((entry) => entry.includes(pair.verifier)));
   assert.doesNotMatch(logs.join("\n"), /opaque-test-state|[?&](?:code|state|iss)=|code_challenge|authorization:/i);
 });

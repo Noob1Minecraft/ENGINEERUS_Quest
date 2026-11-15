@@ -61,6 +61,13 @@ type SafeAuthorizationRedirect = {
   state: string;
 };
 
+type AuthorizationDiagnostic = {
+  clientIdFingerprint: string;
+  redirectUri: string;
+  expiresAt: number;
+  submissionCount: number;
+};
+
 export type PersonalOAuthServer = {
   challenge: string;
   handleRequest: (req: IncomingMessage, res: ServerResponse) => Promise<boolean>;
@@ -251,6 +258,10 @@ function redirectAuthorizationResponse(
     iss_parameter_present: redirect.searchParams.has("iss"),
     iss_matches_configured_issuer: redirect.searchParams.get("iss") === issuer,
     redirect_uri_matches_registered_client: registeredRedirectUris.includes(redirectUri),
+    returned_state_fingerprint: params.state ? sha256(params.state) : null,
+    state_matches_incoming_authorization_state: params.state
+      ? redirect.searchParams.get("state") === params.state
+      : !redirect.searchParams.has("state"),
   })}`);
   res.statusCode = 302;
   res.setHeader("Location", redirect.toString());
@@ -280,6 +291,7 @@ export function createPersonalOAuthServer(config: PersonalOAuthConfig): Personal
   const signingKey = new TextEncoder().encode(config.signingSecret);
   const clients = new Map<string, RegisteredClient>();
   const codes = new Map<string, AuthorizationCode>();
+  const authorizationDiagnostics = new Map<string, AuthorizationDiagnostic>();
   const activeRefreshTokens = new Map<string, RefreshTokenRecord>();
   const activeRefreshTokenByFamily = new Map<string, string>();
   let failedApprovals: number[] = [];
@@ -290,6 +302,13 @@ export function createPersonalOAuthServer(config: PersonalOAuthConfig): Personal
     const current = now();
     for (const [digest, record] of codes) {
       if (record.expiresAt <= current) codes.delete(digest);
+    }
+  }
+
+  function pruneAuthorizationDiagnostics(): void {
+    const current = now();
+    for (const [stateFingerprint, record] of authorizationDiagnostics) {
+      if (record.expiresAt <= current) authorizationDiagnostics.delete(stateFingerprint);
     }
   }
 
@@ -474,9 +493,41 @@ export function createPersonalOAuthServer(config: PersonalOAuthConfig): Personal
       return;
     }
     if (req.method === "GET") {
+      pruneAuthorizationDiagnostics();
+      keepMapBounded(authorizationDiagnostics, MAX_PENDING_CODES);
+      const stateFingerprint = sha256(request.state);
+      const clientIdFingerprint = sha256(request.clientId);
+      authorizationDiagnostics.set(stateFingerprint, {
+        clientIdFingerprint,
+        redirectUri: request.redirectUri,
+        expiresAt: now() + AUTHORIZATION_CODE_TTL_MS,
+        submissionCount: 0,
+      });
+      console.error(`OAuth authorization request: ${JSON.stringify({
+        state_fingerprint: stateFingerprint,
+        client_id_fingerprint: clientIdFingerprint,
+        redirect_uri_matches_registered_client: clients.get(request.clientId)?.redirectUris.includes(request.redirectUri) ?? false,
+        issuer_selected: issuer,
+      })}`);
       renderApprovalPage(res, request);
       return;
     }
+    pruneAuthorizationDiagnostics();
+    const stateFingerprint = sha256(request.state);
+    const clientIdFingerprint = sha256(request.clientId);
+    const originalRequest = authorizationDiagnostics.get(stateFingerprint);
+    const submissionCount = (originalRequest?.submissionCount ?? 0) + 1;
+    if (originalRequest) originalRequest.submissionCount = submissionCount;
+    console.error(`OAuth authorization submission: ${JSON.stringify({
+      submitted_state_fingerprint: stateFingerprint,
+      client_id_fingerprint: clientIdFingerprint,
+      matches_original_authorization_request: Boolean(
+        originalRequest
+        && originalRequest.clientIdFingerprint === clientIdFingerprint
+        && originalRequest.redirectUri === request.redirectUri
+      ),
+      submission_count: submissionCount,
+    })}`);
     const current = now();
     failedApprovals = failedApprovals.filter((timestamp) => current - timestamp < APPROVAL_WINDOW_MS);
     if (failedApprovals.length >= MAX_FAILED_APPROVALS) {
