@@ -171,6 +171,31 @@ test("OAuth discovery starts with no redirect allowlist while registration remai
   assert.equal(legacy.status, 200);
 });
 
+test("OAuth startup validation reports a safe reason without reflecting secret material", () => {
+  const logs: string[] = [];
+  const originalError = console.error;
+  console.error = (...values: unknown[]) => logs.push(values.map(String).join(" "));
+  try {
+    const giveHint = createGiveHintHandler(async () => "Use the governing law first.");
+    assert.throws(() => createRemoteMcpHttpServer({
+      authToken: INTERNAL_TOKEN,
+      createMcpServer: () => createEngineerusMcpServer(giveHint, { oauthEnabled: true }),
+      oauth: {
+        issuer: "https://engineerus-quest-mcp-private.onrender.com",
+        resource: "https://engineerus-quest-mcp-private.onrender.com/mcp",
+        adminSecret: "short-secret-material",
+        signingSecret: SIGNING_SECRET,
+        allowedRedirectUris: [],
+      },
+    }), /MCP OAuth secrets must contain at least 32 characters/);
+  } finally {
+    console.error = originalError;
+  }
+
+  assert.deepEqual(logs, ["OAuth startup validation failed: MCP OAuth secrets must contain at least 32 characters."]);
+  assert.doesNotMatch(logs.join("\n"), /short-secret-material/);
+});
+
 test("valid DCR, personal approval, and PKCE token reach the protected MCP tool list", async (t) => {
   const app = await startOAuthServer();
   t.after(app.close);

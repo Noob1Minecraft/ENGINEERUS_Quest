@@ -18,6 +18,7 @@ const SUSTAINED_WINDOW_MS = 60_000;
 const DEFAULT_BURST_LIMIT = 8;
 const DEFAULT_SUSTAINED_LIMIT = 30;
 const MIN_AUTH_TOKEN_LENGTH = 32;
+const MIN_OAUTH_SECRET_LENGTH = 32;
 
 type RemoteMcpHttpServerOptions = {
   authToken: string;
@@ -39,6 +40,29 @@ function json(res: ServerResponse, status: number, payload: Record<string, unkno
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.end(JSON.stringify(payload));
+}
+
+function isCanonicalHttpsUrl(value: string | undefined): boolean {
+  try {
+    const url = new URL(value ?? "");
+    return url.protocol === "https:" && !url.username && !url.password && !url.search && !url.hash;
+  } catch {
+    return false;
+  }
+}
+
+function safeOAuthStartupErrorMessage(error: unknown): string {
+  if (!(error instanceof Error)) return "OAuth configuration validation failed.";
+  const allowedMessages = new Set([
+    "MCP OAuth issuer must be a canonical HTTPS URL.",
+    "MCP OAuth resource must be a canonical HTTPS URL.",
+    `MCP OAuth secrets must contain at least ${MIN_OAUTH_SECRET_LENGTH} characters.`,
+    "OAuth redirect URIs must use HTTPS or loopback HTTP.",
+    "MCP OAuth redirect URIs must be unique.",
+  ]);
+  if (allowedMessages.has(error.message)) return error.message;
+  if (error instanceof TypeError && error.message === "Invalid URL") return "OAuth URL is invalid.";
+  return "OAuth configuration validation failed.";
 }
 
 function safeTokenEquals(actual: string, expected: string): boolean {
@@ -139,9 +163,13 @@ export function createRemoteMcpHttpServer(options: RemoteMcpHttpServerOptions): 
     sustainedLimit: options.sustainedLimit,
     now: options.now ?? Date.now,
   });
-  const oauth: PersonalOAuthServer | undefined = options.oauth
-    ? createPersonalOAuthServer(options.oauth)
-    : undefined;
+  let oauth: PersonalOAuthServer | undefined;
+  try {
+    oauth = options.oauth ? createPersonalOAuthServer(options.oauth) : undefined;
+  } catch (error) {
+    console.error(`OAuth startup validation failed: ${safeOAuthStartupErrorMessage(error)}`);
+    throw error;
+  }
 
   const server = createServer(async (req, res) => {
     res.setHeader("Cache-Control", "no-store");
@@ -201,8 +229,11 @@ export async function main(): Promise<void> {
   console.error(`MCP_OAUTH_ENABLED present: ${Object.hasOwn(process.env, "MCP_OAUTH_ENABLED")}.`);
   console.error(`OAuth enabled: ${process.env.MCP_OAUTH_ENABLED === "true"}.`);
   console.error(`MCP_PUBLIC_BASE_URL present: ${Boolean(process.env.MCP_PUBLIC_BASE_URL)}.`);
+  console.error(`MCP_PUBLIC_BASE_URL canonical HTTPS: ${isCanonicalHttpsUrl(process.env.MCP_PUBLIC_BASE_URL)}.`);
   console.error(`MCP_OAUTH_ADMIN_SECRET present: ${Boolean(process.env.MCP_OAUTH_ADMIN_SECRET)}.`);
+  console.error(`MCP_OAUTH_ADMIN_SECRET length >= ${MIN_OAUTH_SECRET_LENGTH}: ${(process.env.MCP_OAUTH_ADMIN_SECRET?.length ?? 0) >= MIN_OAUTH_SECRET_LENGTH}.`);
   console.error(`MCP_OAUTH_SIGNING_SECRET present: ${Boolean(process.env.MCP_OAUTH_SIGNING_SECRET)}.`);
+  console.error(`MCP_OAUTH_SIGNING_SECRET length >= ${MIN_OAUTH_SECRET_LENGTH}: ${(process.env.MCP_OAUTH_SIGNING_SECRET?.length ?? 0) >= MIN_OAUTH_SECRET_LENGTH}.`);
   console.error(`OAuth config resolved: ${Boolean(config.oauth)}.`);
   if (!config.enabled) throw new Error("Remote MCP is disabled.");
   if (config.authToken.length < MIN_AUTH_TOKEN_LENGTH) {
