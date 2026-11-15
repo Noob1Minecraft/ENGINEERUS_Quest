@@ -242,6 +242,8 @@ export function createRemoteMcpHttpServer(options: RemoteMcpHttpServerOptions): 
 export async function main(): Promise<void> {
   const config = loadRemoteMcpConfig();
   const redirectUris = inspectRedirectUris(process.env.MCP_OAUTH_REDIRECT_URIS);
+  console.error(`MCP_REMOTE_ENABLED present: ${Object.hasOwn(process.env, "MCP_REMOTE_ENABLED")}.`);
+  console.error(`Remote MCP enabled: ${config.enabled}.`);
   console.error(`MCP_OAUTH_ENABLED present: ${Object.hasOwn(process.env, "MCP_OAUTH_ENABLED")}.`);
   console.error(`OAuth enabled: ${process.env.MCP_OAUTH_ENABLED === "true"}.`);
   console.error(`MCP_PUBLIC_BASE_URL present: ${Boolean(process.env.MCP_PUBLIC_BASE_URL)}.`);

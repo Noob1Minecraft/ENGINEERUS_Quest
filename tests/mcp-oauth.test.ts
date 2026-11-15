@@ -239,6 +239,8 @@ test("remote startup reports the give_hint phase safely when Groq credentials ar
 
   assert.ok(logs.includes("GROQ_API_KEY present: false."));
   assert.ok(logs.includes("GROQ_API_KEY_2 present: false."));
+  assert.ok(logs.includes("MCP_REMOTE_ENABLED present: true."));
+  assert.ok(logs.includes("Remote MCP enabled: true."));
   assert.ok(logs.includes("Creating give_hint handler..."));
   assert.ok(logs.includes("Startup failed during give_hint handler creation: The MCP server requires an existing Groq credential."));
   assert.doesNotMatch(logs.join("\n"), new RegExp(`${ADMIN_SECRET}|${SIGNING_SECRET}|${INTERNAL_TOKEN}`));
