@@ -66,6 +66,32 @@ test("remote MCP starts and exposes a minimal health check", async (t) => {
   assert.equal(response.headers.get("cache-control"), "no-store");
 });
 
+test("remote MCP logs only request method, pathname, and response status", async (t) => {
+  const app = await startTestServer({});
+  t.after(app.close);
+  const logs: string[] = [];
+  const originalError = console.error;
+  console.error = (...values: unknown[]) => logs.push(values.map(String).join(" "));
+  try {
+    const health = await fetch(`${app.baseUrl}/health?private_query_must_not_log=hidden`);
+    const unauthorized = await fetch(`${app.baseUrl}/mcp`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} }),
+    });
+    assert.equal(health.status, 404);
+    assert.equal(unauthorized.status, 401);
+  } finally {
+    console.error = originalError;
+  }
+
+  assert.deepEqual(logs, [
+    "GET /health -> 404",
+    "POST /mcp -> 401",
+  ]);
+  assert.doesNotMatch(logs.join("\n"), /private_query_must_not_log|hidden|authorization|cookie/i);
+});
+
 test("remote MCP rejects missing and invalid bearer credentials without leaking them", async (t) => {
   const app = await startTestServer({});
   t.after(app.close);

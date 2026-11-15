@@ -197,10 +197,11 @@ test("OAuth DCR rejection logs only safe request metadata and the validation rea
     console.error = originalError;
   }
 
-  assert.equal(logs.length, 1);
   const prefix = "OAuth DCR diagnostic: ";
-  assert.ok(logs[0].startsWith(prefix));
-  const diagnostic = JSON.parse(logs[0].slice(prefix.length)) as Record<string, unknown>;
+  const diagnosticLog = logs.find((entry) => entry.startsWith(prefix));
+  assert.ok(diagnosticLog);
+  assert.ok(logs.includes("POST /oauth/register -> 400"));
+  const diagnostic = JSON.parse(diagnosticLog.slice(prefix.length)) as Record<string, unknown>;
   assert.deepEqual(diagnostic, {
     received: true,
     status: 400,
@@ -212,7 +213,7 @@ test("OAuth DCR rejection logs only safe request metadata and the validation rea
     client_name: "ChatGPT plugin builder",
     validation_reason: "redirect_uri_not_allowlisted",
   });
-  assert.doesNotMatch(logs[0], /authorization_header|access_token|refresh_token|cookie|client_secret|code_challenge/i);
+  assert.doesNotMatch(logs.join("\n"), /authorization_header|access_token|refresh_token|cookie|client_secret|code_challenge/i);
 });
 
 test("OAuth startup validation reports a safe reason without reflecting secret material", () => {

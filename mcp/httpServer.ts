@@ -42,6 +42,14 @@ function json(res: ServerResponse, status: number, payload: Record<string, unkno
   res.end(JSON.stringify(payload));
 }
 
+function requestPathname(value: string | undefined): string {
+  try {
+    return new URL(value ?? "/", "http://mcp.invalid").pathname;
+  } catch {
+    return "<invalid-path>";
+  }
+}
+
 function isCanonicalHttpsUrl(value: string | undefined): boolean {
   try {
     const url = new URL(value ?? "");
@@ -187,6 +195,10 @@ export function createRemoteMcpHttpServer(options: RemoteMcpHttpServerOptions): 
   }
 
   const server = createServer(async (req, res) => {
+    const method = req.method ?? "UNKNOWN";
+    const pathname = requestPathname(req.url);
+    res.once("finish", () => console.error(`${method} ${pathname} -> ${res.statusCode}`));
+
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("Referrer-Policy", "no-referrer");
