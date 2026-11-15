@@ -45,6 +45,11 @@ type ValidAuthorizationRequest = {
   codeChallenge: string;
 };
 
+type SafeAuthorizationRedirect = {
+  redirectUri: string;
+  state: string;
+};
+
 export type PersonalOAuthServer = {
   challenge: string;
   handleRequest: (req: IncomingMessage, res: ServerResponse) => Promise<boolean>;
@@ -165,6 +170,34 @@ function parseAuthorizationRequest(
   return { clientId, redirectUri, resource, scope, state, codeChallenge };
 }
 
+function findSafeAuthorizationRedirect(
+  params: URLSearchParams,
+  clients: Map<string, RegisteredClient>,
+  allowedRedirectUris: Set<string>,
+): SafeAuthorizationRedirect | null {
+  const client = clients.get(params.get("client_id") ?? "");
+  const redirectUri = params.get("redirect_uri") ?? "";
+  if (!client || !client.redirectUris.includes(redirectUri) || !allowedRedirectUris.has(redirectUri)) return null;
+  const state = params.get("state") ?? "";
+  return { redirectUri, state: state.length <= 512 ? state : "" };
+}
+
+function redirectAuthorizationResponse(
+  res: ServerResponse,
+  issuer: string,
+  redirectUri: string,
+  params: { code?: string; error?: string; state?: string },
+): void {
+  const redirect = new URL(redirectUri);
+  if (params.code) redirect.searchParams.set("code", params.code);
+  if (params.error) redirect.searchParams.set("error", params.error);
+  if (params.state) redirect.searchParams.set("state", params.state);
+  redirect.searchParams.set("iss", issuer);
+  res.statusCode = 302;
+  res.setHeader("Location", redirect.toString());
+  res.end();
+}
+
 function keepMapBounded<K, V>(map: Map<K, V>, maximum: number): void {
   while (map.size >= maximum) {
     const oldest = map.keys().next().value as K | undefined;
@@ -273,7 +306,15 @@ export function createPersonalOAuthServer(config: PersonalOAuthConfig): Personal
 
     const request = parseAuthorizationRequest(params, clients, allowedRedirectUris, resource);
     if (!request) {
-      json(res, 400, { error: "invalid_request" });
+      const safeRedirect = findSafeAuthorizationRedirect(params, clients, allowedRedirectUris);
+      if (safeRedirect) {
+        redirectAuthorizationResponse(res, issuer, safeRedirect.redirectUri, {
+          error: "invalid_request",
+          state: safeRedirect.state,
+        });
+      } else {
+        json(res, 400, { error: "invalid_request" });
+      }
       return;
     }
     if (req.method === "GET") {
@@ -285,12 +326,18 @@ export function createPersonalOAuthServer(config: PersonalOAuthConfig): Personal
     if (failedApprovals.length >= MAX_FAILED_APPROVALS) {
       const retryAfter = Math.max(1, Math.ceil(((failedApprovals[0] ?? current) + APPROVAL_WINDOW_MS - current) / 1_000));
       res.setHeader("Retry-After", String(retryAfter));
-      json(res, 429, { error: "temporarily_unavailable" });
+      redirectAuthorizationResponse(res, issuer, request.redirectUri, {
+        error: "temporarily_unavailable",
+        state: request.state,
+      });
       return;
     }
     if (!approvalSecret || !safeEquals(approvalSecret, config.adminSecret)) {
       failedApprovals.push(current);
-      json(res, 401, { error: "access_denied" });
+      redirectAuthorizationResponse(res, issuer, request.redirectUri, {
+        error: "access_denied",
+        state: request.state,
+      });
       return;
     }
     failedApprovals = [];
@@ -306,12 +353,7 @@ export function createPersonalOAuthServer(config: PersonalOAuthConfig): Personal
       codeChallenge: request.codeChallenge,
       expiresAt: now() + AUTHORIZATION_CODE_TTL_MS,
     });
-    const redirect = new URL(request.redirectUri);
-    redirect.searchParams.set("code", code);
-    redirect.searchParams.set("state", request.state);
-    res.statusCode = 302;
-    res.setHeader("Location", redirect.toString());
-    res.end();
+    redirectAuthorizationResponse(res, issuer, request.redirectUri, { code, state: request.state });
   }
 
   async function handleToken(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -398,6 +440,7 @@ export function createPersonalOAuthServer(config: PersonalOAuthConfig): Personal
           token_endpoint_auth_methods_supported: ["none"],
           code_challenge_methods_supported: ["S256"],
           scopes_supported: [OAUTH_SCOPE],
+          authorization_response_iss_parameter_supported: true,
         });
       }
       return true;

@@ -10,7 +10,7 @@ import { createGiveHintHandler } from "../mcp/tools/giveHint";
 const INTERNAL_TOKEN = "internal-test-bearer-token-at-least-32-chars";
 const ADMIN_SECRET = "personal-oauth-admin-secret-at-least-32-chars";
 const SIGNING_SECRET = "personal-oauth-signing-secret-at-least-32-chars";
-const CALLBACK = "https://chatgpt.com/connector/oauth/test-callback";
+const CALLBACK = "https://chatgpt.com/connector_platform_oauth_redirect";
 
 type StartedServer = Awaited<ReturnType<typeof startOAuthServer>>;
 
@@ -87,6 +87,7 @@ async function authorize(app: StartedServer, clientId: string, challenge: string
   const location = new URL(response.headers.get("location")!);
   assert.equal(location.origin + location.pathname, CALLBACK);
   assert.equal(location.searchParams.get("state"), "opaque-test-state");
+  assert.equal(location.searchParams.get("iss"), "https://engineerus-quest-mcp-private.onrender.com");
   return location.searchParams.get("code")!;
 }
 
@@ -145,6 +146,7 @@ test("OAuth discovery advertises protected resource, authorization endpoints, sc
   assert.equal(metadata.registration_endpoint, "https://engineerus-quest-mcp-private.onrender.com/oauth/register");
   assert.deepEqual(metadata.code_challenge_methods_supported, ["S256"]);
   assert.deepEqual(metadata.token_endpoint_auth_methods_supported, ["none"]);
+  assert.equal(metadata.authorization_response_iss_parameter_supported, true);
 });
 
 test("OAuth discovery starts with no redirect allowlist while registration remains closed", async (t) => {
@@ -246,7 +248,7 @@ test("remote startup reports the give_hint phase safely when Groq credentials ar
   assert.doesNotMatch(logs.join("\n"), new RegExp(`${ADMIN_SECRET}|${SIGNING_SECRET}|${INTERNAL_TOKEN}`));
 });
 
-test("valid DCR, personal approval, and PKCE token reach the protected MCP tool list", async (t) => {
+test("DCR accepts the allowlisted stable ChatGPT callback and PKCE reaches the protected MCP tool list", async (t) => {
   const app = await startOAuthServer();
   t.after(app.close);
   const clientId = await registerClient(app);
@@ -263,6 +265,31 @@ test("valid DCR, personal approval, and PKCE token reach the protected MCP tool 
   assert.equal(toolsResponse.status, 200);
   assert.deepEqual(tools.result.tools.map((tool: { name: string }) => tool.name), ["give_hint"]);
   assert.deepEqual(tools.result.tools[0]._meta.securitySchemes, [{ type: "oauth2", scopes: ["mcp:tools"] }]);
+});
+
+test("safe authorization error redirects include the exact RFC 9207 issuer", async (t) => {
+  const app = await startOAuthServer();
+  t.after(app.close);
+  const clientId = await registerClient(app);
+  const pair = pkce();
+  const query = new URLSearchParams({
+    response_type: "token",
+    client_id: clientId,
+    redirect_uri: CALLBACK,
+    code_challenge: pair.challenge,
+    code_challenge_method: "S256",
+    resource: "https://engineerus-quest-mcp-private.onrender.com/mcp",
+    scope: "mcp:tools",
+    state: "error-state",
+  });
+
+  const response = await fetch(`${app.baseUrl}/oauth/authorize?${query}`, { redirect: "manual" });
+  assert.equal(response.status, 302);
+  const location = new URL(response.headers.get("location")!);
+  assert.equal(location.origin + location.pathname, CALLBACK);
+  assert.equal(location.searchParams.get("error"), "invalid_request");
+  assert.equal(location.searchParams.get("state"), "error-state");
+  assert.equal(location.searchParams.get("iss"), "https://engineerus-quest-mcp-private.onrender.com");
 });
 
 test("authorization endpoint renders a protected approval form without embedding secrets", async (t) => {
@@ -303,7 +330,7 @@ test("invalid PKCE is rejected and the one-time authorization code cannot be ret
   assert.deepEqual(await invalid.json(), { error: "invalid_grant" });
 });
 
-test("DCR rejects redirect URIs outside the exact configured allowlist", async (t) => {
+test("DCR and authorization reject redirect URIs outside the exact configured allowlist", async (t) => {
   const app = await startOAuthServer();
   t.after(app.close);
   const response = await fetch(`${app.baseUrl}/oauth/register`, {
@@ -318,6 +345,23 @@ test("DCR rejects redirect URIs outside the exact configured allowlist", async (
   });
   assert.equal(response.status, 400);
   assert.deepEqual(await response.json(), { error: "invalid_redirect_uri" });
+
+  const clientId = await registerClient(app);
+  const pair = pkce();
+  const query = new URLSearchParams({
+    response_type: "code",
+    client_id: clientId,
+    redirect_uri: "https://attacker.example/callback",
+    code_challenge: pair.challenge,
+    code_challenge_method: "S256",
+    resource: "https://engineerus-quest-mcp-private.onrender.com/mcp",
+    scope: "mcp:tools",
+    state: "mismatch-state",
+  });
+  const authorization = await fetch(`${app.baseUrl}/oauth/authorize?${query}`, { redirect: "manual" });
+  assert.equal(authorization.status, 400);
+  assert.equal(authorization.headers.get("location"), null);
+  assert.deepEqual(await authorization.json(), { error: "invalid_request" });
 });
 
 test("expired authorization codes are rejected", async (t) => {
@@ -375,10 +419,13 @@ test("OAuth errors never expose approval, signing, authorization-code, or access
       state: "opaque-state",
       approval_secret: "wrong-secret-that-must-not-appear",
     }),
+    redirect: "manual",
   });
-  const body = await response.text();
-  assert.equal(response.status, 401);
-  assert.doesNotMatch(body, /wrong-secret|personal-oauth|stack|access_token|authorization code/i);
+  assert.equal(response.status, 302);
+  const location = new URL(response.headers.get("location")!);
+  assert.equal(location.searchParams.get("error"), "access_denied");
+  assert.equal(location.searchParams.get("iss"), "https://engineerus-quest-mcp-private.onrender.com");
+  assert.doesNotMatch(location.toString(), /wrong-secret|personal-oauth|stack|access_token|authorization code/i);
 });
 
 test("personal authorization attempts are bounded without reflecting submitted secrets", async (t) => {
@@ -400,11 +447,21 @@ test("personal authorization attempts are bounded without reflecting submitted s
       state: "opaque-state",
       approval_secret: "wrong-secret-that-must-not-appear",
     }),
+    redirect: "manual",
   });
 
-  for (let index = 0; index < 5; index += 1) assert.equal((await request()).status, 401);
+  for (let index = 0; index < 5; index += 1) {
+    const denied = await request();
+    assert.equal(denied.status, 302);
+    const location = new URL(denied.headers.get("location")!);
+    assert.equal(location.searchParams.get("error"), "access_denied");
+    assert.equal(location.searchParams.get("iss"), "https://engineerus-quest-mcp-private.onrender.com");
+  }
   const blocked = await request();
-  assert.equal(blocked.status, 429);
+  assert.equal(blocked.status, 302);
   assert.match(blocked.headers.get("retry-after") ?? "", /^\d+$/);
-  assert.doesNotMatch(await blocked.text(), /wrong-secret|personal-oauth|stack/i);
+  const blockedLocation = new URL(blocked.headers.get("location")!);
+  assert.equal(blockedLocation.searchParams.get("error"), "temporarily_unavailable");
+  assert.equal(blockedLocation.searchParams.get("iss"), "https://engineerus-quest-mcp-private.onrender.com");
+  assert.doesNotMatch(blockedLocation.toString(), /wrong-secret|personal-oauth|stack/i);
 });
