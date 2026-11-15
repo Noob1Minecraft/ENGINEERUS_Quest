@@ -51,6 +51,21 @@ function isCanonicalHttpsUrl(value: string | undefined): boolean {
   }
 }
 
+function inspectRedirectUris(value: string | undefined): { count: number; valid: boolean } {
+  const entries = (value ?? "").split(",").map((entry) => entry.trim()).filter(Boolean);
+  const unique = new Set(entries);
+  const valid = unique.size === entries.length && entries.every((entry) => {
+    try {
+      const url = new URL(entry);
+      const loopback = url.protocol === "http:" && (url.hostname === "127.0.0.1" || url.hostname === "localhost");
+      return (url.protocol === "https:" || loopback) && !url.username && !url.password && !url.hash;
+    } catch {
+      return false;
+    }
+  });
+  return { count: entries.length, valid };
+}
+
 function safeOAuthStartupErrorMessage(error: unknown): string {
   if (!(error instanceof Error)) return "OAuth configuration validation failed.";
   const allowedMessages = new Set([
@@ -226,6 +241,7 @@ export function createRemoteMcpHttpServer(options: RemoteMcpHttpServerOptions): 
 
 export async function main(): Promise<void> {
   const config = loadRemoteMcpConfig();
+  const redirectUris = inspectRedirectUris(process.env.MCP_OAUTH_REDIRECT_URIS);
   console.error(`MCP_OAUTH_ENABLED present: ${Object.hasOwn(process.env, "MCP_OAUTH_ENABLED")}.`);
   console.error(`OAuth enabled: ${process.env.MCP_OAUTH_ENABLED === "true"}.`);
   console.error(`MCP_PUBLIC_BASE_URL present: ${Boolean(process.env.MCP_PUBLIC_BASE_URL)}.`);
@@ -234,23 +250,55 @@ export async function main(): Promise<void> {
   console.error(`MCP_OAUTH_ADMIN_SECRET length >= ${MIN_OAUTH_SECRET_LENGTH}: ${(process.env.MCP_OAUTH_ADMIN_SECRET?.length ?? 0) >= MIN_OAUTH_SECRET_LENGTH}.`);
   console.error(`MCP_OAUTH_SIGNING_SECRET present: ${Boolean(process.env.MCP_OAUTH_SIGNING_SECRET)}.`);
   console.error(`MCP_OAUTH_SIGNING_SECRET length >= ${MIN_OAUTH_SECRET_LENGTH}: ${(process.env.MCP_OAUTH_SIGNING_SECRET?.length ?? 0) >= MIN_OAUTH_SECRET_LENGTH}.`);
+  console.error(`GROQ_API_KEY present: ${Boolean(process.env.GROQ_API_KEY)}.`);
+  console.error(`GROQ_API_KEY_2 present: ${Boolean(process.env.GROQ_API_KEY_2)}.`);
+  console.error(`MCP_AUTH_TOKEN length >= ${MIN_AUTH_TOKEN_LENGTH}: ${config.authToken.length >= MIN_AUTH_TOKEN_LENGTH}.`);
+  console.error(`MCP_OAUTH_REDIRECT_URIS: ${redirectUris.count === 0 ? "absent/empty" : `present with ${redirectUris.count} entries`}.`);
+  console.error(`MCP_OAUTH_REDIRECT_URIS valid: ${redirectUris.valid}.`);
   console.error(`OAuth config resolved: ${Boolean(config.oauth)}.`);
   if (!config.enabled) throw new Error("Remote MCP is disabled.");
   if (config.authToken.length < MIN_AUTH_TOKEN_LENGTH) {
     throw new Error(`MCP_AUTH_TOKEN must contain at least ${MIN_AUTH_TOKEN_LENGTH} characters.`);
   }
 
-  const giveHint = createConfiguredGiveHintHandler();
-  const server = createRemoteMcpHttpServer({
-    authToken: config.authToken,
-    createMcpServer: () => createEngineerusMcpServer(giveHint, { oauthEnabled: Boolean(config.oauth) }),
-    oauth: config.oauth,
-  });
+  console.error("Creating give_hint handler...");
+  let giveHint: ReturnType<typeof createConfiguredGiveHintHandler>;
+  try {
+    giveHint = createConfiguredGiveHintHandler();
+    console.error(`give_hint handler created: ${Boolean(giveHint)}.`);
+  } catch (error) {
+    const message = error instanceof Error && error.message === "The MCP server requires an existing Groq credential."
+      ? error.message
+      : "Startup phase failed.";
+    console.error(`Startup failed during give_hint handler creation: ${message}`);
+    throw error;
+  }
 
-  await new Promise<void>((resolvePromise, reject) => {
-    server.once("error", reject);
-    server.listen(config.port, "0.0.0.0", resolvePromise);
-  });
+  console.error("Creating remote MCP HTTP server...");
+  let server: Server;
+  try {
+    server = createRemoteMcpHttpServer({
+      authToken: config.authToken,
+      createMcpServer: () => createEngineerusMcpServer(giveHint, { oauthEnabled: Boolean(config.oauth) }),
+      oauth: config.oauth,
+    });
+    console.error(`Remote MCP HTTP server created: ${Boolean(server)}.`);
+  } catch (error) {
+    console.error("Startup failed during remote MCP HTTP server creation.");
+    throw error;
+  }
+
+  console.error("Starting listen...");
+  try {
+    await new Promise<void>((resolvePromise, reject) => {
+      server.once("error", reject);
+      server.listen(config.port, "0.0.0.0", resolvePromise);
+    });
+    console.error("Listen succeeded: true.");
+  } catch (error) {
+    console.error("Startup failed during listen.");
+    throw error;
+  }
   console.error(`Engineerus Quest remote MCP listening on port ${config.port}.`);
 }
 

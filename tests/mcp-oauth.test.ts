@@ -4,7 +4,7 @@ import type { AddressInfo } from "node:net";
 import test from "node:test";
 
 import { createEngineerusMcpServer } from "../mcp/createServer";
-import { createRemoteMcpHttpServer } from "../mcp/httpServer";
+import { createRemoteMcpHttpServer, main } from "../mcp/httpServer";
 import { createGiveHintHandler } from "../mcp/tools/giveHint";
 
 const INTERNAL_TOKEN = "internal-test-bearer-token-at-least-32-chars";
@@ -194,6 +194,54 @@ test("OAuth startup validation reports a safe reason without reflecting secret m
 
   assert.deepEqual(logs, ["OAuth startup validation failed: MCP OAuth secrets must contain at least 32 characters."]);
   assert.doesNotMatch(logs.join("\n"), /short-secret-material/);
+});
+
+test("remote startup reports the give_hint phase safely when Groq credentials are missing", async () => {
+  const keys = [
+    "MCP_REMOTE_ENABLED",
+    "MCP_AUTH_TOKEN",
+    "MCP_PORT",
+    "MCP_OAUTH_ENABLED",
+    "MCP_PUBLIC_BASE_URL",
+    "MCP_OAUTH_ADMIN_SECRET",
+    "MCP_OAUTH_SIGNING_SECRET",
+    "MCP_OAUTH_REDIRECT_URIS",
+    "GROQ_API_KEY",
+    "GROQ_API_KEY_2",
+  ] as const;
+  const saved = new Map(keys.map((key) => [key, process.env[key]]));
+  Object.assign(process.env, {
+    MCP_REMOTE_ENABLED: "true",
+    MCP_AUTH_TOKEN: INTERNAL_TOKEN,
+    MCP_PORT: "3100",
+    MCP_OAUTH_ENABLED: "true",
+    MCP_PUBLIC_BASE_URL: "https://engineerus-quest-mcp-private.onrender.com",
+    MCP_OAUTH_ADMIN_SECRET: ADMIN_SECRET,
+    MCP_OAUTH_SIGNING_SECRET: SIGNING_SECRET,
+    MCP_OAUTH_REDIRECT_URIS: "",
+  });
+  delete process.env.GROQ_API_KEY;
+  delete process.env.GROQ_API_KEY_2;
+
+  const logs: string[] = [];
+  const originalError = console.error;
+  console.error = (...values: unknown[]) => logs.push(values.map(String).join(" "));
+  try {
+    await assert.rejects(main(), /requires an existing Groq credential/);
+  } finally {
+    console.error = originalError;
+    for (const key of keys) {
+      const value = saved.get(key);
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+
+  assert.ok(logs.includes("GROQ_API_KEY present: false."));
+  assert.ok(logs.includes("GROQ_API_KEY_2 present: false."));
+  assert.ok(logs.includes("Creating give_hint handler..."));
+  assert.ok(logs.includes("Startup failed during give_hint handler creation: The MCP server requires an existing Groq credential."));
+  assert.doesNotMatch(logs.join("\n"), new RegExp(`${ADMIN_SECRET}|${SIGNING_SECRET}|${INTERNAL_TOKEN}`));
 });
 
 test("valid DCR, personal approval, and PKCE token reach the protected MCP tool list", async (t) => {
