@@ -173,6 +173,48 @@ test("OAuth discovery starts with no redirect allowlist while registration remai
   assert.equal(legacy.status, 200);
 });
 
+test("OAuth DCR rejection logs only safe request metadata and the validation reason", async (t) => {
+  const app = await startOAuthServer();
+  t.after(app.close);
+  const logs: string[] = [];
+  const originalError = console.error;
+  console.error = (...values: unknown[]) => logs.push(values.map(String).join(" "));
+  try {
+    const redirectUri = "https://chatgpt.com/connector_platform_oauth_redirect_unlisted";
+    const response = await fetch(`${app.baseUrl}/oauth/register`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        client_name: "ChatGPT plugin builder",
+        redirect_uris: [redirectUri],
+        grant_types: ["authorization_code"],
+        response_types: ["code"],
+        token_endpoint_auth_method: "none",
+      }),
+    });
+    assert.equal(response.status, 400);
+  } finally {
+    console.error = originalError;
+  }
+
+  assert.equal(logs.length, 1);
+  const prefix = "OAuth DCR diagnostic: ";
+  assert.ok(logs[0].startsWith(prefix));
+  const diagnostic = JSON.parse(logs[0].slice(prefix.length)) as Record<string, unknown>;
+  assert.deepEqual(diagnostic, {
+    received: true,
+    status: 400,
+    redirect_uris_count: 1,
+    redirect_uris: ["https://chatgpt.com/connector_platform_oauth_redirect_unlisted"],
+    grant_types: ["authorization_code"],
+    response_types: ["code"],
+    token_endpoint_auth_method: "none",
+    client_name: "ChatGPT plugin builder",
+    validation_reason: "redirect_uri_not_allowlisted",
+  });
+  assert.doesNotMatch(logs[0], /authorization_header|access_token|refresh_token|cookie|client_secret|code_challenge/i);
+});
+
 test("OAuth startup validation reports a safe reason without reflecting secret material", () => {
   const logs: string[] = [];
   const originalError = console.error;

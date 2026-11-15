@@ -110,6 +110,44 @@ function contentType(req: IncomingMessage): string {
   return String(req.headers["content-type"] ?? "").split(";", 1)[0]!.trim().toLowerCase();
 }
 
+function safeDiagnosticStrings(value: unknown): unknown[] {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, 10).map((item) => typeof item === "string" ? item.slice(0, 256) : "<non-string>");
+}
+
+function safeDiagnosticRedirectUris(value: unknown): unknown[] {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, 10).map((item) => {
+    if (typeof item !== "string") return "<non-string>";
+    try {
+      const url = new URL(item);
+      if (url.username || url.password || url.search || url.hash || item.length > 2_048) {
+        return "<redacted-noncanonical-uri>";
+      }
+      return item;
+    } catch {
+      return "<invalid-uri>";
+    }
+  });
+}
+
+function logDcrDiagnostic(status: number, reason: string, body: Record<string, unknown> = {}): void {
+  const redirectUris = Array.isArray(body.redirect_uris) ? body.redirect_uris : [];
+  console.error(`OAuth DCR diagnostic: ${JSON.stringify({
+    received: true,
+    status,
+    redirect_uris_count: redirectUris.length,
+    redirect_uris: safeDiagnosticRedirectUris(redirectUris),
+    grant_types: safeDiagnosticStrings(body.grant_types ?? ["authorization_code"]),
+    response_types: safeDiagnosticStrings(body.response_types ?? ["code"]),
+    token_endpoint_auth_method: typeof body.token_endpoint_auth_method === "string"
+      ? body.token_endpoint_auth_method.slice(0, 100)
+      : "none",
+    client_name: typeof body.client_name === "string" ? body.client_name.slice(0, 100) : null,
+    validation_reason: reason,
+  })}`);
+}
+
 function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (character) => ({
     "&": "&amp;",
@@ -234,6 +272,7 @@ export function createPersonalOAuthServer(config: PersonalOAuthConfig): Personal
 
   async function handleRegistration(req: IncomingMessage, res: ServerResponse): Promise<void> {
     if (req.method !== "POST" || contentType(req) !== "application/json") {
+      logDcrDiagnostic(400, "invalid_method_or_content_type");
       json(res, 400, { error: "invalid_client_metadata" });
       return;
     }
@@ -241,6 +280,7 @@ export function createPersonalOAuthServer(config: PersonalOAuthConfig): Personal
     try {
       body = JSON.parse((await readBody(req)).toString("utf8")) as Record<string, unknown>;
     } catch {
+      logDcrDiagnostic(400, "invalid_json_or_body_size");
       json(res, 400, { error: "invalid_client_metadata" });
       return;
     }
@@ -248,30 +288,46 @@ export function createPersonalOAuthServer(config: PersonalOAuthConfig): Personal
     const redirectUris = Array.isArray(body.redirect_uris) ? body.redirect_uris : [];
     const grants = body.grant_types ?? ["authorization_code"];
     const responses = body.response_types ?? ["code"];
-    if (
-      redirectUris.length < 1
-      || redirectUris.length > 5
-      || redirectUris.some((uri) => typeof uri !== "string" || !allowedRedirectUris.has(uri))
-    ) {
+    if (redirectUris.length < 1 || redirectUris.length > 5) {
+      logDcrDiagnostic(400, "redirect_uri_count_out_of_range", body);
       json(res, 400, { error: "invalid_redirect_uri" });
       return;
     }
-    if (
-      !Array.isArray(grants) || grants.length !== 1 || grants[0] !== "authorization_code"
-      || !Array.isArray(responses) || responses.length !== 1 || responses[0] !== "code"
-      || (body.token_endpoint_auth_method ?? "none") !== "none"
-    ) {
+    if (redirectUris.some((uri) => typeof uri !== "string")) {
+      logDcrDiagnostic(400, "redirect_uri_type_invalid", body);
+      json(res, 400, { error: "invalid_redirect_uri" });
+      return;
+    }
+    if (redirectUris.some((uri) => !allowedRedirectUris.has(uri as string))) {
+      logDcrDiagnostic(400, "redirect_uri_not_allowlisted", body);
+      json(res, 400, { error: "invalid_redirect_uri" });
+      return;
+    }
+    if (!Array.isArray(grants) || grants.length !== 1 || grants[0] !== "authorization_code") {
+      logDcrDiagnostic(400, "grant_types_invalid", body);
+      json(res, 400, { error: "invalid_client_metadata" });
+      return;
+    }
+    if (!Array.isArray(responses) || responses.length !== 1 || responses[0] !== "code") {
+      logDcrDiagnostic(400, "response_types_invalid", body);
+      json(res, 400, { error: "invalid_client_metadata" });
+      return;
+    }
+    if ((body.token_endpoint_auth_method ?? "none") !== "none") {
+      logDcrDiagnostic(400, "token_endpoint_auth_method_invalid", body);
       json(res, 400, { error: "invalid_client_metadata" });
       return;
     }
 
     if (clients.size >= MAX_REGISTERED_CLIENTS) {
+      logDcrDiagnostic(429, "registration_capacity_exceeded", body);
       res.setHeader("Retry-After", "60");
       json(res, 429, { error: "temporarily_unavailable" });
       return;
     }
     const clientId = `mcp_${randomBytes(24).toString("base64url")}`;
     clients.set(clientId, { clientId, redirectUris: redirectUris as string[] });
+    logDcrDiagnostic(201, "accepted", body);
     json(res, 201, {
       client_id: clientId,
       client_id_issued_at: Math.floor(now() / 1_000),
