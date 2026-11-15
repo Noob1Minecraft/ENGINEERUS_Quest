@@ -56,6 +56,7 @@ type ValidAuthorizationRequest = {
 };
 
 type SafeAuthorizationRedirect = {
+  clientId: string;
   redirectUri: string;
   state: string;
 };
@@ -227,13 +228,14 @@ function findSafeAuthorizationRedirect(
   const redirectUri = params.get("redirect_uri") ?? "";
   if (!client || !client.redirectUris.includes(redirectUri) || !allowedRedirectUris.has(redirectUri)) return null;
   const state = params.get("state") ?? "";
-  return { redirectUri, state: state.length <= 512 ? state : "" };
+  return { clientId: client.clientId, redirectUri, state: state.length <= 512 ? state : "" };
 }
 
 function redirectAuthorizationResponse(
   res: ServerResponse,
   issuer: string,
   redirectUri: string,
+  registeredRedirectUris: readonly string[],
   params: { code?: string; error?: string; state?: string },
 ): void {
   const redirect = new URL(redirectUri);
@@ -241,6 +243,15 @@ function redirectAuthorizationResponse(
   if (params.error) redirect.searchParams.set("error", params.error);
   if (params.state) redirect.searchParams.set("state", params.state);
   redirect.searchParams.set("iss", issuer);
+  console.error(`OAuth authorization redirect: ${JSON.stringify({
+    destination_origin: redirect.origin,
+    destination_pathname: redirect.pathname,
+    code_parameter_present: redirect.searchParams.has("code"),
+    state_parameter_present: redirect.searchParams.has("state"),
+    iss_parameter_present: redirect.searchParams.has("iss"),
+    iss_matches_configured_issuer: redirect.searchParams.get("iss") === issuer,
+    redirect_uri_matches_registered_client: registeredRedirectUris.includes(redirectUri),
+  })}`);
   res.statusCode = 302;
   res.setHeader("Location", redirect.toString());
   res.end();
@@ -453,7 +464,7 @@ export function createPersonalOAuthServer(config: PersonalOAuthConfig): Personal
     if (!request) {
       const safeRedirect = findSafeAuthorizationRedirect(params, clients, allowedRedirectUris);
       if (safeRedirect) {
-        redirectAuthorizationResponse(res, issuer, safeRedirect.redirectUri, {
+        redirectAuthorizationResponse(res, issuer, safeRedirect.redirectUri, clients.get(safeRedirect.clientId)?.redirectUris ?? [], {
           error: "invalid_request",
           state: safeRedirect.state,
         });
@@ -471,7 +482,7 @@ export function createPersonalOAuthServer(config: PersonalOAuthConfig): Personal
     if (failedApprovals.length >= MAX_FAILED_APPROVALS) {
       const retryAfter = Math.max(1, Math.ceil(((failedApprovals[0] ?? current) + APPROVAL_WINDOW_MS - current) / 1_000));
       res.setHeader("Retry-After", String(retryAfter));
-      redirectAuthorizationResponse(res, issuer, request.redirectUri, {
+      redirectAuthorizationResponse(res, issuer, request.redirectUri, clients.get(request.clientId)?.redirectUris ?? [], {
         error: "temporarily_unavailable",
         state: request.state,
       });
@@ -479,7 +490,7 @@ export function createPersonalOAuthServer(config: PersonalOAuthConfig): Personal
     }
     if (!approvalSecret || !safeEquals(approvalSecret, config.adminSecret)) {
       failedApprovals.push(current);
-      redirectAuthorizationResponse(res, issuer, request.redirectUri, {
+      redirectAuthorizationResponse(res, issuer, request.redirectUri, clients.get(request.clientId)?.redirectUris ?? [], {
         error: "access_denied",
         state: request.state,
       });
@@ -498,10 +509,17 @@ export function createPersonalOAuthServer(config: PersonalOAuthConfig): Personal
       codeChallenge: request.codeChallenge,
       expiresAt: now() + AUTHORIZATION_CODE_TTL_MS,
     });
-    redirectAuthorizationResponse(res, issuer, request.redirectUri, { code, state: request.state });
+    redirectAuthorizationResponse(
+      res,
+      issuer,
+      request.redirectUri,
+      clients.get(request.clientId)?.redirectUris ?? [],
+      { code, state: request.state },
+    );
   }
 
   async function handleToken(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    if (req.method === "POST") console.error("OAuth token request received: true");
     if (req.method !== "POST" || contentType(req) !== "application/x-www-form-urlencoded") {
       json(res, 400, { error: "invalid_request" });
       return;

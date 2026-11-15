@@ -463,6 +463,42 @@ test("safe authorization error redirects include the exact RFC 9207 issuer", asy
   assert.equal(location.searchParams.get("iss"), "https://engineerus-quest-mcp-private.onrender.com");
 });
 
+test("authorization redirect and token receipt diagnostics expose structure only", async (t) => {
+  const app = await startOAuthServer();
+  t.after(app.close);
+  const clientId = await registerClient(app);
+  const pair = pkce();
+  const logs: string[] = [];
+  const originalError = console.error;
+  let code = "";
+  try {
+    console.error = (...values: unknown[]) => logs.push(values.map(String).join(" "));
+    code = await authorize(app, clientId, pair.challenge);
+    const token = await exchangeCode(app, clientId, code, pair.verifier);
+    assert.equal(token.status, 200);
+  } finally {
+    console.error = originalError;
+  }
+
+  const prefix = "OAuth authorization redirect: ";
+  const redirectLog = logs.find((entry) => entry.startsWith(prefix));
+  assert.ok(redirectLog);
+  assert.deepEqual(JSON.parse(redirectLog.slice(prefix.length)), {
+    destination_origin: "https://chatgpt.com",
+    destination_pathname: "/connector_platform_oauth_redirect",
+    code_parameter_present: true,
+    state_parameter_present: true,
+    iss_parameter_present: true,
+    iss_matches_configured_issuer: true,
+    redirect_uri_matches_registered_client: true,
+  });
+  assert.ok(logs.includes("OAuth token request received: true"));
+  assert.ok(logs.includes("POST /oauth/token -> 200"));
+  assert.ok(code && !logs.some((entry) => entry.includes(code)));
+  assert.ok(!logs.some((entry) => entry.includes(pair.verifier)));
+  assert.doesNotMatch(logs.join("\n"), /opaque-test-state|[?&](?:code|state|iss)=|code_challenge|authorization:/i);
+});
+
 test("authorization endpoint renders a protected approval form without embedding secrets", async (t) => {
   const app = await startOAuthServer();
   t.after(app.close);
