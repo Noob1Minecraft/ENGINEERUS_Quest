@@ -1,0 +1,48 @@
+name: Verify OpenAI dependency removal
+
+on:
+  push:
+    branches:
+      - fix/remove-unused-openai
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out verification branch
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: fix/remove-unused-openai
+      - name: Use repository Node and npm versions
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install exact lockfile dependencies
+        run: npm ci
+      - name: Remove unused OpenAI SDK dependency
+        run: npm uninstall openai
+      - name: TypeScript
+        run: npm run typecheck
+      - name: Production build
+        run: npm run build
+      - name: Focused security tests
+        run: npm run test:security
+      - name: Verify production audit
+        run: npm audit --omit=dev --audit-level=high
+      - name: Generate production CycloneDX SBOM
+        run: |
+          mkdir -p artifacts
+          npm sbom --sbom-format cyclonedx --omit dev --package-lock-only > artifacts/engineerus-sbom.cdx.json
+      - name: Commit dependency cleanup
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json
+          git commit -m "Remove unused OpenAI SDK dependency"
+          git push origin HEAD:fix/remove-unused-openai
