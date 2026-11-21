@@ -1,0 +1,50 @@
+name: Temporary dependency security update
+
+on:
+  push:
+    branches:
+      - fix/security-audit-deps
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out update branch
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: fix/security-audit-deps
+      - name: Use repository Node and npm versions
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install exact lockfile dependencies
+        run: npm ci
+      - name: Apply compatible audit fixes
+        run: npm audit fix
+      - name: Upgrade direct vulnerable dependencies
+        run: npm install --save-exact multer@2.5.0 sharp@0.35.5 zod@4.6.7
+      - name: TypeScript
+        run: npm run typecheck
+      - name: Production build
+        run: npm run build
+      - name: Focused security tests
+        run: npm run test:security
+      - name: Verify production audit
+        run: npm audit --omit=dev --audit-level=high
+      - name: Commit dependency updates
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json
+          if git diff --cached --quiet; then
+            echo "No dependency changes to commit."
+            exit 0
+          fi
+          git commit -m "Fix production dependency vulnerabilities"
+          git push origin HEAD:fix/security-audit-deps
