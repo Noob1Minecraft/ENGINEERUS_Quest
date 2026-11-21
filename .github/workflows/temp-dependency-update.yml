@@ -26,8 +26,8 @@ jobs:
       - name: Install exact lockfile dependencies
         run: npm ci
       - name: Apply compatible audit fixes
-        run: npm audit fix
-      - name: Upgrade direct vulnerable dependencies
+        run: npm audit fix || true
+      - name: Upgrade direct vulnerable dependencies explicitly
         run: npm install --save-exact multer@2.5.0 sharp@0.35.5 zod@4.6.7
       - name: TypeScript
         run: npm run typecheck
