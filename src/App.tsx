@@ -17,12 +17,7 @@ import { BetaFeedbackModal } from './components/BetaFeedbackModal';
 import { GamificationPanel } from './components/GamificationPanel';
 import { loadGamification, type GamificationState } from './gamification/gamificationApi';
 import { ErrorState, LoadingState } from './components/ui';
-import {
-  buildUrlForPath,
-  resolveInitialLanguage,
-  syncDocumentLanguage,
-  syncManualLanguageToUrl,
-} from './language';
+import { resolveStoredLanguage, syncDocumentLanguage } from './language';
 import { loadAdminAccess } from './admin/adminApi';
 import {
   completeBetaOnboarding,
@@ -89,7 +84,7 @@ function mapQuestDefinitions(definitions: QuestStateResponse['quests']): Record<
 
 export default function App() {
   const auth = useAuth();
-  const [lang, setLang] = useState<Language>(() => resolveInitialLanguage(window.location.search, localStorage.getItem('lang')));
+  const [lang, setLang] = useState<Language>(() => resolveStoredLanguage(localStorage.getItem('lang')));
 
   const [activeTab, setActiveTab] = useState<string>(() => window.location.pathname === '/admin' ? 'admin' : 'home');
   const [isAuthOpen, setIsAuthOpen] = useState<boolean>(false);
@@ -124,26 +119,18 @@ export default function App() {
   }, [lang]);
 
   useEffect(() => {
-    const handlePopState = () => {
-      setActiveTab(window.location.pathname === '/admin' ? 'admin' : 'home');
-      setLang(resolveInitialLanguage(window.location.search, localStorage.getItem('lang')));
-    };
+    const handlePopState = () => setActiveTab(window.location.pathname === '/admin' ? 'admin' : 'home');
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
   useEffect(() => {
     if (activeTab === 'admin' && window.location.pathname !== '/admin') {
-      window.history.pushState(null, '', buildUrlForPath('/admin'));
+      window.history.pushState(null, '', '/admin');
     } else if (activeTab !== 'admin' && window.location.pathname === '/admin') {
-      window.history.pushState(null, '', buildUrlForPath('/'));
+      window.history.pushState(null, '', '/');
     }
   }, [activeTab]);
-
-  const handleSetLanguage = useCallback((language: Language) => {
-    syncManualLanguageToUrl(language);
-    setLang(language);
-  }, []);
 
   useEffect(() => {
     // Mandatory attribution token verification check
@@ -360,7 +347,7 @@ export default function App() {
       <Header
         user={user}
         lang={lang}
-        onSetLang={handleSetLanguage}
+        onSetLang={setLang}
         activeTab={activeTab}
         onSelectTab={setActiveTab}
         onOpenProfile={() => auth.user ? setActiveTab('profile') : setIsAuthOpen(true)}
