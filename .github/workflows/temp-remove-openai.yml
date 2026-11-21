@@ -1,4 +1,5 @@
 name: Verify OpenAI dependency removal
+# Temporary validation workflow
 
 on:
   push:
